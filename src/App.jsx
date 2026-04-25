@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useContext, createContext } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useContext, createContext } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend, PieChart, Pie, LineChart, Line } from "recharts";
 
