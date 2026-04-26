@@ -3415,6 +3415,18 @@ function SystemUsersPage(){
   );
 }
 
+const NAV=[
+  {id:"Dashboard",        label:"Dashboard",                 icon:"📊"},
+  {id:"Employees",        label:"Employees",                 icon:"👥"},
+  {id:"Clients",          label:"Clients",                   icon:"🏢"},
+  {id:"Contracts",        label:"Contracts",                 icon:"📄"},
+  {id:"Allocations",      label:"Allocations",               icon:"🗂"},
+  {id:"Reports",          label:"Reports",                   icon:"📈"},
+  {id:"MonthlyClose",     label:"Monthly Close",             icon:"📅"},
+  {id:"ContractExpenses", label:"Contract/Project Expenses", icon:"🧾"},
+  {id:"Settings",         label:"System Users",              icon:"👤"},
+];
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMING SOON PLACEHOLDER
 // ═══════════════════════════════════════════════════════════════════════════════
