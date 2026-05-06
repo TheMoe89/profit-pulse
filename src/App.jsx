@@ -141,6 +141,40 @@ class ErrBoundary extends React.Component {
 const HPM = 176;
 const SAR = (v) => `SAR ${(v||0).toLocaleString("en-US",{maximumFractionDigits:0})}`;
 const currentMonth = "2026-04";
+// ─── HELPER FUNCTIONS ─────────────────────────────────────────────────────────
+const isActive=(c,month)=>{
+  if(!c.sd||!c.ed) return false;
+  const m=new Date(month+"-01");
+  return new Date(c.sd)<=m && new Date(c.ed)>=m && (c.st||c.status)!=="Cancelled";
+};
+const diffDays=(dateStr)=>{
+  if(!dateStr) return 9999;
+  return Math.ceil((new Date(dateStr)-new Date())/(1000*60*60*24));
+};
+const fmtLong=(m)=>{
+  if(!m) return "";
+  const [y,mo]=m.split("-");
+  return new Date(y,parseInt(mo)-1,1).toLocaleString("en-US",{month:"long",year:"numeric"});
+};
+const fmtShort=(m)=>{
+  if(!m) return "";
+  const [y,mo]=m.split("-");
+  return new Date(y,parseInt(mo)-1,1).toLocaleString("en-US",{month:"short",year:"numeric"});
+};
+const fmtDate=(d)=>{if(!d)return"—";return new Date(d).toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"});};
+const fmtDateShort=(d)=>{if(!d)return"—";return new Date(d).toLocaleDateString("en-US",{month:"short",day:"numeric"});};
+const daysBetween=(end,todayStr)=>{if(!end)return null;const t=todayStr?new Date(todayStr):new Date();return Math.ceil((new Date(end)-t)/(1000*60*60*24));};
+const addMonthsSimple=(dateStr,months)=>{if(!dateStr)return"";const d=new Date(dateStr);d.setMonth(d.getMonth()+months);return d.toISOString().slice(0,10);};
+const calcProfitPct=(total,prev,amount)=>{const t=parseFloat(total)||0,p=parseFloat(prev)||0,a=parseFloat(amount)||0;if(t<=0)return"";return(((t-p-a)/t)*100).toFixed(2);};
+const genContractNum=(tenure,contracts)=>{
+  const cat=tenure>=12?"CTR":tenure>=3?"PRJ":"ADH";
+  const y=new Date().getFullYear();
+  const existing=contracts.filter(c=>c.contract_number?.startsWith(`${cat}-${y}-`));
+  const max=existing.reduce((m,c)=>{const n=parseInt(c.contract_number?.split("-")[2]||"0");return Math.max(m,n);},0);
+  return `${cat}-${y}-${String(max+1).padStart(3,"0")}`;
+};
+
+
 
 const MONTHS=["2026-01","2026-02","2026-03","2026-04","2026-05","2026-06","2026-07","2026-08","2026-09","2026-10","2026-11","2026-12"];
 
@@ -2511,11 +2545,6 @@ const MOCK_EXPENSES_INIT = [
   {id:"ex7", expense_number:"EXP-2026-007", request_date:"2026-03-18", contract_id:"ct2", contract_number:"CTR-2026-002", client_name:"Saudi Aramco",  contract_category:"Retainer", contract_start_date:"2026-01-01", contract_end_date:"2026-05-15", total_contract_value:360000, contract_notes:"",                   expense_type:"Other",       vendor_name:"Riyadh Events Co",    department:"Client Servicing Department", amount:6500,  previous_requested_total_amount:12000,  project_profit_pct:"93.75", bill_number:"INV-2026-007", bill_date:"2026-03-17", item_details:"Client event logistics & catering",             notes:"Q1 client appreciation event", status:"Draft", attachment_url:"", attachment_name:""},
 ];
 
-function calcProfitPct(total,prev,amount){
-  const t=parseFloat(total)||0,p=parseFloat(prev)||0,a=parseFloat(amount)||0;
-  if(t<=0) return "";
-  return (((t-p-a)/t)*100).toFixed(2);
-}
 
 const EMPTY_EXP_FORM = {
   expense_number:"",request_date:new Date().toISOString().slice(0,10),
