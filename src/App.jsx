@@ -142,150 +142,60 @@ const HPM = 176;
 const SAR = (v) => `SAR ${(v||0).toLocaleString("en-US",{maximumFractionDigits:0})}`;
 const currentMonth = "2026-04";
 
-// ─── MOCK DATA ────────────────────────────────────────────────────────────────
-const CLIENTS = [
-  {id:"c1",name:"SABIC"},{id:"c2",name:"Saudi Aramco"},
-  {id:"c3",name:"Almarai"},{id:"c4",name:"STC"},{id:"c5",name:"Mobily"},
+const MONTHS=["2026-01","2026-02","2026-03","2026-04","2026-05","2026-06","2026-07","2026-08","2026-09","2026-10","2026-11","2026-12"];
+
+const CLIENTS=[
+  {id:"cl1",name:"SABIC"},{id:"cl2",name:"Saudi Aramco"},{id:"cl3",name:"Almarai"},
+  {id:"cl4",name:"STC"},{id:"cl5",name:"Mobily"},{id:"cl6",name:"Al Rajhi Bank"},
+  {id:"cl7",name:"Noon"},{id:"cl8",name:"Zain KSA"},
 ];
-const CONTRACTS = [
-  {id:"ct1",cid:"c1",cn:"SABIC",        cv:480000,tm:12,sd:"2026-01-01",ed:"2026-12-31",st:"Active",bcs:80000, bp:140000,bc:160000,bpl:100000},
-  {id:"ct2",cid:"c2",cn:"Saudi Aramco", cv:360000,tm:12,sd:"2026-01-01",ed:"2026-05-15",st:"Active",bcs:60000, bp:100000,bc:120000,bpl:80000},
-  {id:"ct3",cid:"c3",cn:"Almarai",      cv:240000,tm:12,sd:"2026-01-01",ed:"2026-12-31",st:"Active",bcs:40000, bp:70000, bc:80000, bpl:50000},
-  {id:"ct4",cid:"c4",cn:"STC",          cv:180000,tm:6, sd:"2026-02-01",ed:"2026-07-31",st:"Active",bcs:30000, bp:50000, bc:60000, bpl:40000},
-  {id:"ct5",cid:"c5",cn:"Mobily",       cv:90000, tm:3, sd:"2026-03-01",ed:"2026-06-25",st:"Active",bcs:15000, bp:25000, bc:30000, bpl:20000},
+
+const CONTRACTS=[
+  {id:"ct1",cid:"cl1",cn:"SABIC",cv:480000,tm:12,sd:"2026-01-01",ed:"2026-12-31",st:"Active",bcs:80000,bp:140000,bc:160000,bpl:100000},
+  {id:"ct2",cid:"cl2",cn:"Saudi Aramco",cv:360000,tm:12,sd:"2026-01-01",ed:"2026-05-15",st:"Active",bcs:60000,bp:100000,bc:120000,bpl:80000},
+  {id:"ct3",cid:"cl3",cn:"Almarai",cv:240000,tm:12,sd:"2026-01-01",ed:"2026-12-31",st:"Active",bcs:40000,bp:70000,bc:80000,bpl:50000},
+  {id:"ct4",cid:"cl4",cn:"STC",cv:180000,tm:6,sd:"2026-02-01",ed:"2026-07-31",st:"Active",bcs:30000,bp:50000,bc:60000,bpl:40000},
+  {id:"ct5",cid:"cl5",cn:"Mobily",cv:90000,tm:3,sd:"2026-03-01",ed:"2026-06-25",st:"Active",bcs:15000,bp:25000,bc:30000,bpl:20000},
 ];
-const EMPLOYEES_INIT = [
-  {id:"e1", name:"Sarah Al-Rashidi", designation:"Senior Account Manager", department:"Client Servicing Department",location:"Jeddah", mc:18000,email:"sarah@agency.sa",   status:"Active",  start:"2023-03-01"},
-  {id:"e2", name:"Mohammed Khalid",  designation:"Creative Director",       department:"Creative Department",        location:"Riyadh", mc:22000,email:"mohammed@agency.sa",status:"Active",  start:"2022-09-15"},
-  {id:"e3", name:"Lena Barakat",     designation:"Production Specialist",   department:"Production Department",      location:"Jeddah", mc:15000,email:"lena@agency.sa",    status:"Active",  start:"2023-06-01"},
-  {id:"e4", name:"Omar Farouk",      designation:"Media Planner",           department:"Planning Department",        location:"Riyadh", mc:17000,email:"omar@agency.sa",    status:"Active",  start:"2023-01-10"},
-  {id:"e5", name:"Nadia Hamdan",     designation:"Account Executive",       department:"Client Servicing Department",location:"Jeddah", mc:14000,email:"nadia@agency.sa",   status:"Active",  start:"2024-02-01"},
-  {id:"e6", name:"Tariq Mansour",    designation:"Motion Designer",         department:"Creative Department",        location:"Jeddah", mc:16000,email:"tariq@agency.sa",   status:"Active",  start:"2023-08-20"},
-  {id:"e7", name:"Rana Al-Amin",     designation:"Strategy Lead",           department:"Planning Department",        location:"Riyadh", mc:20000,email:"rana@agency.sa",    status:"Active",  start:"2022-05-01"},
-  {id:"e8", name:"Faisal Qureshi",   designation:"Production Manager",      department:"Production Department",      location:"Jeddah", mc:19000,email:"faisal@agency.sa",  status:"Active",  start:"2021-11-01"},
-  {id:"e9", name:"Yasmin Saleh",     designation:"Copywriter",              department:"Creative Department",        location:"Jeddah", mc:13000,email:"yasmin@agency.sa",  status:"Active",  start:"2024-01-15"},
-  {id:"e10",name:"Khalid Nasser",    designation:"Digital Planner",         department:"Planning Department",        location:"Riyadh", mc:15500,email:"khalid@agency.sa",  status:"Active",  start:"2023-10-01"},
-  {id:"e11",name:"Hala Al-Otaibi",   designation:"Account Manager",         department:"Client Servicing Department",location:"Riyadh", mc:16500,email:"hala@agency.sa",    status:"Active",  start:"2023-04-01"},
-  {id:"e12",name:"Rami Shahin",      designation:"Art Director",            department:"Creative Department",        location:"Jeddah", mc:17500,email:"rami@agency.sa",    status:"Inactive",start:"2022-02-01",inactive_effective_month:"2026-02"},
+
+const EMPLOYEES_INIT=[
+  {id:"e1",name:"Sarah Al-Rashidi",designation:"Account Director",department:"Client Servicing Department",mc:18000,email:"sarah@acq-c.com",status:"Active",start:"2022-01-15"},
+  {id:"e2",name:"Mohammed Khalid",designation:"Senior Producer",department:"Production Department",mc:15000,email:"m.khalid@acq-c.com",status:"Active",start:"2021-06-01"},
+  {id:"e3",name:"Lena Barakat",designation:"Creative Director",department:"Creative Department",mc:20000,email:"lena@acq-c.com",status:"Active",start:"2020-03-10"},
+  {id:"e4",name:"Omar Farouk",designation:"Media Planner",department:"Planning Department",mc:12000,email:"omar@acq-c.com",status:"Active",start:"2023-02-01"},
+  {id:"e5",name:"Nadia Hamdan",designation:"Account Manager",department:"Client Servicing Department",mc:14000,email:"nadia@acq-c.com",status:"Active",start:"2022-08-15"},
+  {id:"e6",name:"Tariq Mansour",designation:"Video Producer",department:"Production Department",mc:13000,email:"tariq@acq-c.com",status:"Active",start:"2021-11-01"},
+  {id:"e7",name:"Rana Al-Amin",designation:"Senior Designer",department:"Creative Department",mc:14500,email:"rana@acq-c.com",status:"Active",start:"2022-04-01"},
+  {id:"e8",name:"Faisal Qureshi",designation:"Production Manager",department:"Production Department",mc:16000,email:"faisal@acq-c.com",status:"Active",start:"2020-09-01"},
+  {id:"e9",name:"Yasmin Saleh",designation:"Social Media Manager",department:"Creative Department",mc:11000,email:"yasmin@acq-c.com",status:"Active",start:"2023-05-01"},
+  {id:"e10",name:"Khalid Nasser",designation:"Junior Planner",department:"Planning Department",mc:9000,email:"khalid@acq-c.com",status:"Active",start:"2024-01-01"},
+  {id:"e11",name:"Rami Shahin",designation:"Account Executive",department:"Client Servicing Department",mc:10000,email:"rami@acq-c.com",status:"Inactive",start:"2022-01-01",inactive_effective_month:"2026-02"},
+  {id:"e12",name:"Hana Mustafa",designation:"Graphic Designer",department:"Creative Department",mc:11500,email:"hana@acq-c.com",status:"Active",start:"2023-09-01"},
 ];
-const ALLOCS_BY_MONTH = {
+
+const ALLOCS_BY_MONTH={
   "2026-04":[
-    {eid:"e1",cid:"c1",h:88}, {eid:"e1",cid:"c3",h:66},
-    {eid:"e2",cid:"c2",h:176},{eid:"e3",cid:"c1",h:120},
-    {eid:"e4",cid:"c3",h:44}, {eid:"e5",cid:"c4",h:160},
-    {eid:"e6",cid:"c2",h:200},{eid:"e7",cid:"c3",h:132},
-    {eid:"e7",cid:"c4",h:22}, {eid:"e8",cid:"c1",h:176},
-    {eid:"e9",cid:"c2",h:88}, {eid:"e10",cid:"c4",h:30},
-    {eid:"e3",cid:"c5",h:56}, {eid:"e9",cid:"c5",h:88},
+    {eid:"e1",cid:"cl1",h:88,client_name:"SABIC"},{eid:"e1",cid:"cl3",h:66,client_name:"Almarai"},
+    {eid:"e2",cid:"cl2",h:176,client_name:"Saudi Aramco"},{eid:"e3",cid:"cl1",h:120,client_name:"SABIC"},
+    {eid:"e3",cid:"cl5",h:56,client_name:"Mobily"},{eid:"e4",cid:"cl3",h:44,client_name:"Almarai"},
+    {eid:"e5",cid:"cl4",h:160,client_name:"STC"},{eid:"e6",cid:"cl2",h:176,client_name:"Saudi Aramco"},
+    {eid:"e7",cid:"cl3",h:132,client_name:"Almarai"},{eid:"e8",cid:"cl1",h:176,client_name:"SABIC"},
+    {eid:"e9",cid:"cl2",h:88,client_name:"Saudi Aramco"},{eid:"e9",cid:"cl5",h:88,client_name:"Mobily"},
+    {eid:"e10",cid:"cl4",h:30,client_name:"STC"},
   ],
   "2026-03":[
-    {eid:"e1",cid:"c1",h:100},{eid:"e2",cid:"c2",h:160},
-    {eid:"e3",cid:"c1",h:140},{eid:"e5",cid:"c4",h:130},
-    {eid:"e6",cid:"c2",h:176},{eid:"e7",cid:"c3",h:110},
-    {eid:"e8",cid:"c1",h:176},{eid:"e4",cid:"c3",h:60},
-    {eid:"e9",cid:"c5",h:176},{eid:"e10",cid:"c4",h:88},
+    {eid:"e1",cid:"cl1",h:100,client_name:"SABIC"},{eid:"e2",cid:"cl2",h:160,client_name:"Saudi Aramco"},
+    {eid:"e3",cid:"cl1",h:140,client_name:"SABIC"},{eid:"e5",cid:"cl4",h:130,client_name:"STC"},
+    {eid:"e6",cid:"cl2",h:176,client_name:"Saudi Aramco"},{eid:"e7",cid:"cl3",h:110,client_name:"Almarai"},
+    {eid:"e8",cid:"cl1",h:176,client_name:"SABIC"},{eid:"e9",cid:"cl5",h:176,client_name:"Mobily"},
   ],
 };
+
 const SNAPSHOTS=[
-  {m:"2026-01",cn:"SABIC",        r:40000,c:28000},
-  {m:"2026-01",cn:"Saudi Aramco", r:30000,c:24000},
-  {m:"2026-01",cn:"Almarai",      r:20000,c:12000},
-  {m:"2026-02",cn:"SABIC",        r:40000,c:30000},
-  {m:"2026-02",cn:"Saudi Aramco", r:30000,c:22000},
-  {m:"2026-02",cn:"Almarai",      r:20000,c:14000},
-  {m:"2026-02",cn:"STC",          r:30000,c:19000},
-  {m:"2026-03",cn:"SABIC",        r:40000,c:31000},
-  {m:"2026-03",cn:"Saudi Aramco", r:30000,c:25000},
-  {m:"2026-03",cn:"Almarai",      r:20000,c:11000},
-  {m:"2026-03",cn:"STC",          r:30000,c:18000},
-  {m:"2026-03",cn:"Mobily",       r:30000,c:22000},
+  {m:"2026-01",cn:"SABIC",r:40000,c:28000},{m:"2026-01",cn:"Saudi Aramco",r:30000,c:24000},{m:"2026-01",cn:"Almarai",r:20000,c:12000},
+  {m:"2026-02",cn:"SABIC",r:40000,c:30000},{m:"2026-02",cn:"Saudi Aramco",r:30000,c:22000},{m:"2026-02",cn:"Almarai",r:20000,c:14000},{m:"2026-02",cn:"STC",r:30000,c:19000},
+  {m:"2026-03",cn:"SABIC",r:40000,c:31000},{m:"2026-03",cn:"Saudi Aramco",r:30000,c:25000},{m:"2026-03",cn:"Almarai",r:20000,c:11000},{m:"2026-03",cn:"STC",r:30000,c:18000},{m:"2026-03",cn:"Mobily",r:30000,c:22000},
 ];
-
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
-function isActive(c,month){
-  const [y,mo]=month.split("-").map(Number);
-  const ms=new Date(y,mo-1,1),me=new Date(y,mo,0);
-  const [sy,sm,sd]=c.sd.split("-").map(Number);
-  const [ey,em,ed]=c.ed.split("-").map(Number);
-  return new Date(sy,sm-1,sd)<=me&&new Date(ey,em-1,ed)>ms;
-}
-function diffDays(d){return Math.round((new Date(d)-new Date())/86400000);}
-function fmtLong(m){const[y,mo]=m.split("-").map(Number);return new Date(y,mo-1,1).toLocaleString("en-US",{month:"long",year:"numeric"});}
-function fmtShort(m){const[y,mo]=m.split("-").map(Number);return new Date(y,mo-1,1).toLocaleString("en-US",{month:"short",year:"numeric"});}
-function fmtDate(d){return new Date(d).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});}
-function fmtDateShort(d){if(!d)return"—";const[y,m,day]=d.split("-").map(Number);return new Date(y,m-1,day).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});}
-function daysBetween(end,todayStr){if(!end)return 0;const e=new Date(end),t=new Date(todayStr||new Date().toISOString().slice(0,10));return Math.round((e-t)/86400000);}
-function addMonthsSimple(dateStr,months){if(!dateStr||!months)return"";const d=new Date(dateStr);const whole=Math.floor(months);const fracDays=Math.round((months-whole)*30);d.setMonth(d.getMonth()+whole);d.setDate(d.getDate()+fracDays);return d.toISOString().slice(0,10);}
-
-// ─── SHARED UI ────────────────────────────────────────────────────────────────
-function Card({children,style={}}){return <div style={{background:"#161616",border:"1px solid #262626",borderRadius:14,boxShadow:"0 2px 8px rgba(0,0,0,.4)",...style}}>{children}</div>;}
-function Bdg({children,bg="#f1f5f9",color="#475569"}){
-  return <span style={{background:bg,color,padding:"2px 8px",borderRadius:6,fontSize:11,fontWeight:600,display:"inline-block"}}>{children}</span>;
-}
-function PBar({val,color}){
-  return(
-    <div style={{height:5,background:"#262626",borderRadius:3,overflow:"hidden",margin:"5px 0 3px"}}>
-      <div style={{width:`${Math.min(100,val)}%`,height:"100%",background:color,borderRadius:3}}/>
-    </div>
-  );
-}
-function Avatar({name,size=38}){
-  const ini=(name||"?").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase();
-  return <div style={{width:size,height:size,borderRadius:10,background:"linear-gradient(135deg,#334155,#0f172a)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:size*.33,fontWeight:700,flexShrink:0}}>{ini}</div>;
-}
-function Btn({children,onClick,variant="primary",size="md",type="button",disabled,style={}}){
-  const sz={sm:{padding:"5px 12px",fontSize:12},md:{padding:"8px 16px",fontSize:13}};
-  const vs={
-    primary:{background:"#1DC99A",color:"#000",border:"none",fontWeight:700},
-    outline:{background:"transparent",color:"#B3B3B3",border:"1px solid #262626",fontWeight:500},
-    ghost:{background:"transparent",color:"#B3B3B3",border:"none",fontWeight:500},
-    danger:{background:"transparent",color:"#EF4444",border:`1px solid #EF444433`,fontWeight:500},
-  };
-  return <button type={type} onClick={onClick} disabled={disabled}
-    style={{...sz[size],...vs[variant],borderRadius:9,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.5:1,display:"inline-flex",alignItems:"center",gap:5,transition:"opacity .15s",...style}}
-    onMouseEnter={e=>{if(!disabled&&variant==="primary")e.currentTarget.style.background="#17B68B";else if(!disabled&&variant!=="ghost"&&variant!=="danger")e.currentTarget.style.background="#1E1E1E";}}
-    onMouseLeave={e=>{if(variant==="primary")e.currentTarget.style.background="#1DC99A";else if(variant!=="ghost"&&variant!=="danger")e.currentTarget.style.background="transparent";}}
-  >{children}</button>;
-}
-
-function Inp({value,onChange,placeholder,type="text",required,style={}}){
-  return <input value={value} onChange={onChange} placeholder={placeholder} type={type} required={required}
-    style={{width:"100%",padding:"9px 12px",border:"1px solid #262626",borderRadius:9,fontSize:13,color:"#FFFFFF",background:"#1E1E1E",outline:"none",boxSizing:"border-box",...style}}
-    onFocus={e=>e.target.style.borderColor="#1DC99A"} onBlur={e=>e.target.style.borderColor="#262626"}
-  />;
-}
-
-function Sel({value,onChange,options,style={}}){
-  return(
-    <select value={value} onChange={e=>onChange(e.target.value)}
-      style={{width:"100%",padding:"8px 11px",border:"1px solid #262626",borderRadius:9,fontSize:13,color:"#FFFFFF",background:"#1E1E1E",outline:"none",...style}}>
-      {options.map(o=><option key={o.v} value={o.v}>{o.l}</option>)}
-    </select>
-  );
-}
-
-function Lbl({children}){return <p style={{margin:"0 0 5px",fontSize:12,fontWeight:600,color:"#B3B3B3"}}>{children}</p>;}
-function Modal({open,onClose,title,children}){
-  if(!open)return null;
-  return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div style={{background:"#161616",borderRadius:16,width:"100%",maxWidth:600,maxHeight:"90vh",overflowY:"auto",border:"1px solid #262626",boxShadow:"0 25px 60px rgba(0,0,0,.6)"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 22px",borderBottom:"1px solid #262626"}}>
-          <h3 style={{margin:0,fontSize:16,fontWeight:700,color:"#FFFFFF"}}>{title}</h3>
-          <button onClick={onClose} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#777777",lineHeight:1,padding:"0 4px"}}>&times;</button>
-        </div>
-        <div style={{padding:"20px 22px"}}>{children}</div>
-      </div>
-    </div>
-  );
-}
-
-function SortTh({k,sk,sd,onSort,children,align="left"}){
-  const active=sk===k;
-  return <th onClick={()=>onSort(k)} style={{padding:"9px 13px",textAlign:align,fontSize:11,fontWeight:600,color:active?"#1DC99A":"#777777",background:"#161616",borderBottom:"1px solid #262626",cursor:"pointer",userSelect:"none",whiteSpace:"nowrap"}}>
-    {children}{active?sd==="asc"?" ↑":" ↓":""}
-  </th>;
-}
 
 function DashboardPage(){
   const [month,setMonth]=useState("2026-04");
