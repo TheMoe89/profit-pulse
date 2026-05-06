@@ -473,18 +473,20 @@ function Btn({children,onClick,variant="primary",size="md",type="button",disable
 }
 function Inp({value,onChange,placeholder,type="text",required,min,max,style={}}){
   return <input value={value} onChange={onChange} placeholder={placeholder} type={type} required={required} min={min} max={max}
-    style={{width:"100%",padding:"9px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,color:"#0f172a",background:"#f1f5f9",outline:"none",boxSizing:"border-box",...style}}
-    onFocus={e=>e.target.style.borderColor="#6366f1"} onBlur={e=>e.target.style.borderColor="#262626"}
+    style={{width:"100%",padding:"9px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,color:"#0f172a",background:"#fff",outline:"none",boxSizing:"border-box",...style}}
+    onFocus={e=>e.target.style.borderColor="#6366f1"} onBlur={e=>e.target.style.borderColor="#e2e8f0"}
   />;
 }
+
 function Sel({value,onChange,options,style={}}){
   return(
     <select value={value} onChange={e=>onChange(e.target.value)}
-      style={{width:"100%",padding:"8px 11px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,color:"#0f172a",background:"#f1f5f9",outline:"none",...style}}>
+      style={{width:"100%",padding:"8px 11px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,color:"#0f172a",background:"#fff",outline:"none",...style}}>
       {options.map(o=><option key={o.v} value={o.v}>{o.l}</option>)}
     </select>
   );
 }
+
 function Lbl({children}){return <p style={{margin:"0 0 5px",fontSize:12,fontWeight:600,color:"#475569"}}>{children}</p>;}
 function Modal({open,onClose,title,children}){
   if(!open)return null;
@@ -502,7 +504,7 @@ function Modal({open,onClose,title,children}){
 }
 function SortTh({k,sk,sd,onSort,children,align="left"}){
   const active=sk===k;
-  return <th onClick={()=>onSort(k)} style={{padding:"9px 13px",textAlign:align,fontSize:11,fontWeight:600,color:active?"#0f172a":"#64748b",background:"#fff",borderBottom:"1px solid #e2e8f0",cursor:"pointer",userSelect:"none",whiteSpace:"nowrap"}}>
+  return <th onClick={()=>onSort(k)} style={{padding:"9px 13px",textAlign:align,fontSize:11,fontWeight:600,color:active?"#6366f1":"#64748b",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",cursor:"pointer",userSelect:"none",whiteSpace:"nowrap"}}>
     {children}{active?sd==="asc"?" ↑":" ↓":""}
   </th>;
 }
@@ -583,7 +585,7 @@ function DashboardPage(){
       {/* Tabs */}
       <div style={{display:"flex",gap:4,background:"#f1f5f9",borderRadius:10,padding:4,maxWidth:380}}>
         {[["finance","📈 Financial Analysis"],["team","👥 Team & Renewals"]].map(([v,l])=>(
-          <button key={v} onClick={()=>setFinTab(v)} style={{flex:1,padding:"7px 10px",borderRadius:8,border:"none",background:finTab===v?"#1E1E1E":"transparent",fontWeight:finTab===v?700:500,fontSize:12,color:finTab===v?"#0f172a":"#64748b",cursor:"pointer",boxShadow:finTab===v?"0 1px 3px rgba(0,0,0,.1)":"none"}}>{l}</button>
+          <button key={v} onClick={()=>setFinTab(v)} style={{flex:1,padding:"7px 10px",borderRadius:8,border:"none",background:finTab===v?"#fff":"transparent",fontWeight:finTab===v?700:500,fontSize:12,color:finTab===v?"#0f172a":"#64748b",cursor:"pointer",boxShadow:finTab===v?"0 1px 3px rgba(0,0,0,.1)":"none"}}>{l}</button>
         ))}
       </div>
 
@@ -624,7 +626,7 @@ function DashboardPage(){
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
                   <XAxis dataKey="name" tick={{fontSize:9,fill:"#64748b"}} angle={-40} textAnchor="end"/>
                   <YAxis tick={{fontSize:9,fill:"#64748b"}} tickFormatter={v=>`${v/1000}K`}/>
-                  <Tooltip formatter={v=>SAR(v)} contentStyle={{borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#0f172a"}}/>
+                  <Tooltip formatter={v=>SAR(v)} contentStyle={{borderRadius:8,border:"none"}}/>
                   <Legend wrapperStyle={{fontSize:10,color:"#64748b"}}/>
                   <Bar dataKey="monthly" name="Monthly Retainer" fill="#6366f1" radius={[4,4,0,0]}/>
                   <Bar dataKey="cost"    name="Monthly Cost"     fill="#f59e0b" radius={[4,4,0,0]}/>
@@ -641,7 +643,7 @@ function DashboardPage(){
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
                   <XAxis dataKey="name" tick={{fontSize:9,fill:"#64748b"}}/>
                   <YAxis tick={{fontSize:9,fill:"#64748b"}} tickFormatter={v=>`${v/1000}K`}/>
-                  <Tooltip formatter={v=>SAR(v)} contentStyle={{borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#0f172a"}}/>
+                  <Tooltip formatter={v=>SAR(v)} contentStyle={{borderRadius:8,border:"none"}}/>
                   <Legend wrapperStyle={{fontSize:10,color:"#64748b"}}/>
                   <Bar dataKey="budget" name="Budget"      fill="#6366f1" radius={[4,4,0,0]}/>
                   <Bar dataKey="cost"   name="Actual Cost" fill="#f59e0b" radius={[4,4,0,0]}/>
@@ -681,7 +683,7 @@ function DashboardPage(){
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
                   <XAxis type="number" domain={[0,HPM]} tick={{fontSize:10,fill:"#64748b"}} tickFormatter={v=>`${v}h`}/>
                   <YAxis dataKey="name" type="category" tick={{fontSize:10,fill:"#64748b"}} width={42}/>
-                  <Tooltip formatter={(v,n)=>[`${v} hrs`,n==="hours"?"Allocated":"Available"]} contentStyle={{borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#0f172a"}}/>
+                  <Tooltip formatter={(v,n)=>[`${v} hrs`,n==="hours"?"Allocated":"Available"]} contentStyle={{borderRadius:8,border:"none"}}/>
                   <Bar dataKey="hours" stackId="a" name="Allocated">{C.chart.slice(0,8).map((e,i)=><Cell key={i} fill={e.u>100?"#ef4444":e.u>=70?"#6366f1":"#f59e0b"}/>)}</Bar>
                   <Bar dataKey="available" stackId="a" fill="#e2e8f0" name="Available"/>
                 </BarChart>
@@ -1107,8 +1109,8 @@ function ContractsPage(){
   useEffect(()=>{
     sb.from('contracts').select('*').order('contract_number').then(({data})=>{if(data)setContracts(data.map(mapC));setLoading(false);});
   },[]);
-  const dbAdd=async p=>{const{data}=await sb.from('contracts').insert([{contract_number:p.contract_number,client_id:p.client_id,client_name:p.client_name,contract_value:p.contract_value,tenure_months:p.tenure_months,start_date:p.start_date,end_date:p.end_date,status:p.status,contract_category:p.contract_category,budget_client_servicing:p.budget_client_servicing,budget_production:p.budget_production,budget_creative:p.budget_creative,budget_planning:p.budget_planning,notes:p.notes||""}]).select().single();if(data)setContracts(x=>[...x,mapC(data)]);};
-  const dbUpdate=async(id,p)=>{const{data}=await sb.from('contracts').update({contract_number:p.contract_number,client_id:p.client_id,client_name:p.client_name,contract_value:p.contract_value,tenure_months:p.tenure_months,start_date:p.start_date,end_date:p.end_date,status:p.status,contract_category:p.contract_category,budget_client_servicing:p.budget_client_servicing,budget_production:p.budget_production,budget_creative:p.budget_creative,budget_planning:p.budget_planning,notes:p.notes||""}).eq('id',id).select().single();if(data)setContracts(x=>x.map(c=>c.id===id?mapC(data):c));};
+  const dbAdd=async p=>{const{data,error}=await sb.from('contracts').insert([{contract_number:p.contract_number,client_id:p.client_id||null,client_name:p.client_name,contract_value:parseFloat(p.contract_value)||0,tenure_months:parseFloat(p.tenure_months)||0,project_name:p.project_name||"",start_date:p.start_date,end_date:p.end_date,status:p.status,contract_category:p.contract_category,budget_client_servicing:parseFloat(p.budget_client_servicing)||0,budget_production:parseFloat(p.budget_production)||0,budget_creative:parseFloat(p.budget_creative)||0,budget_planning:parseFloat(p.budget_planning)||0,budget_third_party:parseFloat(p.budget_third_party)||0,notes:p.notes||""}]).select().single();if(error)alert('Error saving: '+error.message);if(data)setContracts(x=>[...x,mapC(data)]);};
+  const dbUpdate=async(id,p)=>{const{data,error}=await sb.from('contracts').update({contract_number:p.contract_number,client_id:p.client_id||null,client_name:p.client_name,contract_value:parseFloat(p.contract_value)||0,tenure_months:parseFloat(p.tenure_months)||0,project_name:p.project_name||"",start_date:p.start_date,end_date:p.end_date,status:p.status,contract_category:p.contract_category,budget_client_servicing:parseFloat(p.budget_client_servicing)||0,budget_production:parseFloat(p.budget_production)||0,budget_creative:parseFloat(p.budget_creative)||0,budget_planning:parseFloat(p.budget_planning)||0,budget_third_party:parseFloat(p.budget_third_party)||0,notes:p.notes||""}).eq('id',id).select().single();if(error)alert('Error updating: '+error.message);if(data)setContracts(x=>x.map(c=>c.id===id?mapC(data):c));};
   const dbDelete=async id=>{await sb.from('contracts').delete().eq('id',id);setContracts(x=>x.filter(c=>c.id!==id));};
   const [search,setSearch]       = useState("");
   const [statusF,setStatusF]     = useState("all");
@@ -1147,9 +1149,10 @@ function ContractsPage(){
 
   const handleSubmit=e=>{
     e.preventDefault();
-    const totalAlloc=(parseFloat(form.budget_client_servicing)||0)+(parseFloat(form.budget_production)||0)+(parseFloat(form.budget_creative)||0)+(parseFloat(form.budget_planning)||0)+(parseFloat(form.budget_third_party)||0);
+    const totalAlloc=[form.budget_client_servicing,form.budget_production,form.budget_creative,form.budget_planning,form.budget_third_party].reduce((s,v)=>s+(parseFloat(v)||0),0);
     const cv=parseFloat(form.contract_value)||0;
-    if(Math.abs(totalAlloc-cv)>0.01){alert(`Total dept allocation (SAR ${totalAlloc.toLocaleString()}) must equal contract value (SAR ${cv.toLocaleString()})`);return;}
+    const totalAllocCheck=[form.budget_client_servicing,form.budget_production,form.budget_creative,form.budget_planning,form.budget_third_party].reduce((s,v)=>s+(parseFloat(v)||0),0);
+    if(Math.abs(totalAllocCheck-cv)>0.01){alert(`Total dept allocation (SAR ${totalAllocCheck.toLocaleString()}) must equal contract value (SAR ${cv.toLocaleString()})`);return;}
     const expired=form.end_date&&new Date(form.end_date)<new Date();
     const autoStatus=expired?"Expired":"Active";
     const autoCat=getCatFromTenure(form.tenure_months);
@@ -1242,7 +1245,7 @@ function ContractsPage(){
                 const soon=dl>=0&&dl<=30,expired=dl<0;
                 const monthly=Math.round(c.contract_value/c.tenure_months);
                 const cs=catStyle(c.contract_category);
-                const rowBg=expired?"#1a0808":soon?"#1a1000":idx%2===0?"#161616":"#111111";
+                const rowBg=expired?"#fff5f5":soon?"#fffbeb":idx%2===0?"#fff":"#fafafa";
                 return(
                   <tr key={c.id} style={{borderBottom:"1px solid #f1f5f9",background:rowBg}}>
                     <td style={{padding:"11px 13px"}}><span style={{background:"#f1f5f9",color:"#475569",padding:"2px 8px",borderRadius:5,fontSize:11,fontWeight:600,fontFamily:"monospace"}}>{c.contract_number||"—"}</span></td>
@@ -1283,8 +1286,8 @@ function ContractsPage(){
               {sorted.length>0&&(
                 <tr style={{background:"#f1f5f9",borderTop:"2px solid #cbd5e1"}}>
                   <td colSpan={3} style={{padding:"9px 13px",fontWeight:700,fontSize:13,color:"#0f172a"}}>TOTAL</td>
-                  <td style={{padding:"9px 13px",textAlign:"right",fontWeight:700,fontSize:13,color:"#0f172a"}}>SAR {sorted.reduce((s,c)=>s+c.contract_value,0).toLocaleString("en-US")}</td>
-                  <td style={{padding:"9px 13px",textAlign:"right",fontWeight:700,fontSize:13,color:"#0f172a"}}>SAR {sorted.reduce((s,c)=>s+Math.round(c.contract_value/c.tenure_months),0).toLocaleString("en-US")}</td>
+                  <td style={{padding:"9px 13px",textAlign:"right",fontWeight:700,fontSize:13,color:"#0f172a"}}>SAR {sorted.reduce((s,c)=>s+(parseFloat(c.contract_value)||0),0).toLocaleString("en-US")}</td>
+                  <td style={{padding:"9px 13px",textAlign:"right",fontWeight:700,fontSize:13,color:"#0f172a"}}>SAR {sorted.reduce((s,c)=>s+Math.round((parseFloat(c.contract_value)||0)/(parseFloat(c.tenure_months)||1)),0).toLocaleString("en-US")}</td>
                   <td colSpan={4}/>
                 </tr>
               )}
@@ -1304,11 +1307,7 @@ function ContractsPage(){
             <div><Lbl>Client *</Lbl>
               <Sel value={form.client_id} onChange={handleClient} options={[{v:"",l:"Select client"},...Object.entries(CLIENT_MAP).map(([v,l])=>({v,l}))]}/>
             </div>
-            <div><Lbl>Project Name *</Lbl>
-              <textarea value={form.project_name||""} onChange={e=>upd("project_name",e.target.value)} placeholder="Enter project name..." required rows={2}
-                style={{width:"100%",padding:"8px 11px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,color:"#0f172a",outline:"none",resize:"vertical",boxSizing:"border-box"}}
-                onFocus={e=>e.target.style.borderColor="#6366f1"} onBlur={e=>e.target.style.borderColor="#e2e8f0"}/>
-            </div>
+            <div><Lbl>Project Name *</Lbl><Inp value={form.project_name||""} onChange={e=>upd("project_name",e.target.value)} placeholder="Enter project name..." required/></div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               <div><Lbl>Contract Value (SAR) *</Lbl><Inp type="number" value={form.contract_value||""} onChange={e=>upd("contract_value",e.target.value)} placeholder="Total value" required/></div>
               <div><Lbl>Tenure (Months) *</Lbl><Inp type="number" min="1" value={form.tenure_months||""} onChange={e=>handleTenure(e.target.value)} placeholder="e.g. 12" required/></div>
@@ -1953,7 +1952,7 @@ function ReportsPage(){
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
                     <XAxis dataKey="name" tick={{fontSize:10,fill:"#64748b"}} angle={-40} textAnchor="end"/>
                     <YAxis tick={{fontSize:10,fill:"#64748b"}} tickFormatter={v=>`${v/1000}K`}/>
-                    <Tooltip formatter={v=>SAR(v)} contentStyle={{borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#0f172a"}}/>
+                    <Tooltip formatter={v=>SAR(v)} contentStyle={{borderRadius:8,border:"none"}}/>
                     <Legend wrapperStyle={{fontSize:11,color:"#64748b"}}/>
                     <Bar dataKey="monthlyRetainer" name="Monthly Retainer" fill="#6366f1" radius={[3,3,0,0]}/>
                     <Bar dataKey="resourceCost"    name="Resource Cost"    fill="#f59e0b" radius={[3,3,0,0]}/>
@@ -1992,7 +1991,7 @@ function ReportsPage(){
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
                     <XAxis dataKey="name" tick={{fontSize:10,fill:"#64748b"}} angle={-20} textAnchor="end"/>
                     <YAxis tick={{fontSize:10,fill:"#64748b"}} tickFormatter={v=>`${v/1000}K`}/>
-                    <Tooltip formatter={v=>SAR(v)} contentStyle={{borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#0f172a"}}/>
+                    <Tooltip formatter={v=>SAR(v)} contentStyle={{borderRadius:8,border:"none"}}/>
                     <Legend wrapperStyle={{fontSize:11,color:"#64748b"}}/>
                     <Bar dataKey="budget" name="Budget"      fill="#6366f1" radius={[3,3,0,0]}/>
                     <Bar dataKey="cost"   name="Actual Cost" fill="#f59e0b" radius={[3,3,0,0]}/>
@@ -2038,7 +2037,7 @@ function ReportsPage(){
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
                       <XAxis dataKey="client" tick={{fontSize:9,fill:"#64748b"}} angle={-35} textAnchor="end"/>
                       <YAxis tick={{fontSize:9,fill:"#64748b"}}/>
-                      <Tooltip formatter={(v,n)=>n==="hours"?`${v}h`:SAR(v)} contentStyle={{borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#0f172a"}}/>
+                      <Tooltip formatter={(v,n)=>n==="hours"?`${v}h`:SAR(v)} contentStyle={{borderRadius:8,border:"none"}}/>
                       <Legend wrapperStyle={{fontSize:10,color:"#64748b"}}/>
                       <Bar dataKey="hours" name="Hours" fill="#6366f1" radius={[3,3,0,0]}/>
                       <Bar dataKey="cost"  name="Cost"  fill="#6366f1" radius={[3,3,0,0]}/>
@@ -2073,7 +2072,7 @@ function ReportsPage(){
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
                     <XAxis dataKey="month" tick={{fontSize:10,fill:"#64748b"}}/>
                     <YAxis tick={{fontSize:10,fill:"#64748b"}} tickFormatter={v=>`${v/1000}K`}/>
-                    <Tooltip formatter={v=>SAR(v)} contentStyle={{borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#0f172a"}}/>
+                    <Tooltip formatter={v=>SAR(v)} contentStyle={{borderRadius:8,border:"none"}}/>
                     <Legend wrapperStyle={{fontSize:11,color:"#64748b"}}/>
                     <Line type="monotone" dataKey="expectedRevenue" name="Revenue"       stroke="#6366f1" strokeWidth={3}/>
                     <Line type="monotone" dataKey="expectedCost"    name="Cost"          stroke="#f59e0b" strokeWidth={3}/>
@@ -2150,7 +2149,7 @@ function ReportsPage(){
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
                     <XAxis dataKey="month" tick={{fontSize:10,fill:"#64748b"}} angle={-35} textAnchor="end"/>
                     <YAxis tick={{fontSize:10,fill:"#64748b"}} tickFormatter={v=>`${v/1000}K`}/>
-                    <Tooltip formatter={v=>SAR(v)} contentStyle={{borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#0f172a"}}/>
+                    <Tooltip formatter={v=>SAR(v)} contentStyle={{borderRadius:8,border:"none"}}/>
                     <Legend wrapperStyle={{fontSize:11,color:"#64748b"}}/>
                     <Bar dataKey="retainer" name="Monthly Retainer" fill="#6366f1" radius={[3,3,0,0]}/>
                     <Bar dataKey="cost"     name="Resource Cost"    fill="#f59e0b" radius={[3,3,0,0]}/>
@@ -2364,7 +2363,7 @@ function ReportsPage(){
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
                       <XAxis dataKey="dept" tick={{fontSize:10,fill:"#64748b"}}/>
                       <YAxis tick={{fontSize:10,fill:"#64748b"}} tickFormatter={v=>`${v/1000}K`}/>
-                      <Tooltip formatter={v=>typeof v==="number"&&v>100?SAR(v):`${v}`} contentStyle={{borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#0f172a"}}/>
+                      <Tooltip formatter={v=>typeof v==="number"&&v>100?SAR(v):`${v}`} contentStyle={{borderRadius:8,border:"none"}}/>
                       <Legend wrapperStyle={{fontSize:11,color:"#64748b"}}/>
                       <Bar dataKey="totalBudget" name="Budget" fill="#6366f1" radius={[3,3,0,0]}/>
                       <Bar dataKey="totalCost"   name="Cost"   fill="#f59e0b" radius={[3,3,0,0]}/>
@@ -2772,7 +2771,7 @@ function ExpenseCharts({expenses}){
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
             <XAxis dataKey="contract" tick={{fontSize:10,fill:"#64748b"}}/>
             <YAxis tick={{fontSize:10,fill:"#64748b"}} tickFormatter={v=>`${(v/1000).toFixed(0)}k`}/>
-            <Tooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#0f172a"}}/>
+            <Tooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:8,border:"none"}}/>
             <Legend wrapperStyle={{fontSize:11,color:"#64748b"}}/>
             <Bar dataKey="approved" name="Approved" fill="#6366f1" radius={[3,3,0,0]}/>
             <Bar dataKey="draft"    name="Draft"    fill="#f59e0b" radius={[3,3,0,0]}/>
@@ -2786,7 +2785,7 @@ function ExpenseCharts({expenses}){
             <Pie data={byType} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={75} label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`} labelLine={false}>
               {byType.map((e,i)=><Cell key={i} fill={EXP_TYPE_COLORS[e.name]||EXP_COLORS[i%EXP_COLORS.length]}/>)}
             </Pie>
-            <Tooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#0f172a"}}/>
+            <Tooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:8,border:"none"}}/>
           </PieChart>
         </ResponsiveContainer>
       </Card>
@@ -2797,7 +2796,7 @@ function ExpenseCharts({expenses}){
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false}/>
             <XAxis type="number" tick={{fontSize:10,fill:"#64748b"}} tickFormatter={v=>`${(v/1000).toFixed(0)}k`}/>
             <YAxis type="category" dataKey="dept" tick={{fontSize:10,fill:"#64748b"}} width={88}/>
-            <Tooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#0f172a"}}/>
+            <Tooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:8,border:"none"}}/>
             <Bar dataKey="total" name="Total" fill="#6366f1" radius={[0,3,3,0]}/>
           </BarChart>
         </ResponsiveContainer>
@@ -2810,7 +2809,7 @@ function ExpenseCharts({expenses}){
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
               <XAxis dataKey="contract" tick={{fontSize:10,fill:"#64748b"}}/>
               <YAxis tick={{fontSize:10,fill:"#64748b"}} unit="%" domain={[0,100]}/>
-              <Tooltip formatter={v=>`${v}%`} contentStyle={{borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#0f172a"}}/>
+              <Tooltip formatter={v=>`${v}%`} contentStyle={{borderRadius:8,border:"none"}}/>
               <Bar dataKey="avg_profit" name="Avg Profit %">
                 {profitData.map((e,i)=><Cell key={i} fill={e.avg_profit>=30?"#6366f1":e.avg_profit>=10?"#f59e0b":"#ef4444"}/>)}
               </Bar>
@@ -3551,7 +3550,7 @@ function PlatformApp(){
   };
 
   return(
-    <div style={{display:"flex",height:"100vh",fontFamily:"'Inter',system-ui,sans-serif",background:"#fff",overflow:"hidden"}}>
+    <div style={{display:"flex",height:"100vh",fontFamily:"'Inter',system-ui,sans-serif",background:"#f8fafc",overflow:"hidden"}}>
 
       {/* Sidebar */}
       <aside style={{width:240,background:"#fff",borderRight:"1px solid #e2e8f0",display:"flex",flexDirection:"column",flexShrink:0,overflowY:"auto"}}>
