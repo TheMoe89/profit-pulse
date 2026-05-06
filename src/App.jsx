@@ -467,8 +467,8 @@ function Btn({children,onClick,variant="primary",size="md",type="button",disable
   };
   return <button type={type} onClick={onClick} disabled={disabled}
     style={{...sz[size],...vs[variant],borderRadius:9,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.5:1,display:"inline-flex",alignItems:"center",gap:5,transition:"opacity .15s",...style}}
-    onMouseEnter={e=>{if(!disabled&&variant==="primary")e.currentTarget.style.background="#4f46e5";else if(!disabled&&variant==="outline")e.currentTarget.style.background="#1E1E1E";}}
-    onMouseLeave={e=>{if(variant==="primary")e.currentTarget.style.background="#6366f1";else if(variant==="outline")e.currentTarget.style.background="transparent";}}
+    onMouseEnter={e=>{if(!disabled&&variant==="primary")e.currentTarget.style.background="#1e293b";else if(!disabled&&variant==="outline")e.currentTarget.style.background="#f1f5f9";}}
+    onMouseLeave={e=>{if(variant==="primary")e.currentTarget.style.background="#0f172a";else if(variant==="outline")e.currentTarget.style.background="transparent";}}
   >{children}</button>;
 }
 function Inp({value,onChange,placeholder,type="text",required,min,max,style={}}){
