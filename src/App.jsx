@@ -14,46 +14,52 @@ function useAuth(){ return useContext(AuthCtx); }
 function AuthProvider({children}){
   const [session,setSession]       = useState(undefined);
   const [profile,setProfile]       = useState(null);
-  const [userPerms,setUserPerms]   = useState(null); // null = no restrictions (admin)
+  const [userPerms,setUserPerms]   = useState(null);
+  const [permsLoaded,setPermsLoaded] = useState(false); // blocks UI until perms are ready
 
   useEffect(()=>{
     sb.auth.getSession().then(({data:{session}})=>{
       setSession(session);
       if(session) loadProfile(session.user.id);
+      else setPermsLoaded(true); // no session = show login immediately
     });
     const {data:{subscription}} = sb.auth.onAuthStateChange((_,session)=>{
       setSession(session);
-      if(session) loadProfile(session.user.id);
-      else { setProfile(null); setUserPerms(null); }
+      if(session){ setPermsLoaded(false); loadProfile(session.user.id); }
+      else { setProfile(null); setUserPerms(null); setPermsLoaded(true); }
     });
     return ()=>subscription.unsubscribe();
   },[]);
 
   const loadProfile = async (uid) => {
     const {data:prof} = await sb.from('profiles').select('*').eq('id',uid).single();
-    if(!prof) return;
+    if(!prof){ setPermsLoaded(true); return; }
     setProfile(prof);
-    // Admins get full access — skip permission lookup
-    if(prof.role==='admin'){ setUserPerms(null); return; }
-    // Find which role this user is assigned to
+    if(prof.role==='admin'){
+      setUserPerms(null); // null = full access
+      setPermsLoaded(true);
+      return;
+    }
+    // Load role permissions for non-admin users
     const {data:roles} = await sb.from('role_permissions').select('*');
     if(roles){
       const assigned = roles.find(r=>(r.assigned_users||[]).includes(prof.email));
       if(assigned) setUserPerms(assigned.permissions||{});
-      else setUserPerms({}); // no role assigned = no access
+      else setUserPerms({}); // no role = no access
     }
+    setPermsLoaded(true); // only NOW show the platform
   };
 
-  // Check if user can perform an action on a module
+  // can() — never called before permsLoaded, so no flash
   const can = (moduleKey, action='view') => {
-    if(!userPerms) return true; // admin = full access
+    if(!userPerms) return true; // admin (null = full access)
     return !!(userPerms[moduleKey]?.[action]);
   };
 
   const signIn = (email,password) => sb.auth.signInWithPassword({email,password});
   const signOut = () => sb.auth.signOut();
 
-  return <AuthCtx.Provider value={{session,profile,userPerms,can,signIn,signOut,sb,loadProfile}}>{children}</AuthCtx.Provider>;
+  return <AuthCtx.Provider value={{session,profile,userPerms,can,permsLoaded,signIn,signOut,sb,loadProfile}}>{children}</AuthCtx.Provider>;
 }
 
 // ─── LOGIN PAGE ───────────────────────────────────────────────────────────────
@@ -1187,9 +1193,9 @@ function ContractsPage(){
     {label:"Planning",        key:"budget_planning",         bg:"#fffbeb",border:"#fde68a",color:"#d97706"},
   ].map(w=>({...w,total:contracts.reduce((s,c)=>s+((c[w.key]||0)),0)}));
 
-  const totalAlloc=(form.budget_client_servicing||0)+(form.budget_production||0)+(form.budget_creative||0)+(form.budget_planning||0);
+  const totalAlloc=(parseFloat(form.budget_client_servicing)||0)+(parseFloat(form.budget_production)||0)+(parseFloat(form.budget_creative)||0)+(parseFloat(form.budget_planning)||0)+(parseFloat(form.budget_third_party)||0);
   const formCV=parseFloat(form.contract_value)||0;
-  const allocMatch=formCV>0&&totalAlloc===formCV;
+  const allocMatch=formCV>0&&Math.abs(totalAlloc-formCV)<0.01;
   const allocOver=totalAlloc>formCV;
 
   const catStyle=c=>({Retainer:{bg:"#dbeafe",col:"#2563eb"},Project:{bg:"#f3e8ff",col:"#6366f1"},Adhoc:{bg:"#fef9c3",col:"#d97706"}}[c]||{bg:"#f1f5f9",col:"#475569"});
@@ -3605,10 +3611,13 @@ export default function Platform(){
 }
 
 function PlatformRoot(){
-  const {session} = useAuth();
-  if(session===undefined) return(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#f8fafc"}}>
-      <div style={{color:"#fff",fontSize:14,opacity:.7}}>Loading…</div>
+  const {session,permsLoaded} = useAuth();
+  // Show loading spinner until BOTH session AND permissions are resolved
+  if(session===undefined || (session && !permsLoaded)) return(
+    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"#f8fafc",gap:16}}>
+      <div style={{width:40,height:40,border:"3px solid #e2e8f0",borderTopColor:"#6366f1",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
+      <p style={{fontSize:13,color:"#64748b",margin:0}}>Loading…</p>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
   if(!session) return <LoginPage/>;
