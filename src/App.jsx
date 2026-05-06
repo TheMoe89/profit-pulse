@@ -231,6 +231,213 @@ const SNAPSHOTS=[
   {m:"2026-03",cn:"SABIC",r:40000,c:31000},{m:"2026-03",cn:"Saudi Aramco",r:30000,c:25000},{m:"2026-03",cn:"Almarai",r:20000,c:11000},{m:"2026-03",cn:"STC",r:30000,c:18000},{m:"2026-03",cn:"Mobily",r:30000,c:22000},
 ];
 
+
+const DEPTS=["Production Department","Client Servicing Department","Creative Department","Planning Department"];
+const EMPTY_EMP={name:"",designation:"",department:"",location:"Jeddah",mc:15000,email:"",status:"Active",start:""};
+const MOCK_CLIENTS_INIT = [
+  {id:"cl1",name:"SABIC",        industry:"Petrochemicals",  contact_person:"Fahad Al-Ghamdi",  contact_person_designation:"Marketing Director",   contact_email:"fahad@sabic.com",    contact_phone:"+966 50 111 2233", status:"Active",   notes:"Long-term retainer client. Key account."},
+  {id:"cl2",name:"Saudi Aramco", industry:"Energy",          contact_person:"Reem Al-Dosari",   contact_person_designation:"Brand Manager",         contact_email:"reem@aramco.com",    contact_phone:"+966 50 222 3344", status:"Active",   notes:""},
+  {id:"cl3",name:"Almarai",      industry:"Food & Beverage", contact_person:"Sami Khalil",      contact_person_designation:"Head of Communications",contact_email:"sami@almarai.com",   contact_phone:"+966 55 333 4455", status:"Active",   notes:"Monthly campaigns + seasonal activations."},
+  {id:"cl4",name:"STC",          industry:"Telecom",         contact_person:"Noura Al-Harbi",   contact_person_designation:"Digital Marketing Lead", contact_email:"noura@stc.com.sa",  contact_phone:"+966 55 444 5566", status:"Active",   notes:""},
+  {id:"cl5",name:"Mobily",       industry:"Telecom",         contact_person:"Tariq Badr",       contact_person_designation:"Marketing Manager",      contact_email:"tariq@mobily.sa",   contact_phone:"+966 50 555 6677", status:"Active",   notes:"Short-term project contract."},
+  {id:"cl6",name:"Al Rajhi Bank",industry:"Banking",         contact_person:"Mona Al-Zahrani",  contact_person_designation:"CMO",                   contact_email:"mona@alrajhi.com",  contact_phone:"+966 56 666 7788", status:"Prospect", notes:"In negotiations for Q3 retainer."},
+  {id:"cl7",name:"Noon",         industry:"E-Commerce",      contact_person:"Ali Hassan",       contact_person_designation:"Growth Lead",            contact_email:"ali@noon.com",      contact_phone:"+966 50 777 8899", status:"Prospect", notes:""},
+  {id:"cl8",name:"Zain KSA",     industry:"Telecom",         contact_person:"Sara Al-Mutairi",  contact_person_designation:"Brand Executive",        contact_email:"sara@zain.sa",      contact_phone:"+966 55 888 9900", status:"Inactive", notes:"Contract ended. Possible renewal in Q4."},
+];
+const EMPTY_CLIENT = {name:"",industry:"",contact_person:"",contact_person_designation:"",contact_email:"",contact_phone:"",status:"Active",notes:""};
+const MOCK_CONTRACTS_FULL = [
+  {id:"ct1", contract_number:"CTR-2026-001", client_id:"cl1", client_name:"SABIC",        contract_value:480000, tenure_months:12, start_date:"2026-01-01", end_date:"2026-12-31", status:"Active",  contract_category:"Retainer", budget_client_servicing:80000,  budget_production:140000, budget_creative:160000, budget_planning:100000, notes:"Annual brand retainer.", contract_pdf_url:""},
+  {id:"ct2", contract_number:"CTR-2026-002", client_id:"cl2", client_name:"Saudi Aramco", contract_value:360000, tenure_months:12, start_date:"2026-01-01", end_date:"2026-05-15", status:"Active",  contract_category:"Retainer", budget_client_servicing:60000,  budget_production:100000, budget_creative:120000, budget_planning:80000,  notes:"",                   contract_pdf_url:""},
+  {id:"ct3", contract_number:"CTR-2026-003", client_id:"cl3", client_name:"Almarai",      contract_value:240000, tenure_months:12, start_date:"2026-01-01", end_date:"2026-12-31", status:"Active",  contract_category:"Retainer", budget_client_servicing:40000,  budget_production:70000,  budget_creative:80000,  budget_planning:50000,  notes:"Includes seasonal campaigns.", contract_pdf_url:""},
+  {id:"ct4", contract_number:"CTR-2026-004", client_id:"cl4", client_name:"STC",          contract_value:180000, tenure_months:6,  start_date:"2026-02-01", end_date:"2026-07-31", status:"Active",  contract_category:"Retainer", budget_client_servicing:30000,  budget_production:50000,  budget_creative:60000,  budget_planning:40000,  notes:"",                   contract_pdf_url:""},
+  {id:"ct5", contract_number:"PRJ-2026-001", client_id:"cl5", client_name:"Mobily",       contract_value:90000,  tenure_months:3,  start_date:"2026-03-01", end_date:"2026-06-25", status:"Active",  contract_category:"Project",  budget_client_servicing:15000,  budget_production:25000,  budget_creative:30000,  budget_planning:20000,  notes:"Brand refresh project.", contract_pdf_url:""},
+  {id:"ct6", contract_number:"ADH-2025-001", client_id:"cl8", client_name:"Zain KSA",     contract_value:45000,  tenure_months:2,  start_date:"2025-10-01", end_date:"2025-11-30", status:"Expired", contract_category:"Adhoc",    budget_client_servicing:10000,  budget_production:15000,  budget_creative:12000,  budget_planning:8000,   notes:"Campaign support.",  contract_pdf_url:""},
+  {id:"ct7", contract_number:"PRJ-2025-002", client_id:"cl3", client_name:"Almarai",      contract_value:120000, tenure_months:4,  start_date:"2025-06-01", end_date:"2025-09-30", status:"Expired", contract_category:"Project",  budget_client_servicing:20000,  budget_production:35000,  budget_creative:40000,  budget_planning:25000,  notes:"Ramadan campaign.",  contract_pdf_url:""},
+];
+const EMPTY_CONTRACT = {client_id:"",client_name:"",contract_value:"",tenure_months:12,start_date:"",end_date:"",status:"Active",contract_category:"Retainer",budget_client_servicing:0,budget_production:0,budget_creative:0,budget_planning:0,contract_pdf_url:"",notes:""};
+const CLIENT_MAP = {cl1:"SABIC",cl2:"Saudi Aramco",cl3:"Almarai",cl4:"STC",cl5:"Mobily",cl6:"Al Rajhi Bank",cl7:"Noon",cl8:"Zain KSA"};
+const MOCK_ALLOCS_INIT = [
+  {id:"a1", employee_id:"e1", employee_name:"Sarah Al-Rashidi", client_id:"cl1", client_name:"SABIC",        contract_id:"ct1", allocated_hours:88,  month:"2026-04", status:"Assigned", notes:""},
+  {id:"a2", employee_id:"e1", employee_name:"Sarah Al-Rashidi", client_id:"cl3", client_name:"Almarai",      contract_id:"ct3", allocated_hours:66,  month:"2026-04", status:"Assigned", notes:""},
+  {id:"a3", employee_id:"e2", employee_name:"Mohammed Khalid",  client_id:"cl2", client_name:"Saudi Aramco", contract_id:"ct2", allocated_hours:176, month:"2026-04", status:"Assigned", notes:""},
+  {id:"a4", employee_id:"e3", employee_name:"Lena Barakat",     client_id:"cl1", client_name:"SABIC",        contract_id:"ct1", allocated_hours:120, month:"2026-04", status:"Assigned", notes:""},
+  {id:"a5", employee_id:"e3", employee_name:"Lena Barakat",     client_id:"cl5", client_name:"Mobily",       contract_id:"ct5", allocated_hours:56,  month:"2026-04", status:"Assigned", notes:""},
+  {id:"a6", employee_id:"e4", employee_name:"Omar Farouk",      client_id:"cl3", client_name:"Almarai",      contract_id:"ct3", allocated_hours:44,  month:"2026-04", status:"Assigned", notes:""},
+  {id:"a7", employee_id:"e5", employee_name:"Nadia Hamdan",     client_id:"cl4", client_name:"STC",          contract_id:"ct4", allocated_hours:160, month:"2026-04", status:"Assigned", notes:""},
+  {id:"a8", employee_id:"e6", employee_name:"Tariq Mansour",    client_id:"cl2", client_name:"Saudi Aramco", contract_id:"ct2", allocated_hours:200, month:"2026-04", status:"Assigned", notes:"Over-allocated"},
+  {id:"a9", employee_id:"e7", employee_name:"Rana Al-Amin",     client_id:"cl3", client_name:"Almarai",      contract_id:"ct3", allocated_hours:132, month:"2026-04", status:"Assigned", notes:""},
+  {id:"a10",employee_id:"e7", employee_name:"Rana Al-Amin",     client_id:"cl4", client_name:"STC",          contract_id:"ct4", allocated_hours:22,  month:"2026-04", status:"Assigned", notes:""},
+  {id:"a11",employee_id:"e8", employee_name:"Faisal Qureshi",   client_id:"cl1", client_name:"SABIC",        contract_id:"ct1", allocated_hours:176, month:"2026-04", status:"Assigned", notes:""},
+  {id:"a12",employee_id:"e9", employee_name:"Yasmin Saleh",     client_id:"cl2", client_name:"Saudi Aramco", contract_id:"ct2", allocated_hours:88,  month:"2026-04", status:"Assigned", notes:""},
+  {id:"a13",employee_id:"e9", employee_name:"Yasmin Saleh",     client_id:"cl5", client_name:"Mobily",       contract_id:"ct5", allocated_hours:88,  month:"2026-04", status:"Assigned", notes:""},
+  {id:"a14",employee_id:"e10",employee_name:"Khalid Nasser",    client_id:"cl4", client_name:"STC",          contract_id:"ct4", allocated_hours:30,  month:"2026-04", status:"Assigned", notes:""},
+  {id:"b1", employee_id:"e1", employee_name:"Sarah Al-Rashidi", client_id:"cl1", client_name:"SABIC",        contract_id:"ct1", allocated_hours:100, month:"2026-03", status:"Assigned", notes:""},
+  {id:"b2", employee_id:"e2", employee_name:"Mohammed Khalid",  client_id:"cl2", client_name:"Saudi Aramco", contract_id:"ct2", allocated_hours:160, month:"2026-03", status:"Assigned", notes:""},
+  {id:"b3", employee_id:"e3", employee_name:"Lena Barakat",     client_id:"cl1", client_name:"SABIC",        contract_id:"ct1", allocated_hours:140, month:"2026-03", status:"Assigned", notes:""},
+  {id:"b4", employee_id:"e5", employee_name:"Nadia Hamdan",     client_id:"cl4", client_name:"STC",          contract_id:"ct4", allocated_hours:130, month:"2026-03", status:"Assigned", notes:""},
+  {id:"b5", employee_id:"e6", employee_name:"Tariq Mansour",    client_id:"cl2", client_name:"Saudi Aramco", contract_id:"ct2", allocated_hours:176, month:"2026-03", status:"Assigned", notes:""},
+  {id:"b6", employee_id:"e7", employee_name:"Rana Al-Amin",     client_id:"cl3", client_name:"Almarai",      contract_id:"ct3", allocated_hours:110, month:"2026-03", status:"Assigned", notes:""},
+  {id:"b7", employee_id:"e8", employee_name:"Faisal Qureshi",   client_id:"cl1", client_name:"SABIC",        contract_id:"ct1", allocated_hours:176, month:"2026-03", status:"Assigned", notes:""},
+  {id:"b8", employee_id:"e4", employee_name:"Omar Farouk",      client_id:"cl3", client_name:"Almarai",      contract_id:"ct3", allocated_hours:60,  month:"2026-03", status:"Assigned", notes:""},
+  {id:"b9", employee_id:"e9", employee_name:"Yasmin Saleh",     client_id:"cl5", client_name:"Mobily",       contract_id:"ct5", allocated_hours:176, month:"2026-03", status:"Assigned", notes:""},
+  {id:"b10",employee_id:"e10",employee_name:"Khalid Nasser",    client_id:"cl4", client_name:"STC",          contract_id:"ct4", allocated_hours:88,  month:"2026-03", status:"Assigned", notes:""},
+];
+const ALLOC_MONTHS = [
+  {v:"2026-01",l:"January 2026"},{v:"2026-02",l:"February 2026"},{v:"2026-03",l:"March 2026"},
+  {v:"2026-04",l:"April 2026"}, {v:"2026-05",l:"May 2026"},     {v:"2026-06",l:"June 2026"},
+  {v:"2026-07",l:"July 2026"},  {v:"2026-08",l:"August 2026"},  {v:"2026-09",l:"September 2026"},
+  {v:"2026-10",l:"October 2026"},{v:"2026-11",l:"November 2026"},{v:"2026-12",l:"December 2026"},
+];
+const ALLOC_DEPTS = ["Production Department","Client Servicing Department","Creative Department","Planning Department"];
+const REPORT_SNAPSHOTS = [
+  {month:"2026-01",client_name:"SABIC",        contract_number:"CTR-2026-001",contract_value:480000,start_date:"2026-01-01",end_date:"2026-12-31",monthly_retainer:40000,allocated_hours:264,resource_cost:28000,profit:12000,status:"Active",contract_category:"Retainer"},
+  {month:"2026-01",client_name:"Saudi Aramco", contract_number:"CTR-2026-002",contract_value:360000,start_date:"2026-01-01",end_date:"2026-05-15",monthly_retainer:30000,allocated_hours:238,resource_cost:24000,profit:6000, status:"Active",contract_category:"Retainer"},
+  {month:"2026-01",client_name:"Almarai",      contract_number:"CTR-2026-003",contract_value:240000,start_date:"2026-01-01",end_date:"2026-12-31",monthly_retainer:20000,allocated_hours:170,resource_cost:12000,profit:8000, status:"Active",contract_category:"Retainer"},
+  {month:"2026-02",client_name:"SABIC",        contract_number:"CTR-2026-001",contract_value:480000,start_date:"2026-01-01",end_date:"2026-12-31",monthly_retainer:40000,allocated_hours:270,resource_cost:30000,profit:10000,status:"Active",contract_category:"Retainer"},
+  {month:"2026-02",client_name:"Saudi Aramco", contract_number:"CTR-2026-002",contract_value:360000,start_date:"2026-01-01",end_date:"2026-05-15",monthly_retainer:30000,allocated_hours:220,resource_cost:22000,profit:8000, status:"Active",contract_category:"Retainer"},
+  {month:"2026-02",client_name:"Almarai",      contract_number:"CTR-2026-003",contract_value:240000,start_date:"2026-01-01",end_date:"2026-12-31",monthly_retainer:20000,allocated_hours:175,resource_cost:14000,profit:6000, status:"Active",contract_category:"Retainer"},
+  {month:"2026-02",client_name:"STC",          contract_number:"CTR-2026-004",contract_value:180000,start_date:"2026-02-01",end_date:"2026-07-31",monthly_retainer:30000,allocated_hours:218,resource_cost:19000,profit:11000,status:"Active",contract_category:"Retainer"},
+  {month:"2026-03",client_name:"SABIC",        contract_number:"CTR-2026-001",contract_value:480000,start_date:"2026-01-01",end_date:"2026-12-31",monthly_retainer:40000,allocated_hours:276,resource_cost:31000,profit:9000, status:"Active",contract_category:"Retainer"},
+  {month:"2026-03",client_name:"Saudi Aramco", contract_number:"CTR-2026-002",contract_value:360000,start_date:"2026-01-01",end_date:"2026-05-15",monthly_retainer:30000,allocated_hours:248,resource_cost:25000,profit:5000, status:"Active",contract_category:"Retainer"},
+  {month:"2026-03",client_name:"Almarai",      contract_number:"CTR-2026-003",contract_value:240000,start_date:"2026-01-01",end_date:"2026-12-31",monthly_retainer:20000,allocated_hours:160,resource_cost:11000,profit:9000, status:"Active",contract_category:"Retainer"},
+  {month:"2026-03",client_name:"STC",          contract_number:"CTR-2026-004",contract_value:180000,start_date:"2026-02-01",end_date:"2026-07-31",monthly_retainer:30000,allocated_hours:210,resource_cost:18000,profit:12000,status:"Active",contract_category:"Retainer"},
+  {month:"2026-03",client_name:"Mobily",       contract_number:"PRJ-2026-001",contract_value:90000, start_date:"2026-03-01",end_date:"2026-06-25",monthly_retainer:30000,allocated_hours:264,resource_cost:22000,profit:8000, status:"Active",contract_category:"Project"},
+];
+const MC_SNAPSHOTS_INIT = [
+  {id:"s1", month:"2026-01",contract_id:"ct1",contract_number:"CTR-2026-001",client_name:"SABIC",        monthly_retainer:40000,resource_cost:28000,profit:12000,allocated_hours:264,is_closed:true,closed_date:"2026-02-01"},
+  {id:"s2", month:"2026-01",contract_id:"ct2",contract_number:"CTR-2026-002",client_name:"Saudi Aramco", monthly_retainer:30000,resource_cost:24000,profit:6000, allocated_hours:238,is_closed:true,closed_date:"2026-02-01"},
+  {id:"s3", month:"2026-01",contract_id:"ct3",contract_number:"CTR-2026-003",client_name:"Almarai",      monthly_retainer:20000,resource_cost:12000,profit:8000, allocated_hours:170,is_closed:true,closed_date:"2026-02-01"},
+  {id:"s4", month:"2026-02",contract_id:"ct1",contract_number:"CTR-2026-001",client_name:"SABIC",        monthly_retainer:40000,resource_cost:30000,profit:10000,allocated_hours:270,is_closed:true,closed_date:"2026-03-01"},
+  {id:"s5", month:"2026-02",contract_id:"ct2",contract_number:"CTR-2026-002",client_name:"Saudi Aramco", monthly_retainer:30000,resource_cost:22000,profit:8000, allocated_hours:220,is_closed:true,closed_date:"2026-03-01"},
+  {id:"s6", month:"2026-02",contract_id:"ct3",contract_number:"CTR-2026-003",client_name:"Almarai",      monthly_retainer:20000,resource_cost:14000,profit:6000, allocated_hours:175,is_closed:true,closed_date:"2026-03-01"},
+  {id:"s7", month:"2026-02",contract_id:"ct4",contract_number:"CTR-2026-004",client_name:"STC",          monthly_retainer:30000,resource_cost:19000,profit:11000,allocated_hours:218,is_closed:true,closed_date:"2026-03-01"},
+  {id:"s8", month:"2026-03",contract_id:"ct1",contract_number:"CTR-2026-001",client_name:"SABIC",        monthly_retainer:40000,resource_cost:31000,profit:9000, allocated_hours:276,is_closed:true,closed_date:"2026-04-01"},
+  {id:"s9", month:"2026-03",contract_id:"ct2",contract_number:"CTR-2026-002",client_name:"Saudi Aramco", monthly_retainer:30000,resource_cost:25000,profit:5000, allocated_hours:248,is_closed:true,closed_date:"2026-04-01"},
+  {id:"s10",month:"2026-03",contract_id:"ct3",contract_number:"CTR-2026-003",client_name:"Almarai",      monthly_retainer:20000,resource_cost:11000,profit:9000, allocated_hours:160,is_closed:true,closed_date:"2026-04-01"},
+  {id:"s11",month:"2026-03",contract_id:"ct4",contract_number:"CTR-2026-004",client_name:"STC",          monthly_retainer:30000,resource_cost:18000,profit:12000,allocated_hours:210,is_closed:true,closed_date:"2026-04-01"},
+  {id:"s12",month:"2026-03",contract_id:"ct5",contract_number:"PRJ-2026-001",client_name:"Mobily",       monthly_retainer:30000,resource_cost:22000,profit:8000, allocated_hours:264,is_closed:true,closed_date:"2026-04-01"},
+];
+const MC_MONTHS = Array.from({length:12},(_,i)=>{
+  const v=`2026-${String(i+1).padStart(2,"0")}`;
+  const l=new Date(2026,i,1).toLocaleString("en-US",{month:"long",year:"numeric"});
+  return {v,l};
+});
+const EXPENSE_TYPES = ["Freelancer","Production","Vendor","Other"];
+const EXP_TYPE_COLORS = {Freelancer:"#1DC99A",Production:"#f59e0b",Vendor:"#1DC99A",Other:"#94a3b8"};
+const MOCK_EXPENSES_INIT = [
+  {id:"ex1", expense_number:"EXP-2026-001", request_date:"2026-01-15", contract_id:"ct1", contract_number:"CTR-2026-001", client_name:"SABIC",        contract_category:"Retainer", contract_start_date:"2026-01-01", contract_end_date:"2026-12-31", total_contract_value:480000, contract_notes:"Annual brand retainer.", expense_type:"Vendor",      vendor_name:"Al Madar Print",      department:"Production Department",       amount:18000, previous_requested_total_amount:0,      project_profit_pct:"96.25", bill_number:"INV-2026-001", bill_date:"2026-01-14", item_details:"Large format printing for SABIC campaign",     notes:"Approved by manager", status:"Approved", attachment_url:"", attachment_name:""},
+  {id:"ex2", expense_number:"EXP-2026-002", request_date:"2026-01-20", contract_id:"ct2", contract_number:"CTR-2026-002", client_name:"Saudi Aramco",  contract_category:"Retainer", contract_start_date:"2026-01-01", contract_end_date:"2026-05-15", total_contract_value:360000, contract_notes:"",                   expense_type:"Freelancer",  vendor_name:"Ahmad Al-Shammari",    department:"Creative Department",         amount:12000, previous_requested_total_amount:0,      project_profit_pct:"96.67", bill_number:"INV-2026-002", bill_date:"2026-01-19", item_details:"Freelance motion graphics for Aramco brand",   notes:"Motion designer contract", status:"Approved", attachment_url:"", attachment_name:""},
+  {id:"ex3", expense_number:"EXP-2026-003", request_date:"2026-02-05", contract_id:"ct1", contract_number:"CTR-2026-001", client_name:"SABIC",        contract_category:"Retainer", contract_start_date:"2026-01-01", contract_end_date:"2026-12-31", total_contract_value:480000, contract_notes:"Annual brand retainer.", expense_type:"Production",  vendor_name:"Studio One Media",    department:"Production Department",       amount:25000, previous_requested_total_amount:18000,  project_profit_pct:"91.04", bill_number:"INV-2026-003", bill_date:"2026-02-04", item_details:"Video production — Q1 brand film",              notes:"Approved by CEO", status:"Approved", attachment_url:"", attachment_name:""},
+  {id:"ex4", expense_number:"EXP-2026-004", request_date:"2026-02-12", contract_id:"ct3", contract_number:"CTR-2026-003", client_name:"Almarai",      contract_category:"Retainer", contract_start_date:"2026-01-01", contract_end_date:"2026-12-31", total_contract_value:240000, contract_notes:"Includes seasonal campaigns.", expense_type:"Vendor",  vendor_name:"NeonSigns Arabia",    department:"Creative Department",         amount:9500,  previous_requested_total_amount:0,      project_profit_pct:"96.04", bill_number:"INV-2026-004", bill_date:"2026-02-11", item_details:"LED display rental for Ramadan activation",     notes:"Seasonal activation", status:"Approved", attachment_url:"", attachment_name:""},
+  {id:"ex5", expense_number:"EXP-2026-005", request_date:"2026-03-01", contract_id:"ct4", contract_number:"CTR-2026-004", client_name:"STC",          contract_category:"Retainer", contract_start_date:"2026-02-01", contract_end_date:"2026-07-31", total_contract_value:180000, contract_notes:"",                   expense_type:"Freelancer",  vendor_name:"Layla Barakat Studio", department:"Creative Department",         amount:8000,  previous_requested_total_amount:0,      project_profit_pct:"95.56", bill_number:"INV-2026-005", bill_date:"2026-02-28", item_details:"Illustration pack — STC social media",          notes:"3 rounds of revision included", status:"Approved", attachment_url:"", attachment_name:""},
+  {id:"ex6", expense_number:"EXP-2026-006", request_date:"2026-03-10", contract_id:"ct5", contract_number:"PRJ-2026-001", client_name:"Mobily",       contract_category:"Project",  contract_start_date:"2026-03-01", contract_end_date:"2026-06-25", total_contract_value:90000,  contract_notes:"Brand refresh project.", expense_type:"Production", vendor_name:"Reel Productions",     department:"Production Department",       amount:15000, previous_requested_total_amount:0,      project_profit_pct:"83.33", bill_number:"INV-2026-006", bill_date:"2026-03-09", item_details:"Brand film shoot — 2 days",                      notes:"Includes equipment hire", status:"Draft",    attachment_url:"", attachment_name:""},
+  {id:"ex7", expense_number:"EXP-2026-007", request_date:"2026-03-18", contract_id:"ct2", contract_number:"CTR-2026-002", client_name:"Saudi Aramco",  contract_category:"Retainer", contract_start_date:"2026-01-01", contract_end_date:"2026-05-15", total_contract_value:360000, contract_notes:"",                   expense_type:"Other",       vendor_name:"Riyadh Events Co",    department:"Client Servicing Department", amount:6500,  previous_requested_total_amount:12000,  project_profit_pct:"93.75", bill_number:"INV-2026-007", bill_date:"2026-03-17", item_details:"Client event logistics & catering",             notes:"Q1 client appreciation event", status:"Draft", attachment_url:"", attachment_name:""},
+];
+const EMPTY_EXP_FORM = {
+  expense_number:"",request_date:new Date().toISOString().slice(0,10),
+  contract_id:"",contract_number:"",client_name:"",contract_category:"",
+  contract_start_date:"",contract_end_date:"",total_contract_value:"",contract_notes:"",
+  expense_type:"",vendor_name:"",amount:"",previous_requested_total_amount:"",
+  project_profit_pct:"",department:"",item_details:"",
+  bill_number:"",bill_date:"",attachment_url:"",attachment_name:"",notes:"",status:"Draft"
+};
+const SU_ENTITIES = [
+  {name:"Dashboard",        key:"dashboard",       desc:"Financial & team overview"},
+  {name:"Employees",        key:"employees",       desc:"Team member data & costs"},
+  {name:"Clients",          key:"clients",         desc:"Client information"},
+  {name:"Contracts",        key:"contracts",       desc:"Contract values & terms"},
+  {name:"Allocations",      key:"allocations",     desc:"Time allocations"},
+  {name:"Reports",          key:"reports",         desc:"Analytics & exports"},
+  {name:"Monthly Close",    key:"monthlyClose",    desc:"Financial month-end close"},
+  {name:"Contract Expenses",key:"contractExpenses",desc:"Project expense tracking"},
+  {name:"System Users",     key:"systemUsers",     desc:"Users & permissions"},
+];
+const SU_DEPTS = ["Client Servicing Department","Creative Department","Production Department","Planning Department"];
+const DEFAULT_PERMS = Object.fromEntries(
+  [{name:"Dashboard",key:"dashboard"},{name:"Employees",key:"employees"},{name:"Clients",key:"clients"},
+   {name:"Contracts",key:"contracts"},{name:"Allocations",key:"allocations"},{name:"Reports",key:"reports"},
+   {name:"Monthly Close",key:"monthlyClose"},{name:"Contract Expenses",key:"contractExpenses"},{name:"System Users",key:"systemUsers"}]
+  .map(e=>[e.key,{view:false,create:false,edit:false,delete:false}])
+);
+const MOCK_ROLES_INIT = [
+  {id:"r1", role_name:"Finance Manager",
+    permissions:{
+      dashboard:{view:true,create:false,edit:false,delete:false},
+      employees:{view:true,create:false,edit:false,delete:false},
+      clients:{view:true,create:false,edit:false,delete:false},
+      contracts:{view:true,create:true,edit:true,delete:false},
+      allocations:{view:true,create:false,edit:false,delete:false},
+      reports:{view:true,create:true,edit:true,delete:false},
+      monthlyClose:{view:true,create:true,edit:true,delete:false},
+      contractExpenses:{view:true,create:true,edit:true,delete:false},
+      systemUsers:{view:false,create:false,edit:false,delete:false},
+    },
+    allowed_departments:[],
+    assigned_users:["sarah@company.com","faisal@company.com"],
+  },
+  {id:"r2", role_name:"Production Lead",
+    permissions:{
+      dashboard:{view:true,create:false,edit:false,delete:false},
+      employees:{view:true,create:false,edit:true,delete:false},
+      clients:{view:true,create:false,edit:false,delete:false},
+      contracts:{view:true,create:false,edit:false,delete:false},
+      allocations:{view:true,create:true,edit:true,delete:true},
+      reports:{view:true,create:false,edit:false,delete:false},
+      monthlyClose:{view:false,create:false,edit:false,delete:false},
+      contractExpenses:{view:true,create:true,edit:true,delete:false},
+      systemUsers:{view:false,create:false,edit:false,delete:false},
+    },
+    allowed_departments:["Production Department"],
+    assigned_users:["lena@company.com"],
+  },
+  {id:"r3", role_name:"Viewer",
+    permissions:{
+      dashboard:{view:true,create:false,edit:false,delete:false},
+      employees:{view:true,create:false,edit:false,delete:false},
+      clients:{view:true,create:false,edit:false,delete:false},
+      contracts:{view:true,create:false,edit:false,delete:false},
+      allocations:{view:true,create:false,edit:false,delete:false},
+      reports:{view:true,create:false,edit:false,delete:false},
+      monthlyClose:{view:false,create:false,edit:false,delete:false},
+      contractExpenses:{view:true,create:false,edit:false,delete:false},
+      systemUsers:{view:false,create:false,edit:false,delete:false},
+    },
+    allowed_departments:[],
+    assigned_users:["khalid@company.com","omar@company.com"],
+  },
+];
+const MOCK_USERS_INIT = [
+  {id:"u1", full_name:"Abdul Wahab Shaikh", email:"abdulwahab@company.com", role:"admin",   status:"active",  isPending:false, departments:[]},
+  {id:"u2", full_name:"Sarah Al-Rashidi",   email:"sarah@company.com",      role:"manager", status:"active",  isPending:false, departments:["Production Department","Creative Department"]},
+  {id:"u3", full_name:"Faisal Qureshi",     email:"faisal@company.com",     role:"manager", status:"active",  isPending:false, departments:[]},
+  {id:"u4", full_name:"Lena Barakat",       email:"lena@company.com",       role:"manager", status:"active",  isPending:false, departments:["Production Department"]},
+  {id:"u5", full_name:"Khalid Nasser",      email:"khalid@company.com",     role:"manager", status:"active",  isPending:false, departments:[]},
+  {id:"u6", full_name:"",                   email:"omar@company.com",       role:"manager", status:"invited", isPending:true,  departments:[]},
+  {id:"u7", full_name:"",                   email:"nadia@company.com",      role:"manager", status:"invited", isPending:true,  departments:[]},
+];
+const NAV=[
+  {id:"Dashboard",        label:"Dashboard",                 icon:"📊"},
+  {id:"Employees",        label:"Employees",                 icon:"👥"},
+  {id:"Clients",          label:"Clients",                   icon:"🏢"},
+  {id:"Contracts",        label:"Contracts",                 icon:"📄"},
+  {id:"Allocations",      label:"Allocations",               icon:"🗂"},
+  {id:"Reports",          label:"Reports",                   icon:"📈"},
+  {id:"MonthlyClose",     label:"Monthly Close",             icon:"📅"},
+  {id:"ContractExpenses", label:"Contract/Project Expenses", icon:"🧾"},
+  {id:"Settings",         label:"System Users",              icon:"👤"},
+];
+const PAGE_PERM_KEY = {
+  Dashboard:         "dashboard",
+  Employees:         "employees",
+  Clients:           "clients",
+  Contracts:         "contracts",
+  Allocations:       "allocations",
+  Reports:           "reports",
+  MonthlyClose:      "monthlyClose",
+  ContractExpenses:  "contractExpenses",
+  Settings:          "systemUsers",
+};
+
 function DashboardPage(){
   const [month,setMonth]=useState("2026-04");
   const [finTab,setFinTab]=useState("finance");
@@ -454,8 +661,6 @@ function DashboardPage(){
 // ═══════════════════════════════════════════════════════════════════════════════
 // EMPLOYEES PAGE
 // ═══════════════════════════════════════════════════════════════════════════════
-const DEPTS=["Production Department","Client Servicing Department","Creative Department","Planning Department"];
-const EMPTY_EMP={name:"",designation:"",department:"",location:"Jeddah",mc:15000,email:"",status:"Active",start:""};
 
 function EmployeesPage(){
   const [emps,setEmps]=useState(EMPLOYEES_INIT);
@@ -591,18 +796,7 @@ function EmployeesPage(){
 // ═══════════════════════════════════════════════════════════════════════════════
 // CLIENTS PAGE
 // ═══════════════════════════════════════════════════════════════════════════════
-const MOCK_CLIENTS_INIT = [
-  {id:"cl1",name:"SABIC",        industry:"Petrochemicals",  contact_person:"Fahad Al-Ghamdi",  contact_person_designation:"Marketing Director",   contact_email:"fahad@sabic.com",    contact_phone:"+966 50 111 2233", status:"Active",   notes:"Long-term retainer client. Key account."},
-  {id:"cl2",name:"Saudi Aramco", industry:"Energy",          contact_person:"Reem Al-Dosari",   contact_person_designation:"Brand Manager",         contact_email:"reem@aramco.com",    contact_phone:"+966 50 222 3344", status:"Active",   notes:""},
-  {id:"cl3",name:"Almarai",      industry:"Food & Beverage", contact_person:"Sami Khalil",      contact_person_designation:"Head of Communications",contact_email:"sami@almarai.com",   contact_phone:"+966 55 333 4455", status:"Active",   notes:"Monthly campaigns + seasonal activations."},
-  {id:"cl4",name:"STC",          industry:"Telecom",         contact_person:"Noura Al-Harbi",   contact_person_designation:"Digital Marketing Lead", contact_email:"noura@stc.com.sa",  contact_phone:"+966 55 444 5566", status:"Active",   notes:""},
-  {id:"cl5",name:"Mobily",       industry:"Telecom",         contact_person:"Tariq Badr",       contact_person_designation:"Marketing Manager",      contact_email:"tariq@mobily.sa",   contact_phone:"+966 50 555 6677", status:"Active",   notes:"Short-term project contract."},
-  {id:"cl6",name:"Al Rajhi Bank",industry:"Banking",         contact_person:"Mona Al-Zahrani",  contact_person_designation:"CMO",                   contact_email:"mona@alrajhi.com",  contact_phone:"+966 56 666 7788", status:"Prospect", notes:"In negotiations for Q3 retainer."},
-  {id:"cl7",name:"Noon",         industry:"E-Commerce",      contact_person:"Ali Hassan",       contact_person_designation:"Growth Lead",            contact_email:"ali@noon.com",      contact_phone:"+966 50 777 8899", status:"Prospect", notes:""},
-  {id:"cl8",name:"Zain KSA",     industry:"Telecom",         contact_person:"Sara Al-Mutairi",  contact_person_designation:"Brand Executive",        contact_email:"sara@zain.sa",      contact_phone:"+966 55 888 9900", status:"Inactive", notes:"Contract ended. Possible renewal in Q4."},
-];
 
-const EMPTY_CLIENT = {name:"",industry:"",contact_person:"",contact_person_designation:"",contact_email:"",contact_phone:"",status:"Active",notes:""};
 
 function ClientsPage(){
   const {sb}=useAuth();
@@ -785,55 +979,11 @@ function ClientsPage(){
   );
 }
 
-const MOCK_CONTRACTS_FULL = [
-  {id:"ct1", contract_number:"CTR-2026-001", client_id:"cl1", client_name:"SABIC",        contract_value:480000, tenure_months:12, start_date:"2026-01-01", end_date:"2026-12-31", status:"Active",  contract_category:"Retainer", budget_client_servicing:80000,  budget_production:140000, budget_creative:160000, budget_planning:100000, notes:"Annual brand retainer.", contract_pdf_url:""},
-  {id:"ct2", contract_number:"CTR-2026-002", client_id:"cl2", client_name:"Saudi Aramco", contract_value:360000, tenure_months:12, start_date:"2026-01-01", end_date:"2026-05-15", status:"Active",  contract_category:"Retainer", budget_client_servicing:60000,  budget_production:100000, budget_creative:120000, budget_planning:80000,  notes:"",                   contract_pdf_url:""},
-  {id:"ct3", contract_number:"CTR-2026-003", client_id:"cl3", client_name:"Almarai",      contract_value:240000, tenure_months:12, start_date:"2026-01-01", end_date:"2026-12-31", status:"Active",  contract_category:"Retainer", budget_client_servicing:40000,  budget_production:70000,  budget_creative:80000,  budget_planning:50000,  notes:"Includes seasonal campaigns.", contract_pdf_url:""},
-  {id:"ct4", contract_number:"CTR-2026-004", client_id:"cl4", client_name:"STC",          contract_value:180000, tenure_months:6,  start_date:"2026-02-01", end_date:"2026-07-31", status:"Active",  contract_category:"Retainer", budget_client_servicing:30000,  budget_production:50000,  budget_creative:60000,  budget_planning:40000,  notes:"",                   contract_pdf_url:""},
-  {id:"ct5", contract_number:"PRJ-2026-001", client_id:"cl5", client_name:"Mobily",       contract_value:90000,  tenure_months:3,  start_date:"2026-03-01", end_date:"2026-06-25", status:"Active",  contract_category:"Project",  budget_client_servicing:15000,  budget_production:25000,  budget_creative:30000,  budget_planning:20000,  notes:"Brand refresh project.", contract_pdf_url:""},
-  {id:"ct6", contract_number:"ADH-2025-001", client_id:"cl8", client_name:"Zain KSA",     contract_value:45000,  tenure_months:2,  start_date:"2025-10-01", end_date:"2025-11-30", status:"Expired", contract_category:"Adhoc",    budget_client_servicing:10000,  budget_production:15000,  budget_creative:12000,  budget_planning:8000,   notes:"Campaign support.",  contract_pdf_url:""},
-  {id:"ct7", contract_number:"PRJ-2025-002", client_id:"cl3", client_name:"Almarai",      contract_value:120000, tenure_months:4,  start_date:"2025-06-01", end_date:"2025-09-30", status:"Expired", contract_category:"Project",  budget_client_servicing:20000,  budget_production:35000,  budget_creative:40000,  budget_planning:25000,  notes:"Ramadan campaign.",  contract_pdf_url:""},
-];
-const EMPTY_CONTRACT = {client_id:"",client_name:"",contract_value:"",tenure_months:12,start_date:"",end_date:"",status:"Active",contract_category:"Retainer",budget_client_servicing:0,budget_production:0,budget_creative:0,budget_planning:0,contract_pdf_url:"",notes:""};
-const CLIENT_MAP = {cl1:"SABIC",cl2:"Saudi Aramco",cl3:"Almarai",cl4:"STC",cl5:"Mobily",cl6:"Al Rajhi Bank",cl7:"Noon",cl8:"Zain KSA"};
 
 // ─── ALLOCATIONS DATA & HELPERS (shared with ContractsPage) ─────────────────
 
-const MOCK_ALLOCS_INIT = [
-  {id:"a1", employee_id:"e1", employee_name:"Sarah Al-Rashidi", client_id:"cl1", client_name:"SABIC",        contract_id:"ct1", allocated_hours:88,  month:"2026-04", status:"Assigned", notes:""},
-  {id:"a2", employee_id:"e1", employee_name:"Sarah Al-Rashidi", client_id:"cl3", client_name:"Almarai",      contract_id:"ct3", allocated_hours:66,  month:"2026-04", status:"Assigned", notes:""},
-  {id:"a3", employee_id:"e2", employee_name:"Mohammed Khalid",  client_id:"cl2", client_name:"Saudi Aramco", contract_id:"ct2", allocated_hours:176, month:"2026-04", status:"Assigned", notes:""},
-  {id:"a4", employee_id:"e3", employee_name:"Lena Barakat",     client_id:"cl1", client_name:"SABIC",        contract_id:"ct1", allocated_hours:120, month:"2026-04", status:"Assigned", notes:""},
-  {id:"a5", employee_id:"e3", employee_name:"Lena Barakat",     client_id:"cl5", client_name:"Mobily",       contract_id:"ct5", allocated_hours:56,  month:"2026-04", status:"Assigned", notes:""},
-  {id:"a6", employee_id:"e4", employee_name:"Omar Farouk",      client_id:"cl3", client_name:"Almarai",      contract_id:"ct3", allocated_hours:44,  month:"2026-04", status:"Assigned", notes:""},
-  {id:"a7", employee_id:"e5", employee_name:"Nadia Hamdan",     client_id:"cl4", client_name:"STC",          contract_id:"ct4", allocated_hours:160, month:"2026-04", status:"Assigned", notes:""},
-  {id:"a8", employee_id:"e6", employee_name:"Tariq Mansour",    client_id:"cl2", client_name:"Saudi Aramco", contract_id:"ct2", allocated_hours:200, month:"2026-04", status:"Assigned", notes:"Over-allocated"},
-  {id:"a9", employee_id:"e7", employee_name:"Rana Al-Amin",     client_id:"cl3", client_name:"Almarai",      contract_id:"ct3", allocated_hours:132, month:"2026-04", status:"Assigned", notes:""},
-  {id:"a10",employee_id:"e7", employee_name:"Rana Al-Amin",     client_id:"cl4", client_name:"STC",          contract_id:"ct4", allocated_hours:22,  month:"2026-04", status:"Assigned", notes:""},
-  {id:"a11",employee_id:"e8", employee_name:"Faisal Qureshi",   client_id:"cl1", client_name:"SABIC",        contract_id:"ct1", allocated_hours:176, month:"2026-04", status:"Assigned", notes:""},
-  {id:"a12",employee_id:"e9", employee_name:"Yasmin Saleh",     client_id:"cl2", client_name:"Saudi Aramco", contract_id:"ct2", allocated_hours:88,  month:"2026-04", status:"Assigned", notes:""},
-  {id:"a13",employee_id:"e9", employee_name:"Yasmin Saleh",     client_id:"cl5", client_name:"Mobily",       contract_id:"ct5", allocated_hours:88,  month:"2026-04", status:"Assigned", notes:""},
-  {id:"a14",employee_id:"e10",employee_name:"Khalid Nasser",    client_id:"cl4", client_name:"STC",          contract_id:"ct4", allocated_hours:30,  month:"2026-04", status:"Assigned", notes:""},
-  {id:"b1", employee_id:"e1", employee_name:"Sarah Al-Rashidi", client_id:"cl1", client_name:"SABIC",        contract_id:"ct1", allocated_hours:100, month:"2026-03", status:"Assigned", notes:""},
-  {id:"b2", employee_id:"e2", employee_name:"Mohammed Khalid",  client_id:"cl2", client_name:"Saudi Aramco", contract_id:"ct2", allocated_hours:160, month:"2026-03", status:"Assigned", notes:""},
-  {id:"b3", employee_id:"e3", employee_name:"Lena Barakat",     client_id:"cl1", client_name:"SABIC",        contract_id:"ct1", allocated_hours:140, month:"2026-03", status:"Assigned", notes:""},
-  {id:"b4", employee_id:"e5", employee_name:"Nadia Hamdan",     client_id:"cl4", client_name:"STC",          contract_id:"ct4", allocated_hours:130, month:"2026-03", status:"Assigned", notes:""},
-  {id:"b5", employee_id:"e6", employee_name:"Tariq Mansour",    client_id:"cl2", client_name:"Saudi Aramco", contract_id:"ct2", allocated_hours:176, month:"2026-03", status:"Assigned", notes:""},
-  {id:"b6", employee_id:"e7", employee_name:"Rana Al-Amin",     client_id:"cl3", client_name:"Almarai",      contract_id:"ct3", allocated_hours:110, month:"2026-03", status:"Assigned", notes:""},
-  {id:"b7", employee_id:"e8", employee_name:"Faisal Qureshi",   client_id:"cl1", client_name:"SABIC",        contract_id:"ct1", allocated_hours:176, month:"2026-03", status:"Assigned", notes:""},
-  {id:"b8", employee_id:"e4", employee_name:"Omar Farouk",      client_id:"cl3", client_name:"Almarai",      contract_id:"ct3", allocated_hours:60,  month:"2026-03", status:"Assigned", notes:""},
-  {id:"b9", employee_id:"e9", employee_name:"Yasmin Saleh",     client_id:"cl5", client_name:"Mobily",       contract_id:"ct5", allocated_hours:176, month:"2026-03", status:"Assigned", notes:""},
-  {id:"b10",employee_id:"e10",employee_name:"Khalid Nasser",    client_id:"cl4", client_name:"STC",          contract_id:"ct4", allocated_hours:88,  month:"2026-03", status:"Assigned", notes:""},
-];
 
-const ALLOC_MONTHS = [
-  {v:"2026-01",l:"January 2026"},{v:"2026-02",l:"February 2026"},{v:"2026-03",l:"March 2026"},
-  {v:"2026-04",l:"April 2026"}, {v:"2026-05",l:"May 2026"},     {v:"2026-06",l:"June 2026"},
-  {v:"2026-07",l:"July 2026"},  {v:"2026-08",l:"August 2026"},  {v:"2026-09",l:"September 2026"},
-  {v:"2026-10",l:"October 2026"},{v:"2026-11",l:"November 2026"},{v:"2026-12",l:"December 2026"},
-];
 
-const ALLOC_DEPTS = ["Production Department","Client Servicing Department","Creative Department","Planning Department"];
 
 function ContractSearchSelect({contracts,value,onChange}){
   const [search,setSearch]=useState("");
@@ -1527,20 +1677,6 @@ function AllocationsPage(){
 const REPORT_COLORS = ['#10b981','#6366f1','#f59e0b','#ef4444','#8b5cf6','#ec4899'];
 
 // Shared mock snapshots for custom reports tab (extends the existing SNAPSHOTS)
-const REPORT_SNAPSHOTS = [
-  {month:"2026-01",client_name:"SABIC",        contract_number:"CTR-2026-001",contract_value:480000,start_date:"2026-01-01",end_date:"2026-12-31",monthly_retainer:40000,allocated_hours:264,resource_cost:28000,profit:12000,status:"Active",contract_category:"Retainer"},
-  {month:"2026-01",client_name:"Saudi Aramco", contract_number:"CTR-2026-002",contract_value:360000,start_date:"2026-01-01",end_date:"2026-05-15",monthly_retainer:30000,allocated_hours:238,resource_cost:24000,profit:6000, status:"Active",contract_category:"Retainer"},
-  {month:"2026-01",client_name:"Almarai",      contract_number:"CTR-2026-003",contract_value:240000,start_date:"2026-01-01",end_date:"2026-12-31",monthly_retainer:20000,allocated_hours:170,resource_cost:12000,profit:8000, status:"Active",contract_category:"Retainer"},
-  {month:"2026-02",client_name:"SABIC",        contract_number:"CTR-2026-001",contract_value:480000,start_date:"2026-01-01",end_date:"2026-12-31",monthly_retainer:40000,allocated_hours:270,resource_cost:30000,profit:10000,status:"Active",contract_category:"Retainer"},
-  {month:"2026-02",client_name:"Saudi Aramco", contract_number:"CTR-2026-002",contract_value:360000,start_date:"2026-01-01",end_date:"2026-05-15",monthly_retainer:30000,allocated_hours:220,resource_cost:22000,profit:8000, status:"Active",contract_category:"Retainer"},
-  {month:"2026-02",client_name:"Almarai",      contract_number:"CTR-2026-003",contract_value:240000,start_date:"2026-01-01",end_date:"2026-12-31",monthly_retainer:20000,allocated_hours:175,resource_cost:14000,profit:6000, status:"Active",contract_category:"Retainer"},
-  {month:"2026-02",client_name:"STC",          contract_number:"CTR-2026-004",contract_value:180000,start_date:"2026-02-01",end_date:"2026-07-31",monthly_retainer:30000,allocated_hours:218,resource_cost:19000,profit:11000,status:"Active",contract_category:"Retainer"},
-  {month:"2026-03",client_name:"SABIC",        contract_number:"CTR-2026-001",contract_value:480000,start_date:"2026-01-01",end_date:"2026-12-31",monthly_retainer:40000,allocated_hours:276,resource_cost:31000,profit:9000, status:"Active",contract_category:"Retainer"},
-  {month:"2026-03",client_name:"Saudi Aramco", contract_number:"CTR-2026-002",contract_value:360000,start_date:"2026-01-01",end_date:"2026-05-15",monthly_retainer:30000,allocated_hours:248,resource_cost:25000,profit:5000, status:"Active",contract_category:"Retainer"},
-  {month:"2026-03",client_name:"Almarai",      contract_number:"CTR-2026-003",contract_value:240000,start_date:"2026-01-01",end_date:"2026-12-31",monthly_retainer:20000,allocated_hours:160,resource_cost:11000,profit:9000, status:"Active",contract_category:"Retainer"},
-  {month:"2026-03",client_name:"STC",          contract_number:"CTR-2026-004",contract_value:180000,start_date:"2026-02-01",end_date:"2026-07-31",monthly_retainer:30000,allocated_hours:210,resource_cost:18000,profit:12000,status:"Active",contract_category:"Retainer"},
-  {month:"2026-03",client_name:"Mobily",       contract_number:"PRJ-2026-001",contract_value:90000, start_date:"2026-03-01",end_date:"2026-06-25",monthly_retainer:30000,allocated_hours:264,resource_cost:22000,profit:8000, status:"Active",contract_category:"Project"},
-];
 
 function ReportsPage(){
   const [section,setSection]   = useState("charts");
@@ -2198,26 +2334,7 @@ function ReportsPage(){
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // Pre-seeded closed snapshots (Jan–Mar 2026 already closed)
-const MC_SNAPSHOTS_INIT = [
-  {id:"s1", month:"2026-01",contract_id:"ct1",contract_number:"CTR-2026-001",client_name:"SABIC",        monthly_retainer:40000,resource_cost:28000,profit:12000,allocated_hours:264,is_closed:true,closed_date:"2026-02-01"},
-  {id:"s2", month:"2026-01",contract_id:"ct2",contract_number:"CTR-2026-002",client_name:"Saudi Aramco", monthly_retainer:30000,resource_cost:24000,profit:6000, allocated_hours:238,is_closed:true,closed_date:"2026-02-01"},
-  {id:"s3", month:"2026-01",contract_id:"ct3",contract_number:"CTR-2026-003",client_name:"Almarai",      monthly_retainer:20000,resource_cost:12000,profit:8000, allocated_hours:170,is_closed:true,closed_date:"2026-02-01"},
-  {id:"s4", month:"2026-02",contract_id:"ct1",contract_number:"CTR-2026-001",client_name:"SABIC",        monthly_retainer:40000,resource_cost:30000,profit:10000,allocated_hours:270,is_closed:true,closed_date:"2026-03-01"},
-  {id:"s5", month:"2026-02",contract_id:"ct2",contract_number:"CTR-2026-002",client_name:"Saudi Aramco", monthly_retainer:30000,resource_cost:22000,profit:8000, allocated_hours:220,is_closed:true,closed_date:"2026-03-01"},
-  {id:"s6", month:"2026-02",contract_id:"ct3",contract_number:"CTR-2026-003",client_name:"Almarai",      monthly_retainer:20000,resource_cost:14000,profit:6000, allocated_hours:175,is_closed:true,closed_date:"2026-03-01"},
-  {id:"s7", month:"2026-02",contract_id:"ct4",contract_number:"CTR-2026-004",client_name:"STC",          monthly_retainer:30000,resource_cost:19000,profit:11000,allocated_hours:218,is_closed:true,closed_date:"2026-03-01"},
-  {id:"s8", month:"2026-03",contract_id:"ct1",contract_number:"CTR-2026-001",client_name:"SABIC",        monthly_retainer:40000,resource_cost:31000,profit:9000, allocated_hours:276,is_closed:true,closed_date:"2026-04-01"},
-  {id:"s9", month:"2026-03",contract_id:"ct2",contract_number:"CTR-2026-002",client_name:"Saudi Aramco", monthly_retainer:30000,resource_cost:25000,profit:5000, allocated_hours:248,is_closed:true,closed_date:"2026-04-01"},
-  {id:"s10",month:"2026-03",contract_id:"ct3",contract_number:"CTR-2026-003",client_name:"Almarai",      monthly_retainer:20000,resource_cost:11000,profit:9000, allocated_hours:160,is_closed:true,closed_date:"2026-04-01"},
-  {id:"s11",month:"2026-03",contract_id:"ct4",contract_number:"CTR-2026-004",client_name:"STC",          monthly_retainer:30000,resource_cost:18000,profit:12000,allocated_hours:210,is_closed:true,closed_date:"2026-04-01"},
-  {id:"s12",month:"2026-03",contract_id:"ct5",contract_number:"PRJ-2026-001",client_name:"Mobily",       monthly_retainer:30000,resource_cost:22000,profit:8000, allocated_hours:264,is_closed:true,closed_date:"2026-04-01"},
-];
 
-const MC_MONTHS = Array.from({length:12},(_,i)=>{
-  const v=`2026-${String(i+1).padStart(2,"0")}`;
-  const l=new Date(2026,i,1).toLocaleString("en-US",{month:"long",year:"numeric"});
-  return {v,l};
-});
 
 function MonthlyClosePage(){
   const {sb}=useAuth();
@@ -2532,28 +2649,9 @@ function MonthlyClosePage(){
 // CONTRACT/PROJECT EXPENSES PAGE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const EXPENSE_TYPES = ["Freelancer","Production","Vendor","Other"];
-const EXP_TYPE_COLORS = {Freelancer:"#1DC99A",Production:"#f59e0b",Vendor:"#1DC99A",Other:"#94a3b8"};
-
-const MOCK_EXPENSES_INIT = [
-  {id:"ex1", expense_number:"EXP-2026-001", request_date:"2026-01-15", contract_id:"ct1", contract_number:"CTR-2026-001", client_name:"SABIC",        contract_category:"Retainer", contract_start_date:"2026-01-01", contract_end_date:"2026-12-31", total_contract_value:480000, contract_notes:"Annual brand retainer.", expense_type:"Vendor",      vendor_name:"Al Madar Print",      department:"Production Department",       amount:18000, previous_requested_total_amount:0,      project_profit_pct:"96.25", bill_number:"INV-2026-001", bill_date:"2026-01-14", item_details:"Large format printing for SABIC campaign",     notes:"Approved by manager", status:"Approved", attachment_url:"", attachment_name:""},
-  {id:"ex2", expense_number:"EXP-2026-002", request_date:"2026-01-20", contract_id:"ct2", contract_number:"CTR-2026-002", client_name:"Saudi Aramco",  contract_category:"Retainer", contract_start_date:"2026-01-01", contract_end_date:"2026-05-15", total_contract_value:360000, contract_notes:"",                   expense_type:"Freelancer",  vendor_name:"Ahmad Al-Shammari",    department:"Creative Department",         amount:12000, previous_requested_total_amount:0,      project_profit_pct:"96.67", bill_number:"INV-2026-002", bill_date:"2026-01-19", item_details:"Freelance motion graphics for Aramco brand",   notes:"Motion designer contract", status:"Approved", attachment_url:"", attachment_name:""},
-  {id:"ex3", expense_number:"EXP-2026-003", request_date:"2026-02-05", contract_id:"ct1", contract_number:"CTR-2026-001", client_name:"SABIC",        contract_category:"Retainer", contract_start_date:"2026-01-01", contract_end_date:"2026-12-31", total_contract_value:480000, contract_notes:"Annual brand retainer.", expense_type:"Production",  vendor_name:"Studio One Media",    department:"Production Department",       amount:25000, previous_requested_total_amount:18000,  project_profit_pct:"91.04", bill_number:"INV-2026-003", bill_date:"2026-02-04", item_details:"Video production — Q1 brand film",              notes:"Approved by CEO", status:"Approved", attachment_url:"", attachment_name:""},
-  {id:"ex4", expense_number:"EXP-2026-004", request_date:"2026-02-12", contract_id:"ct3", contract_number:"CTR-2026-003", client_name:"Almarai",      contract_category:"Retainer", contract_start_date:"2026-01-01", contract_end_date:"2026-12-31", total_contract_value:240000, contract_notes:"Includes seasonal campaigns.", expense_type:"Vendor",  vendor_name:"NeonSigns Arabia",    department:"Creative Department",         amount:9500,  previous_requested_total_amount:0,      project_profit_pct:"96.04", bill_number:"INV-2026-004", bill_date:"2026-02-11", item_details:"LED display rental for Ramadan activation",     notes:"Seasonal activation", status:"Approved", attachment_url:"", attachment_name:""},
-  {id:"ex5", expense_number:"EXP-2026-005", request_date:"2026-03-01", contract_id:"ct4", contract_number:"CTR-2026-004", client_name:"STC",          contract_category:"Retainer", contract_start_date:"2026-02-01", contract_end_date:"2026-07-31", total_contract_value:180000, contract_notes:"",                   expense_type:"Freelancer",  vendor_name:"Layla Barakat Studio", department:"Creative Department",         amount:8000,  previous_requested_total_amount:0,      project_profit_pct:"95.56", bill_number:"INV-2026-005", bill_date:"2026-02-28", item_details:"Illustration pack — STC social media",          notes:"3 rounds of revision included", status:"Approved", attachment_url:"", attachment_name:""},
-  {id:"ex6", expense_number:"EXP-2026-006", request_date:"2026-03-10", contract_id:"ct5", contract_number:"PRJ-2026-001", client_name:"Mobily",       contract_category:"Project",  contract_start_date:"2026-03-01", contract_end_date:"2026-06-25", total_contract_value:90000,  contract_notes:"Brand refresh project.", expense_type:"Production", vendor_name:"Reel Productions",     department:"Production Department",       amount:15000, previous_requested_total_amount:0,      project_profit_pct:"83.33", bill_number:"INV-2026-006", bill_date:"2026-03-09", item_details:"Brand film shoot — 2 days",                      notes:"Includes equipment hire", status:"Draft",    attachment_url:"", attachment_name:""},
-  {id:"ex7", expense_number:"EXP-2026-007", request_date:"2026-03-18", contract_id:"ct2", contract_number:"CTR-2026-002", client_name:"Saudi Aramco",  contract_category:"Retainer", contract_start_date:"2026-01-01", contract_end_date:"2026-05-15", total_contract_value:360000, contract_notes:"",                   expense_type:"Other",       vendor_name:"Riyadh Events Co",    department:"Client Servicing Department", amount:6500,  previous_requested_total_amount:12000,  project_profit_pct:"93.75", bill_number:"INV-2026-007", bill_date:"2026-03-17", item_details:"Client event logistics & catering",             notes:"Q1 client appreciation event", status:"Draft", attachment_url:"", attachment_name:""},
-];
 
 
-const EMPTY_EXP_FORM = {
-  expense_number:"",request_date:new Date().toISOString().slice(0,10),
-  contract_id:"",contract_number:"",client_name:"",contract_category:"",
-  contract_start_date:"",contract_end_date:"",total_contract_value:"",contract_notes:"",
-  expense_type:"",vendor_name:"",amount:"",previous_requested_total_amount:"",
-  project_profit_pct:"",department:"",item_details:"",
-  bill_number:"",bill_date:"",attachment_url:"",attachment_name:"",notes:"",status:"Draft"
-};
+
 
 // Inline ExpenseCharts
 function ExpenseCharts({expenses}){
@@ -2907,81 +3005,7 @@ function ContractExpensesPage(){
 // SYSTEM USERS PAGE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const SU_ENTITIES = [
-  {name:"Dashboard",        key:"dashboard",       desc:"Financial & team overview"},
-  {name:"Employees",        key:"employees",       desc:"Team member data & costs"},
-  {name:"Clients",          key:"clients",         desc:"Client information"},
-  {name:"Contracts",        key:"contracts",       desc:"Contract values & terms"},
-  {name:"Allocations",      key:"allocations",     desc:"Time allocations"},
-  {name:"Reports",          key:"reports",         desc:"Analytics & exports"},
-  {name:"Monthly Close",    key:"monthlyClose",    desc:"Financial month-end close"},
-  {name:"Contract Expenses",key:"contractExpenses",desc:"Project expense tracking"},
-  {name:"System Users",     key:"systemUsers",     desc:"Users & permissions"},
-];
 
-const SU_DEPTS = ["Client Servicing Department","Creative Department","Production Department","Planning Department"];
-
-const DEFAULT_PERMS = Object.fromEntries(
-  SU_ENTITIES.map(e=>[e.key,{view:false,create:false,edit:false,delete:false}])
-);
-
-const MOCK_ROLES_INIT = [
-  {id:"r1", role_name:"Finance Manager",
-    permissions:{
-      dashboard:{view:true,create:false,edit:false,delete:false},
-      employees:{view:true,create:false,edit:false,delete:false},
-      clients:{view:true,create:false,edit:false,delete:false},
-      contracts:{view:true,create:true,edit:true,delete:false},
-      allocations:{view:true,create:false,edit:false,delete:false},
-      reports:{view:true,create:true,edit:true,delete:false},
-      monthlyClose:{view:true,create:true,edit:true,delete:false},
-      contractExpenses:{view:true,create:true,edit:true,delete:false},
-      systemUsers:{view:false,create:false,edit:false,delete:false},
-    },
-    allowed_departments:[],
-    assigned_users:["sarah@company.com","faisal@company.com"],
-  },
-  {id:"r2", role_name:"Production Lead",
-    permissions:{
-      dashboard:{view:true,create:false,edit:false,delete:false},
-      employees:{view:true,create:false,edit:true,delete:false},
-      clients:{view:true,create:false,edit:false,delete:false},
-      contracts:{view:true,create:false,edit:false,delete:false},
-      allocations:{view:true,create:true,edit:true,delete:true},
-      reports:{view:true,create:false,edit:false,delete:false},
-      monthlyClose:{view:false,create:false,edit:false,delete:false},
-      contractExpenses:{view:true,create:true,edit:true,delete:false},
-      systemUsers:{view:false,create:false,edit:false,delete:false},
-    },
-    allowed_departments:["Production Department"],
-    assigned_users:["lena@company.com"],
-  },
-  {id:"r3", role_name:"Viewer",
-    permissions:{
-      dashboard:{view:true,create:false,edit:false,delete:false},
-      employees:{view:true,create:false,edit:false,delete:false},
-      clients:{view:true,create:false,edit:false,delete:false},
-      contracts:{view:true,create:false,edit:false,delete:false},
-      allocations:{view:true,create:false,edit:false,delete:false},
-      reports:{view:true,create:false,edit:false,delete:false},
-      monthlyClose:{view:false,create:false,edit:false,delete:false},
-      contractExpenses:{view:true,create:false,edit:false,delete:false},
-      systemUsers:{view:false,create:false,edit:false,delete:false},
-    },
-    allowed_departments:[],
-    assigned_users:["khalid@company.com","omar@company.com"],
-  },
-];
-
-const MOCK_USERS_INIT = [
-  {id:"u1", full_name:"Abdul Wahab Shaikh", email:"abdulwahab@company.com", role:"admin",   status:"active",  isPending:false, departments:[]},
-  {id:"u2", full_name:"Sarah Al-Rashidi",   email:"sarah@company.com",      role:"manager", status:"active",  isPending:false, departments:["Production Department","Creative Department"]},
-  {id:"u3", full_name:"Faisal Qureshi",     email:"faisal@company.com",     role:"manager", status:"active",  isPending:false, departments:[]},
-  {id:"u4", full_name:"Lena Barakat",       email:"lena@company.com",       role:"manager", status:"active",  isPending:false, departments:["Production Department"]},
-  {id:"u5", full_name:"Khalid Nasser",      email:"khalid@company.com",     role:"manager", status:"active",  isPending:false, departments:[]},
-  {id:"u6", full_name:"",                   email:"omar@company.com",       role:"manager", status:"invited", isPending:true,  departments:[]},
-  {id:"u7", full_name:"",                   email:"nadia@company.com",      role:"manager", status:"invited", isPending:true,  departments:[]},
-];
 
 function SystemUsersPage(){
   const {sb,profile:currentProfile}=useAuth();
@@ -3393,17 +3417,6 @@ function SystemUsersPage(){
   );
 }
 
-const NAV=[
-  {id:"Dashboard",        label:"Dashboard",                 icon:"📊"},
-  {id:"Employees",        label:"Employees",                 icon:"👥"},
-  {id:"Clients",          label:"Clients",                   icon:"🏢"},
-  {id:"Contracts",        label:"Contracts",                 icon:"📄"},
-  {id:"Allocations",      label:"Allocations",               icon:"🗂"},
-  {id:"Reports",          label:"Reports",                   icon:"📈"},
-  {id:"MonthlyClose",     label:"Monthly Close",             icon:"📅"},
-  {id:"ContractExpenses", label:"Contract/Project Expenses", icon:"🧾"},
-  {id:"Settings",         label:"System Users",              icon:"👤"},
-];
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMING SOON PLACEHOLDER
@@ -3422,17 +3435,6 @@ function ComingSoon({page}){
 // MAIN PLATFORM SHELL
 // ═══════════════════════════════════════════════════════════════════════════════
 // Map sidebar page IDs to permission module keys
-const PAGE_PERM_KEY = {
-  Dashboard:         "dashboard",
-  Employees:         "employees",
-  Clients:           "clients",
-  Contracts:         "contracts",
-  Allocations:       "allocations",
-  Reports:           "reports",
-  MonthlyClose:      "monthlyClose",
-  ContractExpenses:  "contractExpenses",
-  Settings:          "systemUsers",
-};
 
 function AccessDenied(){
   return(
