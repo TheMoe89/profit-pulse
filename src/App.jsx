@@ -438,6 +438,75 @@ const PAGE_PERM_KEY = {
   Settings:          "systemUsers",
 };
 
+
+// ─── SHARED UI COMPONENTS ────────────────────────────────────────────────────
+function Card({children,style={}}){
+  return <div style={{background:"#161616",border:"1px solid #262626",borderRadius:14,boxShadow:"0 2px 8px rgba(0,0,0,.4)",...style}}>{children}</div>;
+}
+function Bdg({children,bg="#1E1E1E",color="#B3B3B3"}){
+  return <span style={{display:"inline-flex",alignItems:"center",padding:"3px 9px",borderRadius:999,background:bg,color,fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>;
+}
+function PBar({val,color}){
+  return(
+    <div style={{height:5,background:"#262626",borderRadius:3,overflow:"hidden",margin:"5px 0 3px"}}>
+      <div style={{width:`${Math.min(100,val)}%`,height:"100%",background:color,borderRadius:3}}/>
+    </div>
+  );
+}
+function Avatar({name,size=36,style={}}){
+  const initials=(name||"?").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase();
+  return <div style={{width:size,height:size,borderRadius:Math.round(size*.25),background:"linear-gradient(135deg,#1DC99A,#0F766E)",display:"flex",alignItems:"center",justifyContent:"center",color:"#000",fontSize:Math.round(size*.35),fontWeight:700,flexShrink:0,...style}}>{initials}</div>;
+}
+function Btn({children,onClick,variant="primary",size="md",type="button",disabled,style={}}){
+  const sz={sm:{padding:"5px 12px",fontSize:12},md:{padding:"8px 16px",fontSize:13}};
+  const vs={
+    primary:{background:"#1DC99A",color:"#000",border:"none",fontWeight:700},
+    outline:{background:"transparent",color:"#B3B3B3",border:"1px solid #262626",fontWeight:500},
+    ghost:{background:"transparent",color:"#B3B3B3",border:"none",fontWeight:500},
+    danger:{background:"transparent",color:"#EF4444",border:"1px solid #EF444433",fontWeight:500},
+  };
+  return <button type={type} onClick={onClick} disabled={disabled}
+    style={{...sz[size],...vs[variant],borderRadius:9,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.5:1,display:"inline-flex",alignItems:"center",gap:5,transition:"opacity .15s",...style}}
+    onMouseEnter={e=>{if(!disabled&&variant==="primary")e.currentTarget.style.background="#17B68B";else if(!disabled&&variant==="outline")e.currentTarget.style.background="#1E1E1E";}}
+    onMouseLeave={e=>{if(variant==="primary")e.currentTarget.style.background="#1DC99A";else if(variant==="outline")e.currentTarget.style.background="transparent";}}
+  >{children}</button>;
+}
+function Inp({value,onChange,placeholder,type="text",required,min,max,style={}}){
+  return <input value={value} onChange={onChange} placeholder={placeholder} type={type} required={required} min={min} max={max}
+    style={{width:"100%",padding:"9px 12px",border:"1px solid #262626",borderRadius:9,fontSize:13,color:"#FFFFFF",background:"#1E1E1E",outline:"none",boxSizing:"border-box",...style}}
+    onFocus={e=>e.target.style.borderColor="#1DC99A"} onBlur={e=>e.target.style.borderColor="#262626"}
+  />;
+}
+function Sel({value,onChange,options,style={}}){
+  return(
+    <select value={value} onChange={e=>onChange(e.target.value)}
+      style={{width:"100%",padding:"8px 11px",border:"1px solid #262626",borderRadius:9,fontSize:13,color:"#FFFFFF",background:"#1E1E1E",outline:"none",...style}}>
+      {options.map(o=><option key={o.v} value={o.v}>{o.l}</option>)}
+    </select>
+  );
+}
+function Lbl({children}){return <p style={{margin:"0 0 5px",fontSize:12,fontWeight:600,color:"#B3B3B3"}}>{children}</p>;}
+function Modal({open,onClose,title,children}){
+  if(!open)return null;
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:"#161616",borderRadius:16,width:"100%",maxWidth:600,maxHeight:"90vh",overflowY:"auto",border:"1px solid #262626",boxShadow:"0 25px 60px rgba(0,0,0,.6)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 22px",borderBottom:"1px solid #262626"}}>
+          <h3 style={{margin:0,fontSize:16,fontWeight:700,color:"#FFFFFF"}}>{title}</h3>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#777777",lineHeight:1,padding:"0 4px"}}>&times;</button>
+        </div>
+        <div style={{padding:"20px 22px"}}>{children}</div>
+      </div>
+    </div>
+  );
+}
+function SortTh({k,sk,sd,onSort,children,align="left"}){
+  const active=sk===k;
+  return <th onClick={()=>onSort(k)} style={{padding:"9px 13px",textAlign:align,fontSize:11,fontWeight:600,color:active?"#1DC99A":"#777777",background:"#111111",borderBottom:"1px solid #262626",cursor:"pointer",userSelect:"none",whiteSpace:"nowrap"}}>
+    {children}{active?sd==="asc"?" ↑":" ↓":""}
+  </th>;
+}
+
 function DashboardPage(){
   const [month,setMonth]=useState("2026-04");
   const [finTab,setFinTab]=useState("finance");
