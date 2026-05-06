@@ -1110,10 +1110,19 @@ function ContractSearchSelect({contracts,value,onChange}){
 function ContractsPage(){
   const {sb}=useAuth();
   const [contracts,setContracts]=useState([]);
+  const [clientList,setClientList]=useState([]); // real clients from Supabase
   const [loading,setLoading]=useState(true);
   const mapC=r=>({...r,cn:r.client_name,cid:r.client_id,cv:r.contract_value,tm:r.tenure_months,sd:r.start_date,ed:r.end_date,st:r.status,bcs:r.budget_client_servicing,bp:r.budget_production,bc:r.budget_creative,bpl:r.budget_planning});
   useEffect(()=>{
-    sb.from('contracts').select('*').order('contract_number').then(({data})=>{if(data)setContracts(data.map(mapC));setLoading(false);});
+    // Load contracts and clients in parallel
+    Promise.all([
+      sb.from('contracts').select('*').order('contract_number'),
+      sb.from('clients').select('id,name').order('name')
+    ]).then(([{data:ctData},{data:clData}])=>{
+      if(ctData) setContracts(ctData.map(mapC));
+      if(clData) setClientList(clData);
+      setLoading(false);
+    });
   },[]);
   const dbAdd=async p=>{const{data,error}=await sb.from('contracts').insert([{contract_number:p.contract_number,client_id:p.client_id||null,client_name:p.client_name,contract_value:parseFloat(p.contract_value)||0,tenure_months:parseFloat(p.tenure_months)||0,project_name:p.project_name||"",start_date:p.start_date,end_date:p.end_date,status:p.status,contract_category:p.contract_category,budget_client_servicing:parseFloat(p.budget_client_servicing)||0,budget_production:parseFloat(p.budget_production)||0,budget_creative:parseFloat(p.budget_creative)||0,budget_planning:parseFloat(p.budget_planning)||0,budget_third_party:parseFloat(p.budget_third_party)||0,notes:p.notes||""}]).select().single();if(error)alert('Error saving: '+error.message);if(data)setContracts(x=>[...x,mapC(data)]);};
   const dbUpdate=async(id,p)=>{const{data,error}=await sb.from('contracts').update({contract_number:p.contract_number,client_id:p.client_id||null,client_name:p.client_name,contract_value:parseFloat(p.contract_value)||0,tenure_months:parseFloat(p.tenure_months)||0,project_name:p.project_name||"",start_date:p.start_date,end_date:p.end_date,status:p.status,contract_category:p.contract_category,budget_client_servicing:parseFloat(p.budget_client_servicing)||0,budget_production:parseFloat(p.budget_production)||0,budget_creative:parseFloat(p.budget_creative)||0,budget_planning:parseFloat(p.budget_planning)||0,budget_third_party:parseFloat(p.budget_third_party)||0,notes:p.notes||""}).eq('id',id).select().single();if(error)alert('Error updating: '+error.message);if(data)setContracts(x=>x.map(c=>c.id===id?mapC(data):c));};
@@ -1139,7 +1148,7 @@ function ContractsPage(){
     const end=form.start_date&&t>0?addMonthsSimple(form.start_date,t):"";
     setForm(p=>({...p,tenure_months:t,end_date:end}));
   };
-  const handleClient=cid=>setForm(p=>({...p,client_id:cid,client_name:CLIENT_MAP[cid]||""}));
+  const handleClient=cid=>{const cl=clientList.find(c=>c.id===cid);setForm(p=>({...p,client_id:cid,client_name:cl?.name||""}));};
 
   const getCatFromTenure=t=>t<=4?"Adhoc":t<=8?"Project":"Retainer";
   const genContractNum=(t,cons)=>{
@@ -1311,7 +1320,7 @@ function ContractsPage(){
               <div style={{padding:"8px 12px",background:"#f1f5f9",borderRadius:8}}><p style={{margin:0,fontSize:12,color:"#475569"}}>Contract ID: <strong style={{color:"#0f172a"}}>{form.contract_number}</strong></p></div>
             )}
             <div><Lbl>Client *</Lbl>
-              <Sel value={form.client_id} onChange={handleClient} options={[{v:"",l:"Select client"},...Object.entries(CLIENT_MAP).map(([v,l])=>({v,l}))]}/>
+              <Sel value={form.client_id} onChange={handleClient} options={[{v:"",l:"Select client"},...clientList.map(c=>({v:c.id,l:c.name}))]}/>
             </div>
             <div><Lbl>Project Name *</Lbl><Inp value={form.project_name||""} onChange={e=>upd("project_name",e.target.value)} placeholder="Enter project name..." required/></div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
