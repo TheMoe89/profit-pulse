@@ -254,7 +254,7 @@ const MOCK_CONTRACTS_FULL = [
   {id:"ct6", contract_number:"ADH-2025-001", client_id:"cl8", client_name:"Zain KSA",     contract_value:45000,  tenure_months:2,  start_date:"2025-10-01", end_date:"2025-11-30", status:"Expired", contract_category:"Adhoc",    budget_client_servicing:10000,  budget_production:15000,  budget_creative:12000,  budget_planning:8000,   notes:"Campaign support.",  contract_pdf_url:""},
   {id:"ct7", contract_number:"PRJ-2025-002", client_id:"cl3", client_name:"Almarai",      contract_value:120000, tenure_months:4,  start_date:"2025-06-01", end_date:"2025-09-30", status:"Expired", contract_category:"Project",  budget_client_servicing:20000,  budget_production:35000,  budget_creative:40000,  budget_planning:25000,  notes:"Ramadan campaign.",  contract_pdf_url:""},
 ];
-const EMPTY_CONTRACT = {client_id:"",client_name:"",contract_value:"",tenure_months:12,start_date:"",end_date:"",status:"Active",contract_category:"Retainer",budget_client_servicing:0,budget_production:0,budget_creative:0,budget_planning:0,contract_pdf_url:"",notes:""};
+const EMPTY_CONTRACT = {client_id:"",client_name:"",contract_value:"",tenure_months:"",project_name:"",start_date:"",end_date:"",status:"Active",contract_category:"Retainer",budget_client_servicing:"",budget_production:"",budget_creative:"",budget_planning:"",budget_third_party:"",contract_pdf_url:"",notes:""};
 const CLIENT_MAP = {cl1:"SABIC",cl2:"Saudi Aramco",cl3:"Almarai",cl4:"STC",cl5:"Mobily",cl6:"Al Rajhi Bank",cl7:"Noon",cl8:"Zain KSA"};
 const MOCK_ALLOCS_INIT = [
   {id:"a1", employee_id:"e1", employee_name:"Sarah Al-Rashidi", client_id:"cl1", client_name:"SABIC",        contract_id:"ct1", allocated_hours:88,  month:"2026-04", status:"Assigned", notes:""},
@@ -460,7 +460,7 @@ function Avatar({name,size=36,style={}}){
 function Btn({children,onClick,variant="primary",size="md",type="button",disabled,style={}}){
   const sz={sm:{padding:"5px 12px",fontSize:12},md:{padding:"8px 16px",fontSize:13}};
   const vs={
-    primary:{background:"#6366f1",color:"#000",border:"none",fontWeight:700},
+    primary:{background:"#0f172a",color:"#fff",border:"none",fontWeight:700},
     outline:{background:"transparent",color:"#475569",border:"1px solid #e2e8f0",fontWeight:500},
     ghost:{background:"transparent",color:"#475569",border:"none",fontWeight:500},
     danger:{background:"transparent",color:"#EF4444",border:"1px solid #EF444433",fontWeight:500},
@@ -1147,9 +1147,9 @@ function ContractsPage(){
 
   const handleSubmit=e=>{
     e.preventDefault();
-    const totalAlloc=(form.budget_client_servicing||0)+(form.budget_production||0)+(form.budget_creative||0)+(form.budget_planning||0);
+    const totalAlloc=(parseFloat(form.budget_client_servicing)||0)+(parseFloat(form.budget_production)||0)+(parseFloat(form.budget_creative)||0)+(parseFloat(form.budget_planning)||0)+(parseFloat(form.budget_third_party)||0);
     const cv=parseFloat(form.contract_value)||0;
-    if(totalAlloc!==cv){alert(`Total dept allocation (SAR ${totalAlloc.toLocaleString()}) must equal contract value (SAR ${cv.toLocaleString()})`);return;}
+    if(Math.abs(totalAlloc-cv)>0.01){alert(`Total dept allocation (SAR ${totalAlloc.toLocaleString()}) must equal contract value (SAR ${cv.toLocaleString()})`);return;}
     const expired=form.end_date&&new Date(form.end_date)<new Date();
     const autoStatus=expired?"Expired":"Active";
     const autoCat=getCatFromTenure(form.tenure_months);
@@ -1304,9 +1304,14 @@ function ContractsPage(){
             <div><Lbl>Client *</Lbl>
               <Sel value={form.client_id} onChange={handleClient} options={[{v:"",l:"Select client"},...Object.entries(CLIENT_MAP).map(([v,l])=>({v,l}))]}/>
             </div>
+            <div><Lbl>Project Name *</Lbl>
+              <textarea value={form.project_name||""} onChange={e=>upd("project_name",e.target.value)} placeholder="Enter project name..." required rows={2}
+                style={{width:"100%",padding:"8px 11px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,color:"#0f172a",outline:"none",resize:"vertical",boxSizing:"border-box"}}
+                onFocus={e=>e.target.style.borderColor="#6366f1"} onBlur={e=>e.target.style.borderColor="#e2e8f0"}/>
+            </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <div><Lbl>Contract Value (SAR) *</Lbl><Inp type="number" value={form.contract_value} onChange={e=>upd("contract_value",parseFloat(e.target.value)||"")} placeholder="Total value" required/></div>
-              <div><Lbl>Tenure (Months) *</Lbl><Inp type="number" step="0.01" min="0.01" value={form.tenure_months} onChange={e=>handleTenure(e.target.value)} placeholder="Duration" required/></div>
+              <div><Lbl>Contract Value (SAR) *</Lbl><Inp type="number" value={form.contract_value||""} onChange={e=>upd("contract_value",e.target.value)} placeholder="Total value" required/></div>
+              <div><Lbl>Tenure (Months) *</Lbl><Inp type="number" min="1" value={form.tenure_months||""} onChange={e=>handleTenure(e.target.value)} placeholder="e.g. 12" required/></div>
             </div>
             {form.contract_value&&form.tenure_months>0&&(
               <div style={{padding:"8px 12px",background:"#fff",borderRadius:8}}>
@@ -1317,8 +1322,8 @@ function ContractsPage(){
             <div style={{border:"1px solid #e2e8f0",borderRadius:10,padding:14,background:"#fff"}}>
               <p style={{margin:"0 0 10px",fontSize:12,fontWeight:700,color:"#475569"}}>Budget Allocation by Department</p>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                {[["budget_client_servicing","Client Servicing Dept"],["budget_production","Production Dept"],["budget_creative","Creative Dept"],["budget_planning","Planning Dept"]].map(([k,l])=>(
-                  <div key={k}><Lbl>{l}</Lbl><Inp type="number" min="0" value={form[k]} onChange={e=>upd(k,parseFloat(e.target.value)||0)} placeholder="0"/></div>
+                {[["budget_client_servicing","Client Servicing Dept"],["budget_production","Production Dept"],["budget_creative","Creative Dept"],["budget_planning","Planning Dept"],["budget_third_party","3rd Party"]].map(([k,l])=>(
+                  <div key={k}><Lbl>{l}</Lbl><Inp type="number" min="0" value={form[k]||""} onChange={e=>upd(k,e.target.value===""?"":parseFloat(e.target.value)||0)} placeholder=""/></div>
                 ))}
               </div>
               <div style={{marginTop:10,padding:"8px 12px",borderRadius:8,background:allocMatch?"#d1fae5":allocOver?"#fee2e2":"#fef9c3",border:`1px solid ${allocMatch?"#a7f3d0":allocOver?"#fecaca":"#fde68a"}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -1328,6 +1333,7 @@ function ContractsPage(){
                   {formCV>0&&<span style={{fontSize:11,fontWeight:400,color:"#64748b",marginLeft:6}}>/ SAR {formCV.toLocaleString("en-US")}</span>}
                 </span>
               </div>
+              <p style={{margin:"6px 0 0",fontSize:10,color:"#94a3b8",fontStyle:"italic"}}>Amounts exclude VAT</p>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               <div><Lbl>Start Date *</Lbl><Inp type="date" value={form.start_date} onChange={e=>handleStartDate(e.target.value)} required/></div>
