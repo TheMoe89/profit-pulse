@@ -1237,7 +1237,7 @@ function ContractsPage(){
     close();
   };
 
-  const del=id=>{if(window.confirm("Delete this contract?"))setContracts(p=>p.filter(c=>c.id!==id));};
+  const del=id=>{if(window.confirm("Delete this contract?"))dbDelete(id);};
   const sort=k=>{if(sk===k)setSd(d=>d==="asc"?"desc":"asc");else{setSk(k);setSd("asc");}};
 
   const filtered=useMemo(()=>contracts.filter(c=>{
