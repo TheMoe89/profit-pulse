@@ -3961,126 +3961,119 @@ function PlatformRoot(){
 
       {/* Contract Revenue Forecast */}
       {customTab==="contract-revenue-forecast"&&(()=>{
-        // Show loading while data fetches
+        // Wait for data
         if(realContracts.length===0) return(
           <div style={{textAlign:"center",padding:60,color:"#94a3b8"}}>
-            <div style={{fontSize:32,marginBottom:12}}>⏳</div>
-            <p style={{fontSize:14}}>Loading contracts...</p>
-            <p style={{fontSize:12,marginTop:6}}>If this persists, make sure you have added contracts first.</p>
+            <div style={{fontSize:32,marginBottom:12}}>📋</div>
+            <p style={{fontSize:14}}>No contracts found. Add contracts first.</p>
           </div>
         );
 
-        if(USE_CONTRACTS.length===0) return(
-          <div style={{textAlign:"center",padding:60,color:"#94a3b8"}}>
-            <div style={{fontSize:40,marginBottom:12}}>📋</div>
-            <p style={{fontSize:14}}>No contracts yet — add contracts to see the revenue forecast</p>
-          </div>
-        );
-
-        // Build full month range from contract dates - no external state needed
-        const allDates=USE_CONTRACTS.flatMap(c=>[c.sd||c.start_date,c.ed||c.end_date]).filter(Boolean);
-        if(allDates.length===0) return <div style={{padding:40,textAlign:"center",color:"#94a3b8"}}>No contract dates found</div>;
+        // Build month list from contract date range
+        const allDates=realContracts.flatMap(c=>[c.start_date,c.end_date]).filter(Boolean);
         const minD=allDates.reduce((a,b)=>a<b?a:b).slice(0,7);
         const maxD=allDates.reduce((a,b)=>a>b?a:b).slice(0,7);
-        const allMonthsList=(()=>{
-          const ms=[];let d=new Date(minD+"-01");const end=new Date(maxD+"-01");
-          while(d<=end){ms.push(d.toISOString().slice(0,7));d=new Date(d.getFullYear(),d.getMonth()+1,1);}
+        const buildMonths=(from,to)=>{
+          const ms=[];let d=new Date(from+"-01");const e=new Date(to+"-01");
+          while(d<=e){ms.push(d.toISOString().slice(0,7));d=new Date(d.getFullYear(),d.getMonth()+1,1);}
           return ms;
-        })();
-        // Use full range by default
-        const rangeMonths=allMonthsList;
+        };
+        const allMonthsList=buildMonths(minD,maxD);
 
-        const rows=USE_CONTRACTS.map(c=>{
-          const tenure=parseFloat(c.tm)||parseFloat(c.tenure_months)||1;
-          const cv=parseFloat(c.cv)||parseFloat(c.contract_value)||0;
-          const monthlyRevenue=Math.round(cv/tenure);
+        // Build rows - one per contract
+        const rows=realContracts.map(c=>{
+          const tenure=parseFloat(c.tenure_months)||1;
+          const cv=parseFloat(c.contract_value)||0;
+          const mr=Math.round(cv/tenure);
           const monthValues={};
-          rangeMonths.forEach(m=>{monthValues[m]=isActive(c,m)?monthlyRevenue:null;});
-          const totalInRange=rangeMonths.reduce((s,m)=>s+(monthValues[m]||0),0);
+          allMonthsList.forEach(m=>{monthValues[m]=isActive(c,m)?mr:null;});
+          const total=allMonthsList.reduce((s,m)=>s+(monthValues[m]||0),0);
           return{
-            clientName:c.cn||c.client_name||"—",
+            clientName:c.client_name||"—",
             contractNumber:c.contract_number||"—",
             contractValue:Math.round(cv),
             tenureMonths:tenure,
-            startDate:(c.sd||c.start_date||"—").slice(0,10),
-            endDate:(c.ed||c.end_date||"—").slice(0,10),
-            status:c.st||c.status||"—",
-            monthValues,totalInRange,
+            startDate:(c.start_date||"—").slice(0,10),
+            endDate:(c.end_date||"—").slice(0,10),
+            status:c.status||"—",
+            monthValues,total
           };
-        }).filter(r=>r.totalInRange>0).sort((a,b)=>a.clientName.localeCompare(b.clientName));
+        }).filter(r=>r.total>0).sort((a,b)=>a.clientName.localeCompare(b.clientName));
 
-        const statusBadge=s=>s==="Active"?{bg:"#d1fae5",col:"#059669"}:{bg:"#f1f5f9",col:"#64748b"};
+        const colTotals=allMonthsList.map(m=>rows.reduce((s,r)=>s+(r.monthValues[m]||0),0));
+        const grandTotal=rows.reduce((s,r)=>s+r.total,0);
+
+        const TH=({children,align="left"})=><th style={{padding:"7px 10px",textAlign:align,fontSize:11,fontWeight:600,color:"#fff",background:"#1e293b",borderBottom:"1px solid #334155",whiteSpace:"nowrap",position:"sticky",top:0}}>{children}</th>;
 
         return(
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                 <span style={{fontSize:13,color:"#64748b"}}>From:</span>
-                <Sel value={rangeMonths[0]||minD} onChange={()=>{}} options={allMonthsList.map(m=>({v:m,l:fmtLong(m)}))} style={{width:160}}/>
+                <select value={minD} style={{padding:"6px 10px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:12}} onChange={()=>{}}>
+                  {allMonthsList.map(m=><option key={m} value={m}>{fmtLong(m)}</option>)}
+                </select>
                 <span style={{fontSize:13,color:"#64748b"}}>To:</span>
-                <Sel value={rangeMonths[rangeMonths.length-1]||maxD} onChange={()=>{}} options={allMonthsList.map(m=>({v:m,l:fmtLong(m)}))} style={{width:160}}/>
+                <select value={maxD} style={{padding:"6px 10px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:12}} onChange={()=>{}}>
+                  {allMonthsList.map(m=><option key={m} value={m}>{fmtLong(m)}</option>)}
+                </select>
               </div>
-              <div style={{display:"flex",gap:8}}>
-                <Btn variant="outline" size="sm" onClick={()=>{
-                  const headers=['Client Name','Contract ID','Contract Value','Tenure (Month)','Start Date','End Date','Status',...rangeMonths.map(m=>fmtShort(m)),'Total'];
-                  const wsData=[headers];
-                  rows.forEach(r=>wsData.push([r.clientName,r.contractNumber,r.contractValue,r.tenureMonths,r.startDate,r.endDate,r.status,...rangeMonths.map(m=>r.monthValues[m]||''),r.totalInRange]));
-                  wsData.push(['Total','','','','','','',...rangeMonths.map(m=>rows.reduce((s,r)=>s+(r.monthValues[m]||0),0)),rows.reduce((s,r)=>s+r.totalInRange,0)]);
-                  exportXLSX(wsData,'Contract Revenue Forecast',`contract-forecast-${minD}-to-${maxD}.xlsx`);
-                }}>⬇ Export Excel</Btn>
-                <Btn variant="outline" size="sm" onClick={()=>{
-                  const headers=['Client','Contract ID','Value','Tenure','Start','End','Status',...rangeMonths.map(m=>fmtShort(m)),'Total'];
-                  const pdfRows=rows.map(r=>[r.clientName,r.contractNumber,r.contractValue.toLocaleString(),r.tenureMonths+'m',r.startDate,r.endDate,r.status,...rangeMonths.map(m=>r.monthValues[m]!=null?r.monthValues[m].toLocaleString():'—'),r.totalInRange.toLocaleString()]);
-                  pdfRows.push(['Total','','','','','','',...rangeMonths.map(m=>rows.reduce((s,r)=>s+(r.monthValues[m]||0),0).toLocaleString()),rows.reduce((s,r)=>s+r.totalInRange,0).toLocaleString()]);
-                  exportPDFTable(`Contract Revenue Forecast — ${fmtLong(minD)} to ${fmtLong(maxD)}`,headers,pdfRows,`contract-forecast-${minD}-to-${maxD}.pdf`);
-                }}>⬇ Export PDF</Btn>
-              </div>
+              <Btn variant="outline" size="sm" onClick={()=>{
+                const headers=["Client Name","Contract ID","Contract Value","Tenure (Month)","Start Date","End Date","Status",...allMonthsList.map(m=>fmtShort(m)),"Total"];
+                const wsData=[headers];
+                rows.forEach(r=>wsData.push([r.clientName,r.contractNumber,r.contractValue,r.tenureMonths,r.startDate,r.endDate,r.status,...allMonthsList.map(m=>r.monthValues[m]||""),r.total]));
+                wsData.push(["Total","","","","","","",...colTotals,grandTotal]);
+                exportXLSX(wsData,"Contract Revenue Forecast",`contract-forecast-${minD}-to-${maxD}.xlsx`);
+              }}>⬇ Export Excel</Btn>
             </div>
             <Card style={{overflow:"hidden"}}>
-              <div style={{padding:"14px 18px",borderBottom:"1px solid #e2e8f0"}}>
+              <div style={{padding:"12px 16px",borderBottom:"1px solid #e2e8f0"}}>
                 <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>Contract Revenue Forecast — {fmtLong(minD)} to {fmtLong(maxD)}</p>
               </div>
-              <div style={{overflowX:"auto"}}>
+              <div style={{overflowX:"auto",maxHeight:600,overflowY:"auto"}}>
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                   <thead><tr>
-                    {["Client Name","Contract ID","Contract Value","Tenure","Start Date","End Date","Status",...rangeMonths.map(m=>fmtShort(m)),"Total"].map((h,i)=>(
-                      <th key={i} style={{padding:"8px 10px",textAlign:i<=1||i===4||i===5||i===6?"left":"right",fontSize:11,fontWeight:600,color:"#fff",background:"#1e293b",borderBottom:"1px solid #334155",whiteSpace:"nowrap"}}>{h}</th>
-                    ))}
+                    <TH>Client Name</TH>
+                    <TH>Contract ID</TH>
+                    <TH align="right">Contract Value</TH>
+                    <TH align="center">Tenure (Month)</TH>
+                    <TH>Start Date</TH>
+                    <TH>End Date</TH>
+                    <TH align="center">Status</TH>
+                    {allMonthsList.map(m=><TH key={m} align="right">{fmtShort(m)}</TH>)}
+                    <TH align="right">Total</TH>
                   </tr></thead>
                   <tbody>
-                    {rows.length===0?(
-                      <tr><td colSpan={8+rangeMonths.length} style={{textAlign:"center",padding:40,color:"#94a3b8"}}>No contracts active in selected range</td></tr>
-                    ):<>
-                      {rows.map((row,i)=>(
-                        <tr key={i} style={{background:i%2===0?"#fff":"#f8fafc"}}>
-                          <td style={{padding:"8px 10px",fontWeight:600,borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.clientName}</td>
-                          <td style={{padding:"8px 10px",fontFamily:"monospace",fontSize:11,borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.contractNumber}</td>
-                          <td style={{padding:"8px 10px",textAlign:"right",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.contractValue.toLocaleString()}</td>
-                          <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{row.tenureMonths}m</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.startDate}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.endDate}</td>
-                          <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
-                            <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:600,background:statusBadge(row.status).bg,color:statusBadge(row.status).col}}>{row.status}</span>
+                    {rows.map((row,i)=>(
+                      <tr key={i} style={{background:i%2===0?"#fff":"#f8fafc"}}>
+                        <td style={{padding:"7px 10px",fontWeight:500,borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.clientName}</td>
+                        <td style={{padding:"7px 10px",fontFamily:"monospace",fontSize:11,borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.contractNumber}</td>
+                        <td style={{padding:"7px 10px",textAlign:"right",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.contractValue.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                        <td style={{padding:"7px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{row.tenureMonths}</td>
+                        <td style={{padding:"7px 10px",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.startDate}</td>
+                        <td style={{padding:"7px 10px",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.endDate}</td>
+                        <td style={{padding:"7px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
+                          <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:600,background:row.status==="Active"?"#d1fae5":"#f1f5f9",color:row.status==="Active"?"#059669":"#64748b"}}>{row.status}</span>
+                        </td>
+                        {allMonthsList.map(m=>(
+                          <td key={m} style={{padding:"7px 10px",textAlign:"right",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>
+                            {row.monthValues[m]!=null
+                              ?<span style={{color:"#059669",fontWeight:500}}>{row.monthValues[m].toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+                              :<span style={{color:"#cbd5e1"}}>-</span>}
                           </td>
-                          {rangeMonths.map(m=>(
-                            <td key={m} style={{padding:"8px 10px",textAlign:"right",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>
-                              {row.monthValues[m]!=null
-                                ?<span style={{color:"#059669",fontWeight:600}}>{row.monthValues[m].toLocaleString()}</span>
-                                :<span style={{color:"#cbd5e1"}}>—</span>}
-                            </td>
-                          ))}
-                          <td style={{padding:"8px 10px",textAlign:"right",fontWeight:700,borderBottom:"1px solid #f1f5f9",background:"#f8fafc",whiteSpace:"nowrap"}}>{row.totalInRange.toLocaleString()}</td>
-                        </tr>
-                      ))}
-                      <tr style={{background:"#e2e8f0",fontWeight:700,borderTop:"2px solid #cbd5e1"}}>
-                        <td colSpan={7} style={{padding:"8px 10px"}}>Total</td>
-                        {rangeMonths.map(m=>{
-                          const colTotal=rows.reduce((s,r)=>s+(r.monthValues[m]||0),0);
-                          return<td key={m} style={{padding:"8px 10px",textAlign:"right",color:colTotal>0?"#059669":"#94a3b8",whiteSpace:"nowrap"}}>{colTotal>0?colTotal.toLocaleString():"—"}</td>;
-                        })}
-                        <td style={{padding:"8px 10px",textAlign:"right",fontWeight:700}}>{rows.reduce((s,r)=>s+r.totalInRange,0).toLocaleString()}</td>
+                        ))}
+                        <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,borderBottom:"1px solid #f1f5f9",background:"#f8fafc",whiteSpace:"nowrap"}}>{row.total.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                       </tr>
-                    </>}
+                    ))}
+                    <tr style={{background:"#e2e8f0",fontWeight:700,borderTop:"2px solid #cbd5e1"}}>
+                      <td colSpan={7} style={{padding:"7px 10px"}}>Total</td>
+                      {colTotals.map((t,i)=>(
+                        <td key={i} style={{padding:"7px 10px",textAlign:"right",color:t>0?"#059669":"#94a3b8",whiteSpace:"nowrap"}}>
+                          {t>0?t.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}):"-"}
+                        </td>
+                      ))}
+                      <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:"#059669",whiteSpace:"nowrap"}}>{grandTotal.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
