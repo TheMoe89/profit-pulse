@@ -1969,6 +1969,17 @@ function ReportsPage(){
     });
   },[sb]);
 
+  // Auto-set forecast range when contracts load - placed after realContracts is declared
+  useEffect(()=>{
+    if(realContracts.length>0){
+      const dates=realContracts.flatMap(c=>[c.sd||c.start_date,c.ed||c.end_date]).filter(Boolean);
+      if(dates.length>0){
+        setForecastFromMonth(dates.reduce((a,b)=>a<b?a:b).slice(0,7));
+        setForecastToMonth(dates.reduce((a,b)=>a>b?a:b).slice(0,7));
+      }
+    }
+  },[realContracts.length]);
+
   // Build allocsByMonth-style lookup from real allocations
   const allocsByMonth = useMemo(()=>{
     const m={};
