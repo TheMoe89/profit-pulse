@@ -548,17 +548,25 @@ function DashboardPage(){
     const als=dbAllocsByMonth[month]||[];
     const em={};dbEmployees.forEach(e=>{em[e.id]={...e,hr:e.mc/HPM};});
     const ac=dbContracts.filter(c=>isActive(c,month));
-    const cm={};ac.forEach(c=>{cm[c.cid]={...c,mr:c.cv/c.tm};});
-    const cp=[].filter(cl=>cm[cl.id]).map(cl=>{
-      const ct=cm[cl.id];let rc2=0;
-      als.filter(a=>a.cid===cl.id).forEach(a=>{const e=em[a.eid];if(e)rc2+=e.hr*a.h;});
-      const mr=ct.mr,gp=mr-rc2,mp=mr>0?(gp/mr)*100:0;
-      return{id:cl.id,name:cl.name,mr,rc:rc2,gp,mp};
+    // Build contract map keyed by contract id (for client matching)
+    const cm={};ac.forEach(c=>{
+      const cid=c.client_id||c.cid||c.id;
+      cm[cid]={...c,mr:Math.round((parseFloat(c.contract_value)||parseFloat(c.cv)||0)/(parseFloat(c.tenure_months)||parseFloat(c.tm)||1))};
     });
-    const tr=cp.reduce((s,c)=>s+c.mr,0),tc=cp.reduce((s,c)=>s+c.rc,0);
+    // Total revenue = sum of monthly retainers of all active contracts this month
+    const tr=ac.reduce((s,c)=>s+Math.round((parseFloat(c.contract_value)||parseFloat(c.cv)||0)/(parseFloat(c.tenure_months)||parseFloat(c.tm)||1)),0);
+    const cp=ac.map(c=>{
+      const mr=Math.round((parseFloat(c.contract_value)||parseFloat(c.cv)||0)/(parseFloat(c.tenure_months)||parseFloat(c.tm)||1));
+      const cid=c.client_id||c.cid||c.id;
+      let rc2=0;
+      als.filter(a=>a.cid===cid||a.client_id===cid).forEach(a=>{const e=em[a.eid||a.employee_id];if(e)rc2+=e.hr*a.h;});
+      const gp=mr-rc2,mp=mr>0?(gp/mr)*100:0;
+      return{id:cid,name:c.client_name||c.cn||"",mr,rc:rc2,gp,mp};
+    });
+    const tc=cp.reduce((s,c)=>s+c.rc,0);
     const tp=tr-tc,am=tr>0?(tp/tr)*100:0,lm=cp.filter(c=>c.mp<20&&c.mp>=0).length;
-    const allAc=dbContracts.filter(c=>c.st==="Active");
-    const tcv=allAc.reduce((s,c)=>s+c.cv,0);
+    const allAc=dbContracts.filter(c=>c.st==="Active"||c.status==="Active");
+    const tcv=allAc.reduce((s,c)=>s+(parseFloat(c.contract_value)||parseFloat(c.cv)||0),0);
     const cvd=ac.map(c=>{const x=cp.find(p=>p.id===c.cid);return{name:c.cn.length>10?c.cn.slice(0,10)+"…":c.cn,monthly:Math.round(c.cv/c.tm),cost:Math.round(x?.rc||0),cid:c.cid};});
     const bld=(cs,as2)=>{
       const d={"Client Servicing":{b:0,c:0},"Production":{b:0,c:0},"Creative":{b:0,c:0},"Planning":{b:0,c:0}};
@@ -576,7 +584,7 @@ function DashboardPage(){
     const lt=Object.values(bm).sort((a,b)=>a.m.localeCompare(b.m)).map(x=>({label:fmtShort(x.m),m:x.m,cl:x.cl}));
     const sc=[...new Set(dbSnapshots.map(s=>s.cn))];
     return{cp,tr,tc,tp,am,lm,acnt:allAc.length,tcv,cvd,dbc,eu,over,under,chart,ren,lt,sc};
-  },[month]);
+  },[month,dbContracts,dbEmployees,dbAllocs,dbSnapshots,dbAllocsByMonth]);
 
   const ltd=C.lt.map(m=>{
     if(lc==="all")return{label:m.label,retainer:Object.values(m.cl).reduce((s,c)=>s+c.r,0),cost:Object.values(m.cl).reduce((s,c)=>s+c.c,0)};
