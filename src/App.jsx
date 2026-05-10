@@ -1929,6 +1929,29 @@ function ReportsPage(){
   const [selDeptMonth,setSelDeptMonth] = useState(currentMonth);
   const [selDeptCapMonth,setSelDeptCapMonth] = useState(currentMonth);
 
+  // ── Real data from Supabase ──────────────────────────────────────────────────
+  const [realEmployees,setRealEmployees] = useState([]);
+  const [realContracts,setRealContracts] = useState([]);
+  const [realClients,setRealClients]     = useState([]);
+  const [realAllocs,setRealAllocs]       = useState([]);
+  const [realSnapshots,setRealSnapshots] = useState([]);
+
+  useEffect(()=>{
+    Promise.all([
+      sb.from('employees').select('*'),
+      sb.from('contracts').select('*'),
+      sb.from('clients').select('*'),
+      sb.from('allocations').select('*'),
+      sb.from('monthly_snapshots').select('*'),
+    ]).then(([{data:e},{data:ct},{data:cl},{data:al},{data:sn}])=>{
+      if(e)  setRealEmployees(e.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0,id:x.id})));
+      if(ct) setRealContracts(ct.map(x=>({...x,cn:x.client_name,cid:x.client_id,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status,bcs:parseFloat(x.budget_client_servicing)||0,bp:parseFloat(x.budget_production)||0,bc:parseFloat(x.budget_creative)||0,bpl:parseFloat(x.budget_planning)||0})));
+      if(cl) setRealClients(cl);
+      if(al) setRealAllocs(al.map(x=>({...x,eid:x.employee_id,cid:x.client_id,h:parseFloat(x.allocated_hours)||0})));
+      if(sn) setRealSnapshots(sn);
+    });
+  },[sb]);
+
   // Build allocsByMonth-style lookup from real allocations
   const allocsByMonth = useMemo(()=>{
     const m={};
