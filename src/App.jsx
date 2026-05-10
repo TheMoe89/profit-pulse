@@ -1864,6 +1864,57 @@ const REPORT_COLORS = ['#10b981','#6366f1','#f59e0b','#ef4444','#8b5cf6','#ec489
 
 // Shared mock snapshots for custom reports tab (extends the existing SNAPSHOTS)
 
+// ── Excel export helper (uses SheetJS loaded from CDN) ──────────────────────
+const exportXLSX = (wsData, sheetName, filename) => {
+  const script = document.createElement('script');
+  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  script.onload = () => {
+    const ws = window.XLSX.utils.aoa_to_sheet(wsData);
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    window.XLSX.writeFile(wb, filename);
+  };
+  if(window.XLSX) {
+    const ws = window.XLSX.utils.aoa_to_sheet(wsData);
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    window.XLSX.writeFile(wb, filename);
+  } else {
+    document.head.appendChild(script);
+  }
+};
+
+const exportPDFTable = (title, headers, rows, filename) => {
+  const script = document.createElement('script');
+  const doExport = () => {
+    const {jsPDF} = window.jspdf;
+    const doc = new jsPDF({orientation:'landscape'});
+    const pw = doc.internal.pageSize.getWidth();
+    doc.setFontSize(13); doc.text(title, pw/2, 14, {align:'center'});
+    doc.setFontSize(9); doc.text(new Date().toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'}), pw/2, 20, {align:'center'});
+    const colW = Math.floor((pw-20)/headers.length);
+    const colX = headers.map((_,i)=>10+i*colW);
+    let y=30;
+    doc.setFillColor(30,41,59); doc.rect(10,y-4,pw-20,7,'F');
+    doc.setTextColor(255,255,255); doc.setFont(undefined,'bold');
+    headers.forEach((h,i)=>doc.text(String(h),colX[i],y,{maxWidth:colW-1}));
+    doc.setTextColor(0,0,0); doc.setFont(undefined,'normal');
+    y+=8;
+    rows.forEach(row=>{
+      if(y>190){doc.addPage();y=20;}
+      row.forEach((v,i)=>doc.text(String(v??''),colX[i],y,{maxWidth:colW-1}));
+      y+=6;
+    });
+    doc.save(filename);
+  };
+  if(window.jspdf) { doExport(); }
+  else {
+    script.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    script.onload=doExport;
+    document.head.appendChild(script);
+  }
+};
+
 function ReportsPage(){
   const {sb} = useAuth();
   const [section,setSection]   = useState("charts");
@@ -1876,6 +1927,12 @@ function ReportsPage(){
   const [selRevCat,setSelRevCat]       = useState("all");
   const [selUtilMonth,setSelUtilMonth] = useState(currentMonth);
   const [selDeptMonth,setSelDeptMonth] = useState(currentMonth);
+  const [selDeptCapMonth,setSelDeptCapMonth] = useState(currentMonth);
+  const [forecastFromMonth,setForecastFromMonth] = useState(currentMonth);
+  const [forecastToMonth,setForecastToMonth] = useState(()=>{
+    const d=new Date(); d.setMonth(d.getMonth()+6);
+    return d.toISOString().slice(0,7);
+  });
 
   // ── Real data from Supabase ──────────────────────────────────────────────────
   const [realEmployees,setRealEmployees] = useState([]);
@@ -2061,6 +2118,8 @@ function ReportsPage(){
     {id:"revenue-profit-contract", label:"Revenue & Profit by Contract"},
     {id:"employee-utilization",    label:"Employee Utilization"},
     {id:"department-performance",  label:"Department Performance"},
+    {id:"dept-capacity-budget",    label:"Dept Capacity vs Budget"},
+    {id:"contract-revenue-forecast",label:"Contract Revenue Forecast"},
   ];
 
   // ── Table header style ───────────────────────────────────────────────────────
@@ -3787,4 +3846,241 @@ function PlatformRoot(){
   );
   if(!session) return <LoginPage/>;
   return <PlatformApp/>;
-}
+
+
+      {/* Dept Capacity vs Budget */}
+      {customTab==="dept-capacity-budget"&&(()=>{
+        const DEPTS=["Client Servicing Department","Production Department","Creative Department","Planning Department"];
+        const budgetKey={"Production Department":"budget_production","Client Servicing Department":"budget_client_servicing","Creative Department":"budget_creative","Planning Department":"budget_planning"};
+        const activeContracts=USE_CONTRACTS.filter(c=>isActive(c,selDeptCapMonth));
+        const monthAllocs=realAllocs.filter(a=>a.month===selDeptCapMonth);
+        const allMonths=[...new Set(realAllocs.map(a=>a.month))].sort().reverse();
+
+        const rows=DEPTS.map(dept=>{
+          const shortName=dept.replace(" Department","");
+          const deptEmps=USE_EMPLOYEES.filter(e=>e.department===dept&&e.status==="Active");
+          const totalEmployees=deptEmps.length;
+          const totalMonthlyCost=Math.round(deptEmps.reduce((s,e)=>s+(parseFloat(e.mc)||parseFloat(e.monthly_cost)||0),0));
+          const deptAllocs=monthAllocs.filter(a=>USE_EMPLOYEES.find(e=>e.id===a.employee_id&&e.department===dept));
+          const allocatedHours=deptAllocs.reduce((s,a)=>s+(parseFloat(a.h)||parseFloat(a.allocated_hours)||0),0);
+          const capacityHours=totalEmployees*HPM;
+          const utilizationPct=capacityHours>0?Math.round((allocatedHours/capacityHours)*100):0;
+          const totalClientBudget=Math.round(activeContracts.reduce((s,c)=>{
+            const tm=parseFloat(c.tm)||parseFloat(c.tenure_months)||1;
+            return s+((parseFloat(c[budgetKey[dept]])||0)/tm);
+          },0));
+          const budgetCoveragePct=totalMonthlyCost>0?Math.round((totalClientBudget/totalMonthlyCost)*100):0;
+          const budgetSurplusDeficit=totalClientBudget-totalMonthlyCost;
+          return{dept:shortName,totalEmployees,totalMonthlyCost,totalClientBudget,budgetCoveragePct,allocatedHours,capacityHours,utilizationPct,budgetSurplusDeficit};
+        });
+
+        const coverBadge=pct=>pct>=100?{bg:"#d1fae5",col:"#059669"}:pct>=70?{bg:"#fef9c3",col:"#d97706"}:{bg:"#fee2e2",col:"#dc2626"};
+        const utilBadge=pct=>pct>100?{bg:"#fee2e2",col:"#dc2626"}:pct>=80?{bg:"#d1fae5",col:"#059669"}:pct>=50?{bg:"#fef9c3",col:"#d97706"}:{bg:"#f1f5f9",col:"#64748b"};
+
+        const months=allMonths.length>0?allMonths:ALLOC_MONTHS.map(m=>m.v);
+
+        return(
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:13,color:"#64748b"}}>Month:</span>
+                <Sel value={selDeptCapMonth} onChange={setSelDeptCapMonth}
+                  options={months.map(m=>({v:m,l:fmtLong(m)}))} style={{width:160}}/>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <Btn variant="outline" size="sm" onClick={()=>{
+                  const wsData=[
+                    ['Month','Department','Total Employees','Monthly Resource Cost (SAR)','Client Budget (SAR)','Budget Coverage %','Allocated Hours','Capacity Hours','Utilization %','Budget Surplus/Deficit (SAR)'],
+                    ...rows.map(r=>[selDeptCapMonth,r.dept,r.totalEmployees,r.totalMonthlyCost,r.totalClientBudget,r.budgetCoveragePct+'%',r.allocatedHours+'h',r.capacityHours+'h',r.utilizationPct+'%',r.budgetSurplusDeficit]),
+                  ];
+                  exportXLSX(wsData,'Dept Capacity vs Budget',`dept-capacity-${selDeptCapMonth}.xlsx`);
+                }}>⬇ Export Excel</Btn>
+                <Btn variant="outline" size="sm" onClick={()=>{
+                  const headers=['Department','Employees','Resource Cost','Client Budget','Coverage %','Alloc Hrs','Cap Hrs','Util %','Surplus/Deficit'];
+                  const pdfRows=rows.map(r=>[r.dept,r.totalEmployees,r.totalMonthlyCost.toLocaleString(),r.totalClientBudget.toLocaleString(),r.budgetCoveragePct+'%',r.allocatedHours+'h',r.capacityHours+'h',r.utilizationPct+'%',r.budgetSurplusDeficit.toLocaleString()]);
+                  exportPDFTable(`Department Capacity vs Budget — ${fmtLong(selDeptCapMonth)}`,headers,pdfRows,`dept-capacity-${selDeptCapMonth}.pdf`);
+                }}>⬇ Export PDF</Btn>
+              </div>
+            </div>
+            <Card style={{overflow:"hidden"}}>
+              <div style={{padding:"14px 18px",borderBottom:"1px solid #e2e8f0"}}>
+                <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>Department Capacity vs Client Budget — {fmtLong(selDeptCapMonth)}</p>
+              </div>
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                  <thead><tr>
+                    {["Department","Employees","Monthly Resource Cost","Client Budget","Budget Coverage %","Allocated Hrs","Capacity Hrs","Utilization %","Budget Surplus / Deficit"].map(h=>(
+                      <th key={h} style={{padding:"8px 10px",textAlign:h==="Department"?"left":"center",fontSize:11,fontWeight:600,color:"#fff",background:"#1e293b",borderBottom:"1px solid #334155",whiteSpace:"nowrap"}}>{h}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>
+                    {rows.map((r,i)=>(
+                      <tr key={r.dept} style={{background:i%2===0?"#fff":"#f8fafc"}}>
+                        <td style={{padding:"8px 10px",fontWeight:600,borderBottom:"1px solid #f1f5f9"}}>{r.dept}</td>
+                        <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{r.totalEmployees}</td>
+                        <td style={{padding:"8px 10px",textAlign:"right",color:"#d97706",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{r.totalMonthlyCost.toLocaleString()}</td>
+                        <td style={{padding:"8px 10px",textAlign:"right",color:"#059669",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{r.totalClientBudget.toLocaleString()}</td>
+                        <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
+                          <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:700,background:coverBadge(r.budgetCoveragePct).bg,color:coverBadge(r.budgetCoveragePct).col}}>{r.budgetCoveragePct}%</span>
+                        </td>
+                        <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{r.allocatedHours}h</td>
+                        <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{r.capacityHours}h</td>
+                        <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
+                          <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:700,background:utilBadge(r.utilizationPct).bg,color:utilBadge(r.utilizationPct).col}}>{r.utilizationPct}%</span>
+                        </td>
+                        <td style={{padding:"8px 10px",textAlign:"right",fontWeight:700,color:r.budgetSurplusDeficit>=0?"#059669":"#dc2626",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{r.budgetSurplusDeficit.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                    <tr style={{background:"#e2e8f0",fontWeight:700,borderTop:"2px solid #cbd5e1"}}>
+                      <td style={{padding:"8px 10px"}}>Totals</td>
+                      <td style={{padding:"8px 10px",textAlign:"center"}}>{rows.reduce((s,r)=>s+r.totalEmployees,0)}</td>
+                      <td style={{padding:"8px 10px",textAlign:"right",color:"#d97706",whiteSpace:"nowrap"}}>{rows.reduce((s,r)=>s+r.totalMonthlyCost,0).toLocaleString()}</td>
+                      <td style={{padding:"8px 10px",textAlign:"right",color:"#059669",whiteSpace:"nowrap"}}>{rows.reduce((s,r)=>s+r.totalClientBudget,0).toLocaleString()}</td>
+                      <td style={{padding:"8px 10px",textAlign:"center"}}>
+                        <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:700,background:"#e2e8f0",color:"#475569"}}>
+                          {(()=>{const tc=rows.reduce((s,r)=>s+r.totalMonthlyCost,0);const tb=rows.reduce((s,r)=>s+r.totalClientBudget,0);return tc>0?Math.round((tb/tc)*100):0;})()}%
+                        </span>
+                      </td>
+                      <td style={{padding:"8px 10px",textAlign:"center"}}>{rows.reduce((s,r)=>s+r.allocatedHours,0)}h</td>
+                      <td style={{padding:"8px 10px",textAlign:"center"}}>{rows.reduce((s,r)=>s+r.capacityHours,0)}h</td>
+                      <td style={{padding:"8px 10px",textAlign:"center"}}>
+                        <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:700,background:"#e2e8f0",color:"#475569"}}>
+                          {(()=>{const tc=rows.reduce((s,r)=>s+r.capacityHours,0);const ta=rows.reduce((s,r)=>s+r.allocatedHours,0);return tc>0?Math.round((ta/tc)*100):0;})()}%
+                        </span>
+                      </td>
+                      <td style={{padding:"8px 10px",textAlign:"right",fontWeight:700,color:rows.reduce((s,r)=>s+r.budgetSurplusDeficit,0)>=0?"#059669":"#dc2626",whiteSpace:"nowrap"}}>{rows.reduce((s,r)=>s+r.budgetSurplusDeficit,0).toLocaleString()}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                {rows.every(r=>r.totalEmployees===0&&r.totalClientBudget===0)&&(
+                  <div style={{textAlign:"center",padding:40,color:"#94a3b8"}}>
+                    <p>No data for {fmtLong(selDeptCapMonth)} — add employees and contracts first</p>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
+
+      {/* Contract Revenue Forecast */}
+      {customTab==="contract-revenue-forecast"&&(()=>{
+        if(USE_CONTRACTS.length===0) return(
+          <div style={{textAlign:"center",padding:60,color:"#94a3b8"}}>
+            <div style={{fontSize:40,marginBottom:12}}>📋</div>
+            <p style={{fontSize:14}}>No contracts yet — add contracts to see the revenue forecast</p>
+          </div>
+        );
+
+        // Build month range from all contract dates
+        const allDates=USE_CONTRACTS.flatMap(c=>[c.sd||c.start_date,c.ed||c.end_date]).filter(Boolean);
+        const minD=allDates.reduce((a,b)=>a<b?a:b).slice(0,7);
+        const maxD=allDates.reduce((a,b)=>a>b?a:b).slice(0,7);
+        const allMonthsList=(()=>{
+          const ms=[];let d=new Date(minD+"-01");const end=new Date(maxD+"-01");
+          while(d<=end){ms.push(d.toISOString().slice(0,7));d=new Date(d.getFullYear(),d.getMonth()+1,1);}
+          return ms;
+        })();
+
+        const rangeMonths=allMonthsList.filter(m=>m>=forecastFromMonth&&m<=forecastToMonth);
+
+        const rows=USE_CONTRACTS.map(c=>{
+          const tenure=parseFloat(c.tm)||parseFloat(c.tenure_months)||1;
+          const cv=parseFloat(c.cv)||parseFloat(c.contract_value)||0;
+          const monthlyRevenue=Math.round(cv/tenure);
+          const monthValues={};
+          rangeMonths.forEach(m=>{monthValues[m]=isActive(c,m)?monthlyRevenue:null;});
+          const totalInRange=rangeMonths.reduce((s,m)=>s+(monthValues[m]||0),0);
+          return{
+            clientName:c.cn||c.client_name||"—",
+            contractNumber:c.contract_number||"—",
+            contractValue:Math.round(cv),
+            tenureMonths:tenure,
+            startDate:(c.sd||c.start_date||"—").slice(0,10),
+            endDate:(c.ed||c.end_date||"—").slice(0,10),
+            status:c.st||c.status||"—",
+            monthValues,totalInRange,
+          };
+        }).filter(r=>r.totalInRange>0).sort((a,b)=>a.clientName.localeCompare(b.clientName));
+
+        const statusBadge=s=>s==="Active"?{bg:"#d1fae5",col:"#059669"}:{bg:"#f1f5f9",col:"#64748b"};
+
+        return(
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                <span style={{fontSize:13,color:"#64748b"}}>From:</span>
+                <Sel value={forecastFromMonth} onChange={setForecastFromMonth}
+                  options={allMonthsList.map(m=>({v:m,l:fmtLong(m)}))} style={{width:160}}/>
+                <span style={{fontSize:13,color:"#64748b"}}>To:</span>
+                <Sel value={forecastToMonth} onChange={setForecastToMonth}
+                  options={allMonthsList.map(m=>({v:m,l:fmtLong(m)}))} style={{width:160}}/>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <Btn variant="outline" size="sm" onClick={()=>{
+                  const headers=['Client Name','Contract ID','Contract Value','Tenure (Month)','Start Date','End Date','Status',...rangeMonths.map(m=>fmtShort(m)),'Total'];
+                  const wsData=[headers];
+                  rows.forEach(r=>wsData.push([r.clientName,r.contractNumber,r.contractValue,r.tenureMonths,r.startDate,r.endDate,r.status,...rangeMonths.map(m=>r.monthValues[m]||''),r.totalInRange]));
+                  wsData.push(['Total','','','','','','',...rangeMonths.map(m=>rows.reduce((s,r)=>s+(r.monthValues[m]||0),0)),rows.reduce((s,r)=>s+r.totalInRange,0)]);
+                  exportXLSX(wsData,'Contract Revenue Forecast',`contract-forecast-${forecastFromMonth}-to-${forecastToMonth}.xlsx`);
+                }}>⬇ Export Excel</Btn>
+                <Btn variant="outline" size="sm" onClick={()=>{
+                  const headers=['Client','Contract ID','Value','Tenure','Start','End','Status',...rangeMonths.map(m=>fmtShort(m)),'Total'];
+                  const pdfRows=rows.map(r=>[r.clientName,r.contractNumber,r.contractValue.toLocaleString(),r.tenureMonths+'m',r.startDate,r.endDate,r.status,...rangeMonths.map(m=>r.monthValues[m]!=null?r.monthValues[m].toLocaleString():'—'),r.totalInRange.toLocaleString()]);
+                  pdfRows.push(['Total','','','','','','',...rangeMonths.map(m=>rows.reduce((s,r)=>s+(r.monthValues[m]||0),0).toLocaleString()),rows.reduce((s,r)=>s+r.totalInRange,0).toLocaleString()]);
+                  exportPDFTable(`Contract Revenue Forecast — ${fmtLong(forecastFromMonth)} to ${fmtLong(forecastToMonth)}`,headers,pdfRows,`contract-forecast-${forecastFromMonth}-to-${forecastToMonth}.pdf`);
+                }}>⬇ Export PDF</Btn>
+              </div>
+            </div>
+            <Card style={{overflow:"hidden"}}>
+              <div style={{padding:"14px 18px",borderBottom:"1px solid #e2e8f0"}}>
+                <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>Contract Revenue Forecast — {fmtLong(forecastFromMonth)} to {fmtLong(forecastToMonth)}</p>
+              </div>
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                  <thead><tr>
+                    {["Client Name","Contract ID","Contract Value","Tenure","Start Date","End Date","Status",...rangeMonths.map(m=>fmtShort(m)),"Total"].map((h,i)=>(
+                      <th key={i} style={{padding:"8px 10px",textAlign:i<=1||i===4||i===5||i===6?"left":"right",fontSize:11,fontWeight:600,color:"#fff",background:"#1e293b",borderBottom:"1px solid #334155",whiteSpace:"nowrap"}}>{h}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>
+                    {rows.length===0?(
+                      <tr><td colSpan={8+rangeMonths.length} style={{textAlign:"center",padding:40,color:"#94a3b8"}}>No contracts active in selected range</td></tr>
+                    ):<>
+                      {rows.map((row,i)=>(
+                        <tr key={i} style={{background:i%2===0?"#fff":"#f8fafc"}}>
+                          <td style={{padding:"8px 10px",fontWeight:600,borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.clientName}</td>
+                          <td style={{padding:"8px 10px",fontFamily:"monospace",fontSize:11,borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.contractNumber}</td>
+                          <td style={{padding:"8px 10px",textAlign:"right",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.contractValue.toLocaleString()}</td>
+                          <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{row.tenureMonths}m</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.startDate}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.endDate}</td>
+                          <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
+                            <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:600,background:statusBadge(row.status).bg,color:statusBadge(row.status).col}}>{row.status}</span>
+                          </td>
+                          {rangeMonths.map(m=>(
+                            <td key={m} style={{padding:"8px 10px",textAlign:"right",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>
+                              {row.monthValues[m]!=null
+                                ?<span style={{color:"#059669",fontWeight:600}}>{row.monthValues[m].toLocaleString()}</span>
+                                :<span style={{color:"#cbd5e1"}}>—</span>}
+                            </td>
+                          ))}
+                          <td style={{padding:"8px 10px",textAlign:"right",fontWeight:700,borderBottom:"1px solid #f1f5f9",background:"#f8fafc",whiteSpace:"nowrap"}}>{row.totalInRange.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                      <tr style={{background:"#e2e8f0",fontWeight:700,borderTop:"2px solid #cbd5e1"}}>
+                        <td colSpan={7} style={{padding:"8px 10px"}}>Total</td>
+                        {rangeMonths.map(m=>{
+                          const colTotal=rows.reduce((s,r)=>s+(r.monthValues[m]||0),0);
+                          return<td key={m} style={{padding:"8px 10px",textAlign:"right",color:colTotal>0?"#059669":"#94a3b8",whiteSpace:"nowrap"}}>{colTotal>0?colTotal.toLocaleString():"—"}</td>;
+                        })}
+                        <td style={{padding:"8px 10px",textAlign:"right",fontWeight:700}}>{rows.reduce((s,r)=>s+r.totalInRange,0).toLocaleString()}</td>
+                      </tr>
+                    </>}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}}
