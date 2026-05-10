@@ -1877,30 +1877,30 @@ function ReportsPage(){
   },[realAllocs]);
 
   // Use real data if available, fall back to mock for display
-  const USE_EMPLOYEES = realEmployees.length>0 ? realEmployees : USE_EMPLOYEES;
-  const USE_USE_CONTRACTS = realContracts.length>0 ? realContracts : USE_CONTRACTS;
-  const USE_USE_CLIENTS   = realClients.length>0   ? realClients   : USE_USE_CLIENTS.map(c=>({...c,id:c.id,name:c.name}));
-  const USE_USE_SNAPSHOTS = realSnapshots.length>0  ? realSnapshots.map(s=>({
+  const USE_EMPLOYEES = realEmployees.length>0 ? realEmployees : EMPLOYEES_INIT;
+  const USE_CONTRACTS = realContracts.length>0 ? realContracts : CONTRACTS;
+  const USE_CLIENTS   = realClients.length>0   ? realClients   : CLIENTS;
+  const USE_SNAPSHOTS = realSnapshots.length>0 ? realSnapshots.map(s=>({
     month:s.month, client_name:s.client_name, contract_number:s.contract_number,
-    contract_value:parseFloat(s.monthly_retainer)*((realContracts.find(c=>c.id===s.contract_id)?.tm)||12)||0,
+    contract_value:parseFloat(s.monthly_retainer)*12,
     monthly_retainer:parseFloat(s.monthly_retainer)||0,
     allocated_hours:parseFloat(s.allocated_hours)||0,
     resource_cost:parseFloat(s.resource_cost)||0,
     profit:parseFloat(s.profit)||0,
     status:"Active", contract_category:"Retainer"
-  })) : USE_USE_SNAPSHOTS;
+  })) : REPORT_SNAPSHOTS;
 
   // ── Calculations ────────────────────────────────────────────────────────────
   const R = useMemo(()=>{
     const als = (allocsByMonth[selMonth]||[]);
     const em  = {};
     USE_EMPLOYEES.forEach(e=>{em[e.id]={...e,hr:(e.mc||e.monthly_cost||0)/HPM};});
-    const ac  = USE_USE_USE_CONTRACTS.filter(c=>isActive(c,selMonth));
+    const ac  = USE_USE_CONTRACTS.filter(c=>isActive(c,selMonth));
     const cm  = {};
     ac.forEach(c=>{cm[c.cid]={...c,mr:c.cv/c.tm};});
 
     // 1. Profit by Client
-    const profitByClient = USE_USE_CLIENTS.filter(cl=>cm[cl.id]).map(cl=>{
+    const profitByClient = USE_CLIENTS.filter(cl=>cm[cl.id]).map(cl=>{
       const ct=cm[cl.id];
       let rc=0,ah=0;
       als.filter(a=>a.cid===cl.id).forEach(a=>{const e=em[a.eid];if(e){rc+=e.hr*a.h;ah+=a.h;}});
@@ -1950,7 +1950,7 @@ function ReportsPage(){
     const cashFlow=Array.from({length:12},(_,i)=>{
       const mk=`2026-${String(i+1).padStart(2,"0")}`;
       const ml=new Date(2026,i,1).toLocaleString("en-US",{month:"short",year:"numeric"});
-      const rev=USE_USE_CONTRACTS.filter(c=>c.st==="Active"&&isActive(c,mk)).reduce((s,c)=>s+c.cv/c.tm,0);
+      const rev=USE_CONTRACTS.filter(c=>c.st==="Active"&&isActive(c,mk)).reduce((s,c)=>s+c.cv/c.tm,0);
       const cost=USE_EMPLOYEES.filter(e=>e.status==="Active").reduce((s,e)=>s+e.mc,0);
       const net=rev-cost; cumulative+=net;
       return{month:ml,expectedRevenue:Math.round(rev),expectedCost:Math.round(cost),netCashFlow:Math.round(net),cumulativeCash:Math.round(cumulative)};
@@ -1967,7 +1967,7 @@ function ReportsPage(){
 
     // 6. Closed months from snapshots
     const byMonth={};
-    USE_USE_SNAPSHOTS.forEach(s=>{
+    USE_SNAPSHOTS.forEach(s=>{
       if(!byMonth[s.month]) byMonth[s.month]={month:s.month,totalRetainer:0,totalCost:0,totalProfit:0,clients:[]};
       byMonth[s.month].totalRetainer+=s.monthly_retainer;
       byMonth[s.month].totalCost+=s.resource_cost;
@@ -1979,7 +1979,7 @@ function ReportsPage(){
       monthFormatted:fmtShort(m.month),
       margin:m.totalRetainer>0?(m.totalProfit/m.totalRetainer)*100:0
     }));
-    const uniqueClosedClients=[...new Set(USE_USE_SNAPSHOTS.map(s=>s.client_name))];
+    const uniqueClosedClients=[...new Set(USE_SNAPSHOTS.map(s=>s.client_name))];
 
     return{profitByClient,profitByDepartment,resourceByDepartment,cashFlow,clientRisk,closedMonths,uniqueClosedClients};
   },[selMonth]);
@@ -2312,7 +2312,7 @@ function ReportsPage(){
 
           {/* Revenue & Profit by Contract */}
           {customTab==="revenue-profit-contract"&&(()=>{
-            const rows=USE_USE_SNAPSHOTS
+            const rows=USE_SNAPSHOTS
               .filter(s=>selRevMonth==="all"||s.month===selRevMonth)
               .filter(s=>selRevCat==="all"||s.contract_category===selRevCat)
               .map(s=>({...s,margin:s.monthly_retainer>0?Math.round((s.profit/s.monthly_retainer)*100):0}))
@@ -2322,7 +2322,7 @@ function ReportsPage(){
             const totProfit=rows.reduce((s,r)=>s+r.profit,0);
             const totHours=rows.reduce((s,r)=>s+r.allocated_hours,0);
             const avgMargin=totRev>0?Math.round((totProfit/totRev)*100):0;
-            const uniqueMonths=[...new Set(USE_USE_SNAPSHOTS.map(s=>s.month))].sort().reverse();
+            const uniqueMonths=[...new Set(USE_SNAPSHOTS.map(s=>s.month))].sort().reverse();
             return(
               <div style={{display:"flex",flexDirection:"column",gap:14}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
@@ -2460,7 +2460,7 @@ function ReportsPage(){
             const availMonths=[...new Set(Object.keys(allocsByMonth))].sort().reverse();
             const em={};
             USE_EMPLOYEES.forEach(e=>{em[e.id]={...e,hr:e.mc/HPM};});
-            const ac=USE_USE_CONTRACTS.filter(c=>isActive(c,selDeptMonth));
+            const ac=USE_CONTRACTS.filter(c=>isActive(c,selDeptMonth));
             const rows=["Client Servicing Department","Production Department","Creative Department","Planning Department"].map(dept=>{
               const shortName=dept.replace(" Department","");
               const deptEmps=USE_EMPLOYEES.filter(e=>e.department===dept);
