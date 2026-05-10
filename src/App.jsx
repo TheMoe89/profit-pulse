@@ -1928,57 +1928,6 @@ function ReportsPage(){
   const [selUtilMonth,setSelUtilMonth] = useState(currentMonth);
   const [selDeptMonth,setSelDeptMonth] = useState(currentMonth);
   const [selDeptCapMonth,setSelDeptCapMonth] = useState(currentMonth);
-  const [forecastFromMonth,setForecastFromMonth] = useState(currentMonth);
-  const [forecastToMonth,setForecastToMonth] = useState(()=>{
-    const d=new Date(); d.setMonth(d.getMonth()+6);
-    return d.toISOString().slice(0,7);
-  });
-
-  // Auto-set forecast range from real contract dates when they load
-  useEffect(()=>{
-    if(realContracts.length>0){
-      const dates=realContracts.flatMap(c=>[c.sd||c.start_date,c.ed||c.end_date]).filter(Boolean);
-      if(dates.length>0){
-        setForecastFromMonth(dates.reduce((a,b)=>a<b?a:b).slice(0,7));
-        setForecastToMonth(dates.reduce((a,b)=>a>b?a:b).slice(0,7));
-      }
-    }
-  },[realContracts]);
-
-
-  // ── Real data from Supabase ──────────────────────────────────────────────────
-  const [realEmployees,setRealEmployees] = useState([]);
-  const [realContracts,setRealContracts] = useState([]);
-  const [realClients,setRealClients]     = useState([]);
-  const [realAllocs,setRealAllocs]       = useState([]);
-  const [realSnapshots,setRealSnapshots] = useState([]);
-
-  useEffect(()=>{
-    Promise.all([
-      sb.from('employees').select('*'),
-      sb.from('contracts').select('*'),
-      sb.from('clients').select('*'),
-      sb.from('allocations').select('*'),
-      sb.from('monthly_snapshots').select('*'),
-    ]).then(([{data:e},{data:ct},{data:cl},{data:al},{data:sn}])=>{
-      if(e)  setRealEmployees(e.map(x=>({...x,mc:x.monthly_cost||0,id:x.id})));
-      if(ct) setRealContracts(ct.map(x=>({...x,id:x.id,cn:x.client_name,cid:x.client_id,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status,bcs:parseFloat(x.budget_client_servicing)||0,bp:parseFloat(x.budget_production)||0,bc:parseFloat(x.budget_creative)||0,bpl:parseFloat(x.budget_planning)||0})));
-      if(cl) setRealClients(cl);
-      if(al) setRealAllocs(al.map(x=>({...x,eid:x.employee_id,cid:x.client_id,h:parseFloat(x.allocated_hours)||0})));
-      if(sn) setRealSnapshots(sn);
-    });
-  },[sb]);
-
-  // Auto-set forecast range when contracts load - placed after realContracts is declared
-  useEffect(()=>{
-    if(realContracts.length>0){
-      const dates=realContracts.flatMap(c=>[c.sd||c.start_date,c.ed||c.end_date]).filter(Boolean);
-      if(dates.length>0){
-        setForecastFromMonth(dates.reduce((a,b)=>a<b?a:b).slice(0,7));
-        setForecastToMonth(dates.reduce((a,b)=>a>b?a:b).slice(0,7));
-      }
-    }
-  },[realContracts.length]);
 
   // Build allocsByMonth-style lookup from real allocations
   const allocsByMonth = useMemo(()=>{
@@ -3996,8 +3945,9 @@ function PlatformRoot(){
           </div>
         );
 
-        // Build month range from all contract dates
+        // Build full month range from contract dates - no external state needed
         const allDates=USE_CONTRACTS.flatMap(c=>[c.sd||c.start_date,c.ed||c.end_date]).filter(Boolean);
+        if(allDates.length===0) return <div style={{padding:40,textAlign:"center",color:"#94a3b8"}}>No contract dates found</div>;
         const minD=allDates.reduce((a,b)=>a<b?a:b).slice(0,7);
         const maxD=allDates.reduce((a,b)=>a>b?a:b).slice(0,7);
         const allMonthsList=(()=>{
@@ -4005,8 +3955,8 @@ function PlatformRoot(){
           while(d<=end){ms.push(d.toISOString().slice(0,7));d=new Date(d.getFullYear(),d.getMonth()+1,1);}
           return ms;
         })();
-
-        const rangeMonths=allMonthsList.filter(m=>m>=forecastFromMonth&&m<=forecastToMonth);
+        // Use full range by default
+        const rangeMonths=allMonthsList;
 
         const rows=USE_CONTRACTS.map(c=>{
           const tenure=parseFloat(c.tm)||parseFloat(c.tenure_months)||1;
@@ -4034,11 +3984,9 @@ function PlatformRoot(){
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
               <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                 <span style={{fontSize:13,color:"#64748b"}}>From:</span>
-                <Sel value={forecastFromMonth} onChange={setForecastFromMonth}
-                  options={allMonthsList.map(m=>({v:m,l:fmtLong(m)}))} style={{width:160}}/>
+                <Sel value={rangeMonths[0]||minD} onChange={()=>{}} options={allMonthsList.map(m=>({v:m,l:fmtLong(m)}))} style={{width:160}}/>
                 <span style={{fontSize:13,color:"#64748b"}}>To:</span>
-                <Sel value={forecastToMonth} onChange={setForecastToMonth}
-                  options={allMonthsList.map(m=>({v:m,l:fmtLong(m)}))} style={{width:160}}/>
+                <Sel value={rangeMonths[rangeMonths.length-1]||maxD} onChange={()=>{}} options={allMonthsList.map(m=>({v:m,l:fmtLong(m)}))} style={{width:160}}/>
               </div>
               <div style={{display:"flex",gap:8}}>
                 <Btn variant="outline" size="sm" onClick={()=>{
@@ -4046,19 +3994,19 @@ function PlatformRoot(){
                   const wsData=[headers];
                   rows.forEach(r=>wsData.push([r.clientName,r.contractNumber,r.contractValue,r.tenureMonths,r.startDate,r.endDate,r.status,...rangeMonths.map(m=>r.monthValues[m]||''),r.totalInRange]));
                   wsData.push(['Total','','','','','','',...rangeMonths.map(m=>rows.reduce((s,r)=>s+(r.monthValues[m]||0),0)),rows.reduce((s,r)=>s+r.totalInRange,0)]);
-                  exportXLSX(wsData,'Contract Revenue Forecast',`contract-forecast-${forecastFromMonth}-to-${forecastToMonth}.xlsx`);
+                  exportXLSX(wsData,'Contract Revenue Forecast',`contract-forecast-${minD}-to-${maxD}.xlsx`);
                 }}>⬇ Export Excel</Btn>
                 <Btn variant="outline" size="sm" onClick={()=>{
                   const headers=['Client','Contract ID','Value','Tenure','Start','End','Status',...rangeMonths.map(m=>fmtShort(m)),'Total'];
                   const pdfRows=rows.map(r=>[r.clientName,r.contractNumber,r.contractValue.toLocaleString(),r.tenureMonths+'m',r.startDate,r.endDate,r.status,...rangeMonths.map(m=>r.monthValues[m]!=null?r.monthValues[m].toLocaleString():'—'),r.totalInRange.toLocaleString()]);
                   pdfRows.push(['Total','','','','','','',...rangeMonths.map(m=>rows.reduce((s,r)=>s+(r.monthValues[m]||0),0).toLocaleString()),rows.reduce((s,r)=>s+r.totalInRange,0).toLocaleString()]);
-                  exportPDFTable(`Contract Revenue Forecast — ${fmtLong(forecastFromMonth)} to ${fmtLong(forecastToMonth)}`,headers,pdfRows,`contract-forecast-${forecastFromMonth}-to-${forecastToMonth}.pdf`);
+                  exportPDFTable(`Contract Revenue Forecast — ${fmtLong(minD)} to ${fmtLong(maxD)}`,headers,pdfRows,`contract-forecast-${minD}-to-${maxD}.pdf`);
                 }}>⬇ Export PDF</Btn>
               </div>
             </div>
             <Card style={{overflow:"hidden"}}>
               <div style={{padding:"14px 18px",borderBottom:"1px solid #e2e8f0"}}>
-                <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>Contract Revenue Forecast — {fmtLong(forecastFromMonth)} to {fmtLong(forecastToMonth)}</p>
+                <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>Contract Revenue Forecast — {fmtLong(minD)} to {fmtLong(maxD)}</p>
               </div>
               <div style={{overflowX:"auto"}}>
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
