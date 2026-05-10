@@ -1898,10 +1898,11 @@ function ReportsPage(){
   },[realAllocs]);
 
   // Use real data if available, fall back to mock for display
-  const USE_EMPLOYEES = realEmployees.length>0 ? realEmployees : EMPLOYEES_INIT;
-  const USE_CONTRACTS = realContracts.length>0 ? realContracts : CONTRACTS;
-  const USE_CLIENTS   = realClients.length>0   ? realClients   : CLIENTS;
-  const USE_SNAPSHOTS = realSnapshots.length>0 ? realSnapshots.map(s=>({
+  // REAL DATA ONLY — no mock fallbacks
+  const USE_EMPLOYEES = realEmployees;
+  const USE_CONTRACTS = realContracts;
+  const USE_CLIENTS   = realClients;
+  const USE_SNAPSHOTS = realSnapshots.map(s=>({
     month:s.month, client_name:s.client_name, contract_number:s.contract_number,
     contract_value:parseFloat(s.monthly_retainer)*12,
     monthly_retainer:parseFloat(s.monthly_retainer)||0,
@@ -1909,7 +1910,7 @@ function ReportsPage(){
     resource_cost:parseFloat(s.resource_cost)||0,
     profit:parseFloat(s.profit)||0,
     status:"Active", contract_category:"Retainer"
-  })) : REPORT_SNAPSHOTS;
+  }));
 
   // ── Calculations ────────────────────────────────────────────────────────────
   const R = useMemo(()=>{
@@ -1968,14 +1969,24 @@ function ReportsPage(){
 
     // 4. Cash Flow Forecast (12 months 2026)
     let cumulative=0;
-    const cashFlow=Array.from({length:12},(_,i)=>{
-      const mk=`2026-${String(i+1).padStart(2,"0")}`;
-      const ml=new Date(2026,i,1).toLocaleString("en-US",{month:"short",year:"numeric"});
-      const rev=USE_CONTRACTS.filter(c=>c.st==="Active"&&isActive(c,mk)).reduce((s,c)=>s+c.cv/c.tm,0);
-      const cost=USE_EMPLOYEES.filter(e=>e.status==="Active").reduce((s,e)=>s+e.mc,0);
-      const net=rev-cost; cumulative+=net;
-      return{month:ml,expectedRevenue:Math.round(rev),expectedCost:Math.round(cost),netCashFlow:Math.round(net),cumulativeCash:Math.round(cumulative)};
-    });
+    const cashFlow=(()=>{
+      if(USE_CONTRACTS.length===0) return [];
+      const allDates=USE_CONTRACTS.flatMap(c=>[c.sd,c.ed]).filter(Boolean);
+      if(!allDates.length) return [];
+      const minD=allDates.reduce((a,b)=>a<b?a:b);
+      const maxD=allDates.reduce((a,b)=>a>b?a:b);
+      const months=[];
+      let d=new Date(minD.slice(0,7)+"-01");
+      const endD=new Date(maxD.slice(0,7)+"-01");
+      while(d<=endD){months.push(d.toISOString().slice(0,7));d=new Date(d.getFullYear(),d.getMonth()+1,1);}
+      return months.map(mk=>{
+        const ml=new Date(mk+"-01").toLocaleString("en-US",{month:"short",year:"numeric"});
+        const rev=USE_CONTRACTS.filter(c=>c.st==="Active"&&isActive(c,mk)).reduce((s,c)=>s+(parseFloat(c.cv)||0)/(parseFloat(c.tm)||1),0);
+        const cost=USE_EMPLOYEES.filter(e=>e.status==="Active").reduce((s,e)=>s+(parseFloat(e.mc)||0),0);
+        const net=rev-cost; cumulative+=net;
+        return{month:ml,expectedRevenue:Math.round(rev),expectedCost:Math.round(cost),netCashFlow:Math.round(net),cumulativeCash:Math.round(cumulative)};
+      });
+    })();
 
     // 5. Client Risk Analysis
     const clientRisk=profitByClient.map(c=>{
