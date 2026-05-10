@@ -1934,6 +1934,17 @@ function ReportsPage(){
     return d.toISOString().slice(0,7);
   });
 
+  // Auto-update forecast range when real contracts load
+  useEffect(()=>{
+    if(USE_CONTRACTS.length>0){
+      const allDates=USE_CONTRACTS.flatMap(c=>[c.sd||c.start_date,c.ed||c.end_date]).filter(Boolean);
+      if(allDates.length>0){
+        setForecastFromMonth(allDates.reduce((a,b)=>a<b?a:b).slice(0,7));
+        setForecastToMonth(allDates.reduce((a,b)=>a>b?a:b).slice(0,7));
+      }
+    }
+  },[USE_CONTRACTS]);
+
   // ── Real data from Supabase ──────────────────────────────────────────────────
   const [realEmployees,setRealEmployees] = useState([]);
   const [realContracts,setRealContracts] = useState([]);
