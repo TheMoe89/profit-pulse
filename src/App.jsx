@@ -1831,28 +1831,76 @@ const REPORT_COLORS = ['#10b981','#6366f1','#f59e0b','#ef4444','#8b5cf6','#ec489
 // Shared mock snapshots for custom reports tab (extends the existing SNAPSHOTS)
 
 function ReportsPage(){
+  const {sb} = useAuth();
   const [section,setSection]   = useState("charts");
   const [chartTab,setChartTab] = useState("profit-by-client");
   const [customTab,setCustomTab]= useState("revenue-profit-contract");
-  const [selMonth,setSelMonth] = useState("2026-04");
+  const [selMonth,setSelMonth] = useState(currentMonth);
   const [selDept,setSelDept]   = useState("all");
   const [selClosedClient,setSelClosedClient] = useState("all");
   const [selRevMonth,setSelRevMonth]   = useState("all");
   const [selRevCat,setSelRevCat]       = useState("all");
-  const [selUtilMonth,setSelUtilMonth] = useState("2026-04");
-  const [selDeptMonth,setSelDeptMonth] = useState("2026-04");
+  const [selUtilMonth,setSelUtilMonth] = useState(currentMonth);
+  const [selDeptMonth,setSelDeptMonth] = useState(currentMonth);
+
+  // ── Real data from Supabase ──────────────────────────────────────────────────
+  const [realEmployees,setRealEmployees] = useState([]);
+  const [realContracts,setRealContracts] = useState([]);
+  const [realClients,setRealClients]     = useState([]);
+  const [realAllocs,setRealAllocs]       = useState([]);
+  const [realSnapshots,setRealSnapshots] = useState([]);
+
+  useEffect(()=>{
+    Promise.all([
+      sb.from('employees').select('*'),
+      sb.from('contracts').select('*'),
+      sb.from('clients').select('*'),
+      sb.from('allocations').select('*'),
+      sb.from('monthly_snapshots').select('*'),
+    ]).then(([{data:e},{data:ct},{data:cl},{data:al},{data:sn}])=>{
+      if(e)  setRealEmployees(e.map(x=>({...x,mc:x.monthly_cost||0,id:x.id})));
+      if(ct) setRealContracts(ct.map(x=>({...x,id:x.id,cn:x.client_name,cid:x.client_id,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status,bcs:parseFloat(x.budget_client_servicing)||0,bp:parseFloat(x.budget_production)||0,bc:parseFloat(x.budget_creative)||0,bpl:parseFloat(x.budget_planning)||0})));
+      if(cl) setRealClients(cl);
+      if(al) setRealAllocs(al.map(x=>({...x,eid:x.employee_id,cid:x.client_id,h:parseFloat(x.allocated_hours)||0})));
+      if(sn) setRealSnapshots(sn);
+    });
+  },[]);
+
+  // Build allocsByMonth-style lookup from real allocations
+  const allocsByMonth = useMemo(()=>{
+    const m={};
+    realAllocs.forEach(a=>{
+      if(!m[a.month]) m[a.month]=[];
+      m[a.month].push(a);
+    });
+    return m;
+  },[realAllocs]);
+
+  // Use real data if available, fall back to mock for display
+  const USE_EMPLOYEES = realEmployees.length>0 ? realEmployees : USE_EMPLOYEES;
+  const USE_USE_CONTRACTS = realContracts.length>0 ? realContracts : USE_CONTRACTS;
+  const USE_USE_CLIENTS   = realClients.length>0   ? realClients   : USE_USE_CLIENTS.map(c=>({...c,id:c.id,name:c.name}));
+  const USE_USE_SNAPSHOTS = realSnapshots.length>0  ? realSnapshots.map(s=>({
+    month:s.month, client_name:s.client_name, contract_number:s.contract_number,
+    contract_value:parseFloat(s.monthly_retainer)*((realContracts.find(c=>c.id===s.contract_id)?.tm)||12)||0,
+    monthly_retainer:parseFloat(s.monthly_retainer)||0,
+    allocated_hours:parseFloat(s.allocated_hours)||0,
+    resource_cost:parseFloat(s.resource_cost)||0,
+    profit:parseFloat(s.profit)||0,
+    status:"Active", contract_category:"Retainer"
+  })) : USE_USE_SNAPSHOTS;
 
   // ── Calculations ────────────────────────────────────────────────────────────
   const R = useMemo(()=>{
-    const als = (ALLOCS_BY_MONTH[selMonth]||[]);
+    const als = (allocsByMonth[selMonth]||[]);
     const em  = {};
-    EMPLOYEES_INIT.forEach(e=>{em[e.id]={...e,hr:e.mc/HPM};});
-    const ac  = CONTRACTS.filter(c=>isActive(c,selMonth));
+    USE_EMPLOYEES.forEach(e=>{em[e.id]={...e,hr:(e.mc||e.monthly_cost||0)/HPM};});
+    const ac  = USE_USE_USE_CONTRACTS.filter(c=>isActive(c,selMonth));
     const cm  = {};
     ac.forEach(c=>{cm[c.cid]={...c,mr:c.cv/c.tm};});
 
     // 1. Profit by Client
-    const profitByClient = CLIENTS.filter(cl=>cm[cl.id]).map(cl=>{
+    const profitByClient = USE_USE_CLIENTS.filter(cl=>cm[cl.id]).map(cl=>{
       const ct=cm[cl.id];
       let rc=0,ah=0;
       als.filter(a=>a.cid===cl.id).forEach(a=>{const e=em[a.eid];if(e){rc+=e.hr*a.h;ah+=a.h;}});
@@ -1902,8 +1950,8 @@ function ReportsPage(){
     const cashFlow=Array.from({length:12},(_,i)=>{
       const mk=`2026-${String(i+1).padStart(2,"0")}`;
       const ml=new Date(2026,i,1).toLocaleString("en-US",{month:"short",year:"numeric"});
-      const rev=CONTRACTS.filter(c=>c.st==="Active"&&isActive(c,mk)).reduce((s,c)=>s+c.cv/c.tm,0);
-      const cost=EMPLOYEES_INIT.filter(e=>e.status==="Active").reduce((s,e)=>s+e.mc,0);
+      const rev=USE_USE_CONTRACTS.filter(c=>c.st==="Active"&&isActive(c,mk)).reduce((s,c)=>s+c.cv/c.tm,0);
+      const cost=USE_EMPLOYEES.filter(e=>e.status==="Active").reduce((s,e)=>s+e.mc,0);
       const net=rev-cost; cumulative+=net;
       return{month:ml,expectedRevenue:Math.round(rev),expectedCost:Math.round(cost),netCashFlow:Math.round(net),cumulativeCash:Math.round(cumulative)};
     });
@@ -1919,7 +1967,7 @@ function ReportsPage(){
 
     // 6. Closed months from snapshots
     const byMonth={};
-    REPORT_SNAPSHOTS.forEach(s=>{
+    USE_USE_SNAPSHOTS.forEach(s=>{
       if(!byMonth[s.month]) byMonth[s.month]={month:s.month,totalRetainer:0,totalCost:0,totalProfit:0,clients:[]};
       byMonth[s.month].totalRetainer+=s.monthly_retainer;
       byMonth[s.month].totalCost+=s.resource_cost;
@@ -1931,7 +1979,7 @@ function ReportsPage(){
       monthFormatted:fmtShort(m.month),
       margin:m.totalRetainer>0?(m.totalProfit/m.totalRetainer)*100:0
     }));
-    const uniqueClosedClients=[...new Set(REPORT_SNAPSHOTS.map(s=>s.client_name))];
+    const uniqueClosedClients=[...new Set(USE_USE_SNAPSHOTS.map(s=>s.client_name))];
 
     return{profitByClient,profitByDepartment,resourceByDepartment,cashFlow,clientRisk,closedMonths,uniqueClosedClients};
   },[selMonth]);
@@ -2264,7 +2312,7 @@ function ReportsPage(){
 
           {/* Revenue & Profit by Contract */}
           {customTab==="revenue-profit-contract"&&(()=>{
-            const rows=REPORT_SNAPSHOTS
+            const rows=USE_USE_SNAPSHOTS
               .filter(s=>selRevMonth==="all"||s.month===selRevMonth)
               .filter(s=>selRevCat==="all"||s.contract_category===selRevCat)
               .map(s=>({...s,margin:s.monthly_retainer>0?Math.round((s.profit/s.monthly_retainer)*100):0}))
@@ -2274,7 +2322,7 @@ function ReportsPage(){
             const totProfit=rows.reduce((s,r)=>s+r.profit,0);
             const totHours=rows.reduce((s,r)=>s+r.allocated_hours,0);
             const avgMargin=totRev>0?Math.round((totProfit/totRev)*100):0;
-            const uniqueMonths=[...new Set(REPORT_SNAPSHOTS.map(s=>s.month))].sort().reverse();
+            const uniqueMonths=[...new Set(USE_USE_SNAPSHOTS.map(s=>s.month))].sort().reverse();
             return(
               <div style={{display:"flex",flexDirection:"column",gap:14}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
@@ -2340,9 +2388,9 @@ function ReportsPage(){
 
           {/* Employee Utilization */}
           {customTab==="employee-utilization"&&(()=>{
-            const als=(ALLOCS_BY_MONTH[selUtilMonth]||[]);
-            const availMonths=[...new Set(Object.keys(ALLOCS_BY_MONTH))].sort().reverse();
-            const rows=EMPLOYEES_INIT.map(emp=>{
+            const als=(allocsByMonth[selUtilMonth]||[]);
+            const availMonths=[...new Set(Object.keys(allocsByMonth))].sort().reverse();
+            const rows=USE_EMPLOYEES.map(emp=>{
               const empAls=als.filter(a=>a.eid===emp.id);
               const ah=empAls.reduce((s,a)=>s+a.h,0);
               const avail=HPM-ah;
@@ -2408,14 +2456,14 @@ function ReportsPage(){
 
           {/* Department Performance */}
           {customTab==="department-performance"&&(()=>{
-            const als=(ALLOCS_BY_MONTH[selDeptMonth]||[]);
-            const availMonths=[...new Set(Object.keys(ALLOCS_BY_MONTH))].sort().reverse();
+            const als=(allocsByMonth[selDeptMonth]||[]);
+            const availMonths=[...new Set(Object.keys(allocsByMonth))].sort().reverse();
             const em={};
-            EMPLOYEES_INIT.forEach(e=>{em[e.id]={...e,hr:e.mc/HPM};});
-            const ac=CONTRACTS.filter(c=>isActive(c,selDeptMonth));
+            USE_EMPLOYEES.forEach(e=>{em[e.id]={...e,hr:e.mc/HPM};});
+            const ac=USE_USE_CONTRACTS.filter(c=>isActive(c,selDeptMonth));
             const rows=["Client Servicing Department","Production Department","Creative Department","Planning Department"].map(dept=>{
               const shortName=dept.replace(" Department","");
-              const deptEmps=EMPLOYEES_INIT.filter(e=>e.department===dept);
+              const deptEmps=USE_EMPLOYEES.filter(e=>e.department===dept);
               const deptAls=als.filter(a=>em[a.eid]?.department===dept);
               const totalHours=deptAls.reduce((s,a)=>s+a.h,0);
               const totalCost=Math.round(deptAls.reduce((s,a)=>{const e=em[a.eid];return s+(e?e.hr*a.h:0);},0));
