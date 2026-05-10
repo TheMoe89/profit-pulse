@@ -29,7 +29,7 @@ function AuthProvider({children}){
       else { setProfile(null); setUserPerms(null); setPermsLoaded(true); }
     });
     return ()=>subscription.unsubscribe();
-  },[]);
+  },[sb]);
 
   const loadProfile = async (uid) => {
     const {data:prof} = await sb.from('profiles').select('*').eq('id',uid).single();
@@ -516,19 +516,40 @@ function SortTh({k,sk,sd,onSort,children,align="left"}){
 }
 
 function DashboardPage(){
-  const [month,setMonth]=useState("2026-04");
+  const {sb} = useAuth();
+  const [month,setMonth]=useState(currentMonth);
   const [finTab,setFinTab]=useState("finance");
   const [lc,setLc]=useState("all");
   const [rc,setRc]=useState("all");
   const [dc,setDc]=useState("all");
   const [capDept,setCapDept]=useState("all");
+  const [dbEmployees,setDbEmployees]=useState([]);
+  const [dbContracts,setDbContracts]=useState([]);
+  const [dbAllocs,setDbAllocs]=useState([]);
+  const [dbSnapshots,setDbSnapshots]=useState([]);
+
+  useEffect(()=>{
+    Promise.all([
+      sb.from('employees').select('*'),
+      sb.from('contracts').select('*'),
+      sb.from('allocations').select('*'),
+      sb.from('monthly_snapshots').select('*'),
+    ]).then(([{data:e},{data:ct},{data:al},{data:sn}])=>{
+      if(e)  setDbEmployees(e.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0,id:x.id,name:x.name,designation:x.designation,department:x.department,status:x.status})));
+      if(ct) setDbContracts(ct.map(x=>({...x,cn:x.client_name,cid:x.client_id,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status,bcs:parseFloat(x.budget_client_servicing)||0,bp:parseFloat(x.budget_production)||0,bc:parseFloat(x.budget_creative)||0,bpl:parseFloat(x.budget_planning)||0})));
+      if(al) setDbAllocs(al.map(x=>({...x,eid:x.employee_id,cid:x.client_id,h:parseFloat(x.allocated_hours)||0})));
+      if(sn) setDbSnapshots(sn.map(x=>({...x,m:x.month,cn:x.client_name,r:parseFloat(x.monthly_retainer)||0,c:parseFloat(x.resource_cost)||0})));
+    });
+  },[sb]);
+
+  const dbAllocsByMonth=useMemo(()=>{const m={};dbAllocs.forEach(a=>{if(!m[a.month])m[a.month]=[];m[a.month].push(a);});return m;},[dbAllocs]);
 
   const C=useMemo(()=>{
-    const als=ALLOCS_BY_MONTH[month]||[];
-    const em={};EMPLOYEES_INIT.forEach(e=>{em[e.id]={...e,hr:e.mc/HPM};});
-    const ac=CONTRACTS.filter(c=>isActive(c,month));
+    const als=dbAllocsByMonth[month]||[];
+    const em={};dbEmployees.forEach(e=>{em[e.id]={...e,hr:e.mc/HPM};});
+    const ac=dbContracts.filter(c=>isActive(c,month));
     const cm={};ac.forEach(c=>{cm[c.cid]={...c,mr:c.cv/c.tm};});
-    const cp=CLIENTS.filter(cl=>cm[cl.id]).map(cl=>{
+    const cp=[].filter(cl=>cm[cl.id]).map(cl=>{
       const ct=cm[cl.id];let rc2=0;
       als.filter(a=>a.cid===cl.id).forEach(a=>{const e=em[a.eid];if(e)rc2+=e.hr*a.h;});
       const mr=ct.mr,gp=mr-rc2,mp=mr>0?(gp/mr)*100:0;
@@ -536,7 +557,7 @@ function DashboardPage(){
     });
     const tr=cp.reduce((s,c)=>s+c.mr,0),tc=cp.reduce((s,c)=>s+c.rc,0);
     const tp=tr-tc,am=tr>0?(tp/tr)*100:0,lm=cp.filter(c=>c.mp<20&&c.mp>=0).length;
-    const allAc=CONTRACTS.filter(c=>c.st==="Active");
+    const allAc=dbContracts.filter(c=>c.st==="Active");
     const tcv=allAc.reduce((s,c)=>s+c.cv,0);
     const cvd=ac.map(c=>{const x=cp.find(p=>p.id===c.cid);return{name:c.cn.length>10?c.cn.slice(0,10)+"…":c.cn,monthly:Math.round(c.cv/c.tm),cost:Math.round(x?.rc||0),cid:c.cid};});
     const bld=(cs,as2)=>{
@@ -547,13 +568,13 @@ function DashboardPage(){
     };
     const da=bld(ac,als);
     const dbc=id=>id==="all"?da:bld(ac.filter(c=>c.cid===id),als.filter(a=>a.cid===id));
-    const eu=EMPLOYEES_INIT.map(e=>{const h=als.filter(a=>a.eid===e.id).reduce((s,a)=>s+a.h,0);return{...e,h,u:(h/HPM)*100,av:Math.max(0,HPM-h)};});
+    const eu=dbEmployees.map(e=>{const h=als.filter(a=>a.eid===e.id).reduce((s,a)=>s+a.h,0);return{...e,h,u:(h/HPM)*100,av:Math.max(0,HPM-h)};});
     const over=eu.filter(e=>e.u>100),under=eu.filter(e=>e.u<70);
     const chart=eu.map(e=>({name:e.name.split(" ")[0],hours:e.h,available:e.av,u:e.u})).sort((a,b)=>b.u-a.u);
     const ren=allAc.filter(c=>{const d=diffDays(c.ed);return d>=0&&d<=60;}).sort((a,b)=>new Date(a.ed)-new Date(b.ed));
-    const bm={};SNAPSHOTS.forEach(s=>{if(!bm[s.m])bm[s.m]={m:s.m,cl:{}};if(!bm[s.m].cl[s.cn])bm[s.m].cl[s.cn]={r:0,c:0};bm[s.m].cl[s.cn].r+=s.r;bm[s.m].cl[s.cn].c+=s.c;});
+    const bm={};dbSnapshots.forEach(s=>{if(!bm[s.m])bm[s.m]={m:s.m,cl:{}};if(!bm[s.m].cl[s.cn])bm[s.m].cl[s.cn]={r:0,c:0};bm[s.m].cl[s.cn].r+=s.r;bm[s.m].cl[s.cn].c+=s.c;});
     const lt=Object.values(bm).sort((a,b)=>a.m.localeCompare(b.m)).map(x=>({label:fmtShort(x.m),m:x.m,cl:x.cl}));
-    const sc=[...new Set(SNAPSHOTS.map(s=>s.cn))];
+    const sc=[...new Set(dbSnapshots.map(s=>s.cn))];
     return{cp,tr,tc,tp,am,lm,acnt:allAc.length,tcv,cvd,dbc,eu,over,under,chart,ren,lt,sc};
   },[month]);
 
@@ -625,7 +646,7 @@ function DashboardPage(){
             <Card style={{padding:18}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10}}>
                 <p style={{margin:0,fontWeight:700,fontSize:12,color:"#0f172a"}}>Monthly Retainer vs Monthly Cost</p>
-                <Sel value={rc} onChange={setRc} options={[{v:"all",l:"All Clients"},...CLIENTS.map(c=>({v:c.id,l:c.name}))]} style={{width:135}}/>
+                <Sel value={rc} onChange={setRc} options={[{v:"all",l:"All Clients"},...[].map(c=>({v:c.id,l:c.name}))]} style={{width:135}}/>
               </div>
               <ResponsiveContainer width="100%" height={190}>
                 <BarChart data={rd} margin={{top:5,right:5,left:0,bottom:36}}>
@@ -642,7 +663,7 @@ function DashboardPage(){
             <Card style={{padding:18}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10}}>
                 <p style={{margin:0,fontWeight:700,fontSize:12,color:"#0f172a"}}>Department Budget vs Cost</p>
-                <Sel value={dc} onChange={setDc} options={[{v:"all",l:"All Clients"},...CLIENTS.map(c=>({v:c.id,l:c.name}))]} style={{width:135}}/>
+                <Sel value={dc} onChange={setDc} options={[{v:"all",l:"All Clients"},...[].map(c=>({v:c.id,l:c.name}))]} style={{width:135}}/>
               </div>
               <ResponsiveContainer width="100%" height={190}>
                 <BarChart data={C.dbc(dc)} margin={{top:5,right:5,left:0,bottom:8}}>
@@ -676,7 +697,7 @@ function DashboardPage(){
       {finTab==="team"&&(
         <div style={{display:"flex",flexDirection:"column",gap:18}}>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
-            <KPI dark label="Active Employees" value={EMPLOYEES_INIT.filter(e=>e.status==="Active").length} sub="Team members" emoji="👥"/>
+            <KPI dark label="Active Employees" value={dbEmployees.filter(e=>e.status==="Active").length} sub="Team members" emoji="👥"/>
             <KPI label="Over-utilized"  value={C.over.length} sub=">160 hrs/month" emoji="⚠️" iBg={C.over.length>0?"#fee2e2":"#f1f5f9"} iC={C.over.length>0?"#EF4444":"#0f172a"} bg={C.over.length>0?"#1a0808":"#161616"} bd={C.over.length>0?"#EF444444":"#262626"}/>
             <KPI label="Under-utilized" value={C.under.length} sub="<70% capacity"  emoji="📉" iBg={C.under.length>0?"#fef9c3":"#f1f5f9"} iC={C.under.length>0?"#d97706":"#0f172a"} bg={C.under.length>0?"#1a1000":"#161616"} bd={C.under.length>0?"#F59E0B44":"#262626"}/>
             <KPI label="Renewals"        value={C.ren.length}   sub="Within 60 days" emoji="📅" iBg="#0d1f1a" iC="#6366f1" bg={C.ren.length>0?"#0d1f1a":"#161616"} bd={C.ren.length>0?"#1DC99A44":"#262626"}/>
@@ -759,7 +780,7 @@ function EmployeesPage(){
       if(data) setEmps(data.map(e=>({...e,mc:e.monthly_cost||0,start:e.start_date||""})));
       setLoading(false);
     });
-  },[]);
+  },[sb]);
 
   const dbAdd=async p=>{
     const{data,error}=await sb.from('employees').insert([{
@@ -914,7 +935,7 @@ function ClientsPage(){
   const [loading,setLoading]=useState(true);
   useEffect(()=>{
     sb.from('clients').select('*').order('name').then(({data})=>{if(data)setClients(data);setLoading(false);});
-  },[]);
+  },[sb]);
   const dbAdd=async p=>{
     const{data,error}=await sb.from('clients').insert([{
       name:p.name,industry:p.industry||"",status:p.status||"Active",
@@ -1179,7 +1200,7 @@ function ContractsPage(){
       if(clData) setClientList(clData);
       setLoading(false);
     });
-  },[]);
+  },[sb]);
   const dbAdd=async p=>{const{data,error}=await sb.from('contracts').insert([{contract_number:p.contract_number,client_id:p.client_id||null,client_name:p.client_name,contract_value:parseFloat(p.contract_value)||0,tenure_months:parseFloat(p.tenure_months)||0,project_name:p.project_name||"",start_date:p.start_date,end_date:p.end_date,status:p.status,contract_category:p.contract_category,budget_client_servicing:parseFloat(p.budget_client_servicing)||0,budget_production:parseFloat(p.budget_production)||0,budget_creative:parseFloat(p.budget_creative)||0,budget_planning:parseFloat(p.budget_planning)||0,budget_third_party:parseFloat(p.budget_third_party)||0,notes:p.notes||""}]).select().single();if(error)alert('Error saving: '+error.message);if(data)setContracts(x=>[...x,mapC(data)]);};
   const dbUpdate=async(id,p)=>{const{data,error}=await sb.from('contracts').update({contract_number:p.contract_number,client_id:p.client_id||null,client_name:p.client_name,contract_value:parseFloat(p.contract_value)||0,tenure_months:parseFloat(p.tenure_months)||0,project_name:p.project_name||"",start_date:p.start_date,end_date:p.end_date,status:p.status,contract_category:p.contract_category,budget_client_servicing:parseFloat(p.budget_client_servicing)||0,budget_production:parseFloat(p.budget_production)||0,budget_creative:parseFloat(p.budget_creative)||0,budget_planning:parseFloat(p.budget_planning)||0,budget_third_party:parseFloat(p.budget_third_party)||0,notes:p.notes||""}).eq('id',id).select().single();if(error)alert('Error updating: '+error.message);if(data)setContracts(x=>x.map(c=>c.id===id?mapC(data):c));};
   const dbDelete=async id=>{await sb.from('contracts').delete().eq('id',id);setContracts(x=>x.filter(c=>c.id!==id));};
@@ -1433,7 +1454,7 @@ function AllocationsPage(){
   const mapA=a=>({...a,eid:a.employee_id,cid:a.client_id,h:a.allocated_hours});
   useEffect(()=>{
     sb.from('allocations').select('*').order('month',{ascending:false}).then(({data})=>{if(data)setAllocs(data.map(mapA));setLoading(false);});
-  },[]);
+  },[sb]);
   const dbBulkAdd=async items=>{const rows=items.map(a=>({employee_id:a.employee_id,employee_name:a.employee_name,employee_monthly_cost:a.employee_monthly_cost||0,client_id:a.client_id,client_name:a.client_name,contract_id:a.contract_id,allocated_hours:a.allocated_hours,month:a.month,status:a.status||'Assigned',notes:a.notes||''}));const{data}=await sb.from('allocations').insert(rows).select();if(data)setAllocs(p=>[...p,...data.map(mapA)]);};
   const dbUpdate=async(id,p)=>{const{data}=await sb.from('allocations').update({allocated_hours:p.allocated_hours,month:p.month,notes:p.notes}).eq('id',id).select().single();if(data)setAllocs(x=>x.map(a=>a.id===id?mapA(data):a));};
   const dbDelete=async id=>{await sb.from('allocations').delete().eq('id',id);setAllocs(x=>x.filter(a=>a.id!==id));};
@@ -1864,7 +1885,7 @@ function ReportsPage(){
       if(al) setRealAllocs(al.map(x=>({...x,eid:x.employee_id,cid:x.client_id,h:parseFloat(x.allocated_hours)||0})));
       if(sn) setRealSnapshots(sn);
     });
-  },[]);
+  },[sb]);
 
   // Build allocsByMonth-style lookup from real allocations
   const allocsByMonth = useMemo(()=>{
@@ -2542,7 +2563,7 @@ function MonthlyClosePage(){
   const [loading,setLoading]=useState(true);
   useEffect(()=>{
     sb.from('monthly_snapshots').select('*').order('month',{ascending:false}).then(({data})=>{if(data)setSnapshots(data);setLoading(false);});
-  },[]);
+  },[sb]);
   const dbBulkAdd=async items=>{const{data}=await sb.from('monthly_snapshots').insert(items.map(s=>({month:s.month,contract_id:s.contract_id,contract_number:s.contract_number,client_name:s.client_name,monthly_retainer:s.monthly_retainer,resource_cost:s.resource_cost,profit:s.profit,allocated_hours:s.allocated_hours,is_closed:true}))).select();if(data)setSnapshots(p=>[...p,...data]);};
   const dbDelete=async month=>{await sb.from('monthly_snapshots').delete().eq('month',month);setSnapshots(p=>p.filter(s=>s.month!==month));};
   const [previewModal,setPreviewModal]   = useState(false);
@@ -2953,7 +2974,7 @@ function ContractExpensesPage(){
   const [loading,setLoading]=useState(true);
   useEffect(()=>{
     sb.from('contract_expenses').select('*').order('created_at',{ascending:false}).then(({data})=>{if(data)setExpenses(data);setLoading(false);});
-  },[]);
+  },[sb]);
   const dbAdd=async p=>{const{data}=await sb.from('contract_expenses').insert([p]).select().single();if(data)setExpenses(x=>[data,...x]);};
   const dbUpdate=async(id,p)=>{const{data}=await sb.from('contract_expenses').update(p).eq('id',id).select().single();if(data)setExpenses(x=>x.map(e=>e.id===id?data:e));};
   const dbDelete=async id=>{await sb.from('contract_expenses').delete().eq('id',id);setExpenses(x=>x.filter(e=>e.id!==id));};
@@ -3222,7 +3243,7 @@ function SystemUsersPage(){
       if(r) setRoles(r);
       setSuLoading(false);
     });
-  },[]);
+  },[sb]);
   const dbSaveRole=async(payload,id)=>{
     if(id){const{data}=await sb.from('role_permissions').update(payload).eq('id',id).select().single();if(data)setRoles(p=>p.map(r=>r.id===id?data:r));}
     else{const{data}=await sb.from('role_permissions').insert([payload]).select().single();if(data)setRoles(p=>[...p,data]);}
