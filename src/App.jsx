@@ -1256,7 +1256,8 @@ function ContractsPage(){
     {label:"Production",      key:"budget_production",       bg:"#f5f3ff",border:"#ddd6fe",color:"#6d28d9"},
     {label:"Creative",        key:"budget_creative",         bg:"#f0fdf4",border:"#bbf7d0",color:"#10b981"},
     {label:"Planning",        key:"budget_planning",         bg:"#fffbeb",border:"#fde68a",color:"#d97706"},
-  ].map(w=>({...w,total:contracts.reduce((s,c)=>s+((c[w.key]||0)),0)}));
+    {label:"3rd Party",       key:"budget_third_party",      bg:"#fff1f2",border:"#fecdd3",color:"#e11d48"},
+  ].map(w=>({...w,total:contracts.reduce((s,c)=>s+((parseFloat(c[w.key])||0)),0)}));
 
   const totalAlloc=(parseFloat(form.budget_client_servicing)||0)+(parseFloat(form.budget_production)||0)+(parseFloat(form.budget_creative)||0)+(parseFloat(form.budget_planning)||0)+(parseFloat(form.budget_third_party)||0);
   const formCV=parseFloat(form.contract_value)||0;
