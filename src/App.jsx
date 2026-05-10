@@ -1218,7 +1218,7 @@ function ContractsPage(){
   const openEdit=c=>{setEditing(c);setForm({client_id:c.client_id,client_name:c.client_name,contract_value:c.contract_value,tenure_months:c.tenure_months,start_date:c.start_date,end_date:c.end_date,status:c.status,contract_category:c.contract_category,budget_client_servicing:c.budget_client_servicing||0,budget_production:c.budget_production||0,budget_creative:c.budget_creative||0,budget_planning:c.budget_planning||0,contract_pdf_url:c.contract_pdf_url||"",notes:c.notes||"",contract_number:c.contract_number});setModalOpen(true);};
   const close=()=>{setModalOpen(false);setEditing(null);};
 
-  const handleSubmit=e=>{
+  const handleSubmit=async e=>{
     e.preventDefault();
     const totalAlloc=[form.budget_client_servicing,form.budget_production,form.budget_creative,form.budget_planning,form.budget_third_party].reduce((s,v)=>s+(parseFloat(v)||0),0);
     const cv=parseFloat(form.contract_value)||0;
@@ -1227,11 +1227,12 @@ function ContractsPage(){
     const expired=form.end_date&&new Date(form.end_date)<new Date();
     const autoStatus=expired?"Expired":"Active";
     const autoCat=getCatFromTenure(form.tenure_months);
+    const payload={...form,status:autoStatus,contract_category:autoCat};
     if(editing){
-      setContracts(p=>p.map(c=>c.id===editing.id?{...c,...form,status:autoStatus,contract_category:autoCat}:c));
+      await dbUpdate(editing.id,payload);
     } else {
       const num=genContractNum(form.tenure_months,contracts);
-      setContracts(p=>[...p,{id:`ct${Date.now()}`,contract_number:num,...form,status:autoStatus,contract_category:autoCat}]);
+      await dbAdd({...payload,contract_number:num});
     }
     close();
   };
@@ -1516,13 +1517,18 @@ function AllocationsPage(){
   const updEmpAlloc=(id,k,v)=>setEmpAllocs(p=>({...p,[id]:{...p[id],[k]:v}}));
 
   const handleBulkSubmit=async()=>{
-    const now=Date.now();
-    const toCreate=selEmpIds.flatMap((eid,i)=>{
+    const toCreate=selEmpIds.flatMap(eid=>{
       const ea=empAllocs[eid]||{};
       if(!ea.client_id||!parseFloat(ea.hours)) return [];
-      const emp=EMPLOYEES_INIT.find(e=>e.id===eid);
-      const ct=MOCK_CONTRACTS_FULL.find(c=>c.id===ea.client_id);
-      return [{id:`a${now}_${i}`,employee_id:eid,employee_name:emp?.name||"",client_id:ct?.cid||"",client_name:ct?.cn||"",contract_id:ea.client_id,allocated_hours:parseFloat(ea.hours),month:selMonth,status:ea.status||"Assigned",notes:ea.notes||""}];
+      const emp=allocs.length>0?EMPLOYEES_INIT.find(e=>e.id===eid):EMPLOYEES_INIT.find(e=>e.id===eid);
+      const ct=contractsForMonth.find(c=>c.id===ea.client_id);
+      return [{
+        employee_id:eid, employee_name:emp?.name||"",
+        employee_monthly_cost:emp?.mc||0,
+        client_id:ct?.cid||ct?.client_id||"", client_name:ct?.cn||ct?.client_name||"",
+        contract_id:ea.client_id, allocated_hours:parseFloat(ea.hours),
+        month:selMonth, status:ea.status||"Assigned", notes:ea.notes||""
+      }];
     });
     if(toCreate.length) await dbBulkAdd(toCreate);
     closeModal();
