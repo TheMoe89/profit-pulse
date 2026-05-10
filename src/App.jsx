@@ -1793,7 +1793,7 @@ function AllocationsPage(){
                     <input value={empSearch} onChange={e=>setEmpSearch(e.target.value)} placeholder="Search employees..." style={{width:"100%",padding:"7px 10px 7px 27px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,outline:"none",background:"#fff",boxSizing:"border-box"}}/>
                   </div>
                   <div style={{border:"1px solid #e2e8f0",borderRadius:9,maxHeight:210,overflowY:"auto"}}>
-                    {realEmps.length>0?realEmps:EMPLOYEES_INIT
+                    {(realEmps.length>0?realEmps:EMPLOYEES_INIT)
                       .filter(e=>e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&selMonth&&e.inactive_effective_month>=selMonth))
                       .filter(e=>!empSearch||e.name.toLowerCase().includes(empSearch.toLowerCase()))
                       .map(emp=>{
