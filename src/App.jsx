@@ -3961,6 +3961,15 @@ function PlatformRoot(){
 
       {/* Contract Revenue Forecast */}
       {customTab==="contract-revenue-forecast"&&(()=>{
+        // Show loading while data fetches
+        if(realContracts.length===0) return(
+          <div style={{textAlign:"center",padding:60,color:"#94a3b8"}}>
+            <div style={{fontSize:32,marginBottom:12}}>⏳</div>
+            <p style={{fontSize:14}}>Loading contracts...</p>
+            <p style={{fontSize:12,marginTop:6}}>If this persists, make sure you have added contracts first.</p>
+          </div>
+        );
+
         if(USE_CONTRACTS.length===0) return(
           <div style={{textAlign:"center",padding:60,color:"#94a3b8"}}>
             <div style={{fontSize:40,marginBottom:12}}>📋</div>
