@@ -2626,6 +2626,121 @@ function ReportsPage(){
               </div>
             );
           })()}
+
+      {/* Dept Capacity vs Budget */}
+      {customTab==="dept-capacity-budget"&&(()=>{
+        const DEPTS=["Client Servicing Department","Production Department","Creative Department","Planning Department"];
+        const budgetKey={"Production Department":"budget_production","Client Servicing Department":"budget_client_servicing","Creative Department":"budget_creative","Planning Department":"budget_planning"};
+        const activeContracts=USE_CONTRACTS.filter(c=>isActive(c,selDeptCapMonth));
+        const monthAllocs=realAllocs.filter(a=>a.month===selDeptCapMonth);
+        const allMonths=[...new Set(realAllocs.map(a=>a.month))].sort().reverse();
+
+        const rows=DEPTS.map(dept=>{
+          const shortName=dept.replace(" Department","");
+          const deptEmps=USE_EMPLOYEES.filter(e=>e.department===dept&&e.status==="Active");
+          const totalEmployees=deptEmps.length;
+          const totalMonthlyCost=Math.round(deptEmps.reduce((s,e)=>s+(parseFloat(e.mc)||parseFloat(e.monthly_cost)||0),0));
+          const deptAllocs=monthAllocs.filter(a=>USE_EMPLOYEES.find(e=>e.id===a.employee_id&&e.department===dept));
+          const allocatedHours=deptAllocs.reduce((s,a)=>s+(parseFloat(a.h)||parseFloat(a.allocated_hours)||0),0);
+          const capacityHours=totalEmployees*HPM;
+          const utilizationPct=capacityHours>0?Math.round((allocatedHours/capacityHours)*100):0;
+          const totalClientBudget=Math.round(activeContracts.reduce((s,c)=>{
+            const tm=parseFloat(c.tm)||parseFloat(c.tenure_months)||1;
+            return s+((parseFloat(c[budgetKey[dept]])||0)/tm);
+          },0));
+          const budgetCoveragePct=totalMonthlyCost>0?Math.round((totalClientBudget/totalMonthlyCost)*100):0;
+          const budgetSurplusDeficit=totalClientBudget-totalMonthlyCost;
+          return{dept:shortName,totalEmployees,totalMonthlyCost,totalClientBudget,budgetCoveragePct,allocatedHours,capacityHours,utilizationPct,budgetSurplusDeficit};
+        });
+
+        const coverBadge=pct=>pct>=100?{bg:"#d1fae5",col:"#059669"}:pct>=70?{bg:"#fef9c3",col:"#d97706"}:{bg:"#fee2e2",col:"#dc2626"};
+        const utilBadge=pct=>pct>100?{bg:"#fee2e2",col:"#dc2626"}:pct>=80?{bg:"#d1fae5",col:"#059669"}:pct>=50?{bg:"#fef9c3",col:"#d97706"}:{bg:"#f1f5f9",col:"#64748b"};
+
+        const months=allMonths.length>0?allMonths:ALLOC_MONTHS.map(m=>m.v);
+
+        return(
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:13,color:"#64748b"}}>Month:</span>
+                <Sel value={selDeptCapMonth} onChange={setSelDeptCapMonth}
+                  options={months.map(m=>({v:m,l:fmtLong(m)}))} style={{width:160}}/>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <Btn variant="outline" size="sm" onClick={()=>{
+                  const wsData=[
+                    ['Month','Department','Total Employees','Monthly Resource Cost (SAR)','Client Budget (SAR)','Budget Coverage %','Allocated Hours','Capacity Hours','Utilization %','Budget Surplus/Deficit (SAR)'],
+                    ...rows.map(r=>[selDeptCapMonth,r.dept,r.totalEmployees,r.totalMonthlyCost,r.totalClientBudget,r.budgetCoveragePct+'%',r.allocatedHours+'h',r.capacityHours+'h',r.utilizationPct+'%',r.budgetSurplusDeficit]),
+                  ];
+                  exportXLSX(wsData,'Dept Capacity vs Budget',`dept-capacity-${selDeptCapMonth}.xlsx`);
+                }}>⬇ Export Excel</Btn>
+                <Btn variant="outline" size="sm" onClick={()=>{
+                  const headers=['Department','Employees','Resource Cost','Client Budget','Coverage %','Alloc Hrs','Cap Hrs','Util %','Surplus/Deficit'];
+                  const pdfRows=rows.map(r=>[r.dept,r.totalEmployees,r.totalMonthlyCost.toLocaleString(),r.totalClientBudget.toLocaleString(),r.budgetCoveragePct+'%',r.allocatedHours+'h',r.capacityHours+'h',r.utilizationPct+'%',r.budgetSurplusDeficit.toLocaleString()]);
+                  exportPDFTable(`Department Capacity vs Budget — ${fmtLong(selDeptCapMonth)}`,headers,pdfRows,`dept-capacity-${selDeptCapMonth}.pdf`);
+                }}>⬇ Export PDF</Btn>
+              </div>
+            </div>
+            <Card style={{overflow:"hidden"}}>
+              <div style={{padding:"14px 18px",borderBottom:"1px solid #e2e8f0"}}>
+                <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>Department Capacity vs Client Budget — {fmtLong(selDeptCapMonth)}</p>
+              </div>
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                  <thead><tr>
+                    {["Department","Employees","Monthly Resource Cost","Client Budget","Budget Coverage %","Allocated Hrs","Capacity Hrs","Utilization %","Budget Surplus / Deficit"].map(h=>(
+                      <th key={h} style={{padding:"8px 10px",textAlign:h==="Department"?"left":"center",fontSize:11,fontWeight:600,color:"#fff",background:"#1e293b",borderBottom:"1px solid #334155",whiteSpace:"nowrap"}}>{h}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>
+                    {rows.map((r,i)=>(
+                      <tr key={r.dept} style={{background:i%2===0?"#fff":"#f8fafc"}}>
+                        <td style={{padding:"8px 10px",fontWeight:600,borderBottom:"1px solid #f1f5f9"}}>{r.dept}</td>
+                        <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{r.totalEmployees}</td>
+                        <td style={{padding:"8px 10px",textAlign:"right",color:"#d97706",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{r.totalMonthlyCost.toLocaleString()}</td>
+                        <td style={{padding:"8px 10px",textAlign:"right",color:"#059669",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{r.totalClientBudget.toLocaleString()}</td>
+                        <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
+                          <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:700,background:coverBadge(r.budgetCoveragePct).bg,color:coverBadge(r.budgetCoveragePct).col}}>{r.budgetCoveragePct}%</span>
+                        </td>
+                        <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{r.allocatedHours}h</td>
+                        <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{r.capacityHours}h</td>
+                        <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
+                          <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:700,background:utilBadge(r.utilizationPct).bg,color:utilBadge(r.utilizationPct).col}}>{r.utilizationPct}%</span>
+                        </td>
+                        <td style={{padding:"8px 10px",textAlign:"right",fontWeight:700,color:r.budgetSurplusDeficit>=0?"#059669":"#dc2626",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{r.budgetSurplusDeficit.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                    <tr style={{background:"#e2e8f0",fontWeight:700,borderTop:"2px solid #cbd5e1"}}>
+                      <td style={{padding:"8px 10px"}}>Totals</td>
+                      <td style={{padding:"8px 10px",textAlign:"center"}}>{rows.reduce((s,r)=>s+r.totalEmployees,0)}</td>
+                      <td style={{padding:"8px 10px",textAlign:"right",color:"#d97706",whiteSpace:"nowrap"}}>{rows.reduce((s,r)=>s+r.totalMonthlyCost,0).toLocaleString()}</td>
+                      <td style={{padding:"8px 10px",textAlign:"right",color:"#059669",whiteSpace:"nowrap"}}>{rows.reduce((s,r)=>s+r.totalClientBudget,0).toLocaleString()}</td>
+                      <td style={{padding:"8px 10px",textAlign:"center"}}>
+                        <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:700,background:"#e2e8f0",color:"#475569"}}>
+                          {(()=>{const tc=rows.reduce((s,r)=>s+r.totalMonthlyCost,0);const tb=rows.reduce((s,r)=>s+r.totalClientBudget,0);return tc>0?Math.round((tb/tc)*100):0;})()}%
+                        </span>
+                      </td>
+                      <td style={{padding:"8px 10px",textAlign:"center"}}>{rows.reduce((s,r)=>s+r.allocatedHours,0)}h</td>
+                      <td style={{padding:"8px 10px",textAlign:"center"}}>{rows.reduce((s,r)=>s+r.capacityHours,0)}h</td>
+                      <td style={{padding:"8px 10px",textAlign:"center"}}>
+                        <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:700,background:"#e2e8f0",color:"#475569"}}>
+                          {(()=>{const tc=rows.reduce((s,r)=>s+r.capacityHours,0);const ta=rows.reduce((s,r)=>s+r.allocatedHours,0);return tc>0?Math.round((ta/tc)*100):0;})()}%
+                        </span>
+                      </td>
+                      <td style={{padding:"8px 10px",textAlign:"right",fontWeight:700,color:rows.reduce((s,r)=>s+r.budgetSurplusDeficit,0)>=0?"#059669":"#dc2626",whiteSpace:"nowrap"}}>{rows.reduce((s,r)=>s+r.budgetSurplusDeficit,0).toLocaleString()}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                {rows.every(r=>r.totalEmployees===0&&r.totalClientBudget===0)&&(
+                  <div style={{textAlign:"center",padding:40,color:"#94a3b8"}}>
+                    <p>No data for {fmtLong(selDeptCapMonth)} — add employees and contracts first</p>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
         </div>
       )}
     </div>
@@ -3848,120 +3963,6 @@ function PlatformRoot(){
   return <PlatformApp/>;
 
 
-      {/* Dept Capacity vs Budget */}
-      {customTab==="dept-capacity-budget"&&(()=>{
-        const DEPTS=["Client Servicing Department","Production Department","Creative Department","Planning Department"];
-        const budgetKey={"Production Department":"budget_production","Client Servicing Department":"budget_client_servicing","Creative Department":"budget_creative","Planning Department":"budget_planning"};
-        const activeContracts=USE_CONTRACTS.filter(c=>isActive(c,selDeptCapMonth));
-        const monthAllocs=realAllocs.filter(a=>a.month===selDeptCapMonth);
-        const allMonths=[...new Set(realAllocs.map(a=>a.month))].sort().reverse();
-
-        const rows=DEPTS.map(dept=>{
-          const shortName=dept.replace(" Department","");
-          const deptEmps=USE_EMPLOYEES.filter(e=>e.department===dept&&e.status==="Active");
-          const totalEmployees=deptEmps.length;
-          const totalMonthlyCost=Math.round(deptEmps.reduce((s,e)=>s+(parseFloat(e.mc)||parseFloat(e.monthly_cost)||0),0));
-          const deptAllocs=monthAllocs.filter(a=>USE_EMPLOYEES.find(e=>e.id===a.employee_id&&e.department===dept));
-          const allocatedHours=deptAllocs.reduce((s,a)=>s+(parseFloat(a.h)||parseFloat(a.allocated_hours)||0),0);
-          const capacityHours=totalEmployees*HPM;
-          const utilizationPct=capacityHours>0?Math.round((allocatedHours/capacityHours)*100):0;
-          const totalClientBudget=Math.round(activeContracts.reduce((s,c)=>{
-            const tm=parseFloat(c.tm)||parseFloat(c.tenure_months)||1;
-            return s+((parseFloat(c[budgetKey[dept]])||0)/tm);
-          },0));
-          const budgetCoveragePct=totalMonthlyCost>0?Math.round((totalClientBudget/totalMonthlyCost)*100):0;
-          const budgetSurplusDeficit=totalClientBudget-totalMonthlyCost;
-          return{dept:shortName,totalEmployees,totalMonthlyCost,totalClientBudget,budgetCoveragePct,allocatedHours,capacityHours,utilizationPct,budgetSurplusDeficit};
-        });
-
-        const coverBadge=pct=>pct>=100?{bg:"#d1fae5",col:"#059669"}:pct>=70?{bg:"#fef9c3",col:"#d97706"}:{bg:"#fee2e2",col:"#dc2626"};
-        const utilBadge=pct=>pct>100?{bg:"#fee2e2",col:"#dc2626"}:pct>=80?{bg:"#d1fae5",col:"#059669"}:pct>=50?{bg:"#fef9c3",col:"#d97706"}:{bg:"#f1f5f9",col:"#64748b"};
-
-        const months=allMonths.length>0?allMonths:ALLOC_MONTHS.map(m=>m.v);
-
-        return(
-          <div style={{display:"flex",flexDirection:"column",gap:14}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <span style={{fontSize:13,color:"#64748b"}}>Month:</span>
-                <Sel value={selDeptCapMonth} onChange={setSelDeptCapMonth}
-                  options={months.map(m=>({v:m,l:fmtLong(m)}))} style={{width:160}}/>
-              </div>
-              <div style={{display:"flex",gap:8}}>
-                <Btn variant="outline" size="sm" onClick={()=>{
-                  const wsData=[
-                    ['Month','Department','Total Employees','Monthly Resource Cost (SAR)','Client Budget (SAR)','Budget Coverage %','Allocated Hours','Capacity Hours','Utilization %','Budget Surplus/Deficit (SAR)'],
-                    ...rows.map(r=>[selDeptCapMonth,r.dept,r.totalEmployees,r.totalMonthlyCost,r.totalClientBudget,r.budgetCoveragePct+'%',r.allocatedHours+'h',r.capacityHours+'h',r.utilizationPct+'%',r.budgetSurplusDeficit]),
-                  ];
-                  exportXLSX(wsData,'Dept Capacity vs Budget',`dept-capacity-${selDeptCapMonth}.xlsx`);
-                }}>⬇ Export Excel</Btn>
-                <Btn variant="outline" size="sm" onClick={()=>{
-                  const headers=['Department','Employees','Resource Cost','Client Budget','Coverage %','Alloc Hrs','Cap Hrs','Util %','Surplus/Deficit'];
-                  const pdfRows=rows.map(r=>[r.dept,r.totalEmployees,r.totalMonthlyCost.toLocaleString(),r.totalClientBudget.toLocaleString(),r.budgetCoveragePct+'%',r.allocatedHours+'h',r.capacityHours+'h',r.utilizationPct+'%',r.budgetSurplusDeficit.toLocaleString()]);
-                  exportPDFTable(`Department Capacity vs Budget — ${fmtLong(selDeptCapMonth)}`,headers,pdfRows,`dept-capacity-${selDeptCapMonth}.pdf`);
-                }}>⬇ Export PDF</Btn>
-              </div>
-            </div>
-            <Card style={{overflow:"hidden"}}>
-              <div style={{padding:"14px 18px",borderBottom:"1px solid #e2e8f0"}}>
-                <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>Department Capacity vs Client Budget — {fmtLong(selDeptCapMonth)}</p>
-              </div>
-              <div style={{overflowX:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                  <thead><tr>
-                    {["Department","Employees","Monthly Resource Cost","Client Budget","Budget Coverage %","Allocated Hrs","Capacity Hrs","Utilization %","Budget Surplus / Deficit"].map(h=>(
-                      <th key={h} style={{padding:"8px 10px",textAlign:h==="Department"?"left":"center",fontSize:11,fontWeight:600,color:"#fff",background:"#1e293b",borderBottom:"1px solid #334155",whiteSpace:"nowrap"}}>{h}</th>
-                    ))}
-                  </tr></thead>
-                  <tbody>
-                    {rows.map((r,i)=>(
-                      <tr key={r.dept} style={{background:i%2===0?"#fff":"#f8fafc"}}>
-                        <td style={{padding:"8px 10px",fontWeight:600,borderBottom:"1px solid #f1f5f9"}}>{r.dept}</td>
-                        <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{r.totalEmployees}</td>
-                        <td style={{padding:"8px 10px",textAlign:"right",color:"#d97706",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{r.totalMonthlyCost.toLocaleString()}</td>
-                        <td style={{padding:"8px 10px",textAlign:"right",color:"#059669",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{r.totalClientBudget.toLocaleString()}</td>
-                        <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
-                          <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:700,background:coverBadge(r.budgetCoveragePct).bg,color:coverBadge(r.budgetCoveragePct).col}}>{r.budgetCoveragePct}%</span>
-                        </td>
-                        <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{r.allocatedHours}h</td>
-                        <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{r.capacityHours}h</td>
-                        <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
-                          <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:700,background:utilBadge(r.utilizationPct).bg,color:utilBadge(r.utilizationPct).col}}>{r.utilizationPct}%</span>
-                        </td>
-                        <td style={{padding:"8px 10px",textAlign:"right",fontWeight:700,color:r.budgetSurplusDeficit>=0?"#059669":"#dc2626",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{r.budgetSurplusDeficit.toLocaleString()}</td>
-                      </tr>
-                    ))}
-                    <tr style={{background:"#e2e8f0",fontWeight:700,borderTop:"2px solid #cbd5e1"}}>
-                      <td style={{padding:"8px 10px"}}>Totals</td>
-                      <td style={{padding:"8px 10px",textAlign:"center"}}>{rows.reduce((s,r)=>s+r.totalEmployees,0)}</td>
-                      <td style={{padding:"8px 10px",textAlign:"right",color:"#d97706",whiteSpace:"nowrap"}}>{rows.reduce((s,r)=>s+r.totalMonthlyCost,0).toLocaleString()}</td>
-                      <td style={{padding:"8px 10px",textAlign:"right",color:"#059669",whiteSpace:"nowrap"}}>{rows.reduce((s,r)=>s+r.totalClientBudget,0).toLocaleString()}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center"}}>
-                        <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:700,background:"#e2e8f0",color:"#475569"}}>
-                          {(()=>{const tc=rows.reduce((s,r)=>s+r.totalMonthlyCost,0);const tb=rows.reduce((s,r)=>s+r.totalClientBudget,0);return tc>0?Math.round((tb/tc)*100):0;})()}%
-                        </span>
-                      </td>
-                      <td style={{padding:"8px 10px",textAlign:"center"}}>{rows.reduce((s,r)=>s+r.allocatedHours,0)}h</td>
-                      <td style={{padding:"8px 10px",textAlign:"center"}}>{rows.reduce((s,r)=>s+r.capacityHours,0)}h</td>
-                      <td style={{padding:"8px 10px",textAlign:"center"}}>
-                        <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:700,background:"#e2e8f0",color:"#475569"}}>
-                          {(()=>{const tc=rows.reduce((s,r)=>s+r.capacityHours,0);const ta=rows.reduce((s,r)=>s+r.allocatedHours,0);return tc>0?Math.round((ta/tc)*100):0;})()}%
-                        </span>
-                      </td>
-                      <td style={{padding:"8px 10px",textAlign:"right",fontWeight:700,color:rows.reduce((s,r)=>s+r.budgetSurplusDeficit,0)>=0?"#059669":"#dc2626",whiteSpace:"nowrap"}}>{rows.reduce((s,r)=>s+r.budgetSurplusDeficit,0).toLocaleString()}</td>
-                    </tr>
-                  </tbody>
-                </table>
-                {rows.every(r=>r.totalEmployees===0&&r.totalClientBudget===0)&&(
-                  <div style={{textAlign:"center",padding:40,color:"#94a3b8"}}>
-                    <p>No data for {fmtLong(selDeptCapMonth)} — add employees and contracts first</p>
-                  </div>
-                )}
-              </div>
-            </Card>
-          </div>
-        );
-      })()}
 
       {/* Contract Revenue Forecast */}
       {customTab==="contract-revenue-forecast"&&(()=>{
