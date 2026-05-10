@@ -2763,7 +2763,8 @@ function ReportsPage(){
           while(d<=e){ms.push(d.toISOString().slice(0,7));d=new Date(d.getFullYear(),d.getMonth()+1,1);}
           return ms;
         };
-        const allMonthsList=buildMonths(minD,maxD);
+        // Deduplicate months (in case multiple contracts start/end in same month)
+        const allMonthsList=[...new Set(buildMonths(minD,maxD))];
 
         // Build rows - one per contract
         const rows=realContracts.map(c=>{
