@@ -1895,7 +1895,7 @@ function ReportsPage(){
     const als = (allocsByMonth[selMonth]||[]);
     const em  = {};
     USE_EMPLOYEES.forEach(e=>{em[e.id]={...e,hr:(e.mc||e.monthly_cost||0)/HPM};});
-    const ac  = USE_USE_CONTRACTS.filter(c=>isActive(c,selMonth));
+    const ac  = USE_CONTRACTS.filter(c=>isActive(c,selMonth));
     const cm  = {};
     ac.forEach(c=>{cm[c.cid]={...c,mr:c.cv/c.tm};});
 
