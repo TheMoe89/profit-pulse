@@ -1494,6 +1494,18 @@ function AllocationsPage(){
   const [empSearch,setEmpSearch] = useState("");
   const [confirmOpen,setConfirmOpen]=useState(false);
   const [editForm,setEditForm]   = useState({allocated_hours:"",month:"2026-04",notes:""});
+  const [realEmps,setRealEmps]   = useState([]);
+  const [realContracts,setRealContracts] = useState([]);
+
+  useEffect(()=>{
+    Promise.all([
+      sb.from('employees').select('*').order('name'),
+      sb.from('contracts').select('*'),
+    ]).then(([{data:e},{data:ct}])=>{
+      if(e) setRealEmps(e.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0})));
+      if(ct) setRealContracts(ct.map(x=>({...x,cid:x.client_id,cn:x.client_name,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status})));
+    });
+  },[sb]);
   const [sk,setSk]=useState("employee_name");
   const [sd,setSd]=useState("asc");
   const sortFn=k=>{if(sk===k)setSd(d=>d==="asc"?"desc":"asc");else{setSk(k);setSd("asc");}};
@@ -1502,7 +1514,7 @@ function AllocationsPage(){
 
   const utilForMonth=useCallback((month)=>{
     const map={};
-    EMPLOYEES_INIT.forEach(emp=>{
+    realEmps.length>0?realEmps:EMPLOYEES_INIT.forEach(emp=>{
       const h=allocs.filter(a=>a.employee_id===emp.id&&a.month===month).reduce((s,a)=>s+(a.allocated_hours||0),0);
       map[emp.id]={totalHours:h,availableHours:Math.max(0,HPM-h),percentage:(h/HPM)*100};
     });
@@ -1513,7 +1525,7 @@ function AllocationsPage(){
 
   const contractsForMonth=useMemo(()=>{
     if(!selMonth) return [];
-    return MOCK_CONTRACTS_FULL.filter(c=>isActive(c,selMonth));
+    return realContracts.length>0?realContracts:MOCK_CONTRACTS_FULL.filter(c=>isActive(c,selMonth));
   },[selMonth]);
 
   const getRemainingHours=(empId,month,excludeId=null)=>{
@@ -1522,8 +1534,8 @@ function AllocationsPage(){
   };
 
   const filtered=useMemo(()=>allocs.filter(a=>{
-    const emp=EMPLOYEES_INIT.find(e=>e.id===a.employee_id);
-    const ct=MOCK_CONTRACTS_FULL.find(c=>c.id===a.contract_id);
+    const emp=realEmps.length>0?realEmps:EMPLOYEES_INIT.find(e=>e.id===a.employee_id);
+    const ct=realContracts.length>0?realContracts:MOCK_CONTRACTS_FULL.find(c=>c.id===a.contract_id);
     const ms=!search||a.employee_name?.toLowerCase().includes(search.toLowerCase())||a.client_name?.toLowerCase().includes(search.toLowerCase());
     return ms&&(filterEmp==="all"||a.employee_id===filterEmp)&&(filterCli==="all"||a.client_id===filterCli)&&(filterDept==="all"||emp?.department===filterDept)&&(filterCat==="all"||(ct?.contract_category||"Retainer")===filterCat);
   }),[allocs,search,filterEmp,filterCli,filterDept,filterCat]);
@@ -1537,7 +1549,7 @@ function AllocationsPage(){
   const chartAllocs=useMemo(()=>allocs.filter(a=>a.month===chartMonth),[allocs,chartMonth]);
   // Mirror Base44: inactive employees whose inactive_effective_month >= chartMonth still count
   const isEmpActiveForMonth=(e,month)=>e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=month);
-  const activeEmps=EMPLOYEES_INIT.filter(e=>isEmpActiveForMonth(e,chartMonth));
+  const activeEmps=realEmps.length>0?realEmps:EMPLOYEES_INIT.filter(e=>isEmpActiveForMonth(e,chartMonth));
   const totalCap=activeEmps.length*HPM;
   const utilizedHours=chartAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
   const availHours=Math.max(0,totalCap-utilizedHours);
@@ -1562,7 +1574,7 @@ function AllocationsPage(){
     const toCreate=selEmpIds.flatMap(eid=>{
       const ea=empAllocs[eid]||{};
       if(!ea.client_id||!parseFloat(ea.hours)) return [];
-      const emp=allocs.length>0?EMPLOYEES_INIT.find(e=>e.id===eid):EMPLOYEES_INIT.find(e=>e.id===eid);
+      const emp=allocs.length>0?realEmps.length>0?realEmps:EMPLOYEES_INIT.find(e=>e.id===eid):realEmps.length>0?realEmps:EMPLOYEES_INIT.find(e=>e.id===eid);
       const ct=contractsForMonth.find(c=>c.id===ea.client_id);
       return [{
         employee_id:eid, employee_name:emp?.name||"",
@@ -1647,7 +1659,7 @@ function AllocationsPage(){
 
       {/* Capacity cards — all active employees for chartMonth (mirrors Base44) */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
-        {EMPLOYEES_INIT.filter(e=>isEmpActiveForMonth(e,chartMonth)).map(emp=>{
+        {realEmps.length>0?realEmps:EMPLOYEES_INIT.filter(e=>isEmpActiveForMonth(e,chartMonth)).map(emp=>{
           const u=utilMap[emp.id]||{totalHours:0,availableHours:HPM,percentage:0};
           const ov=u.percentage>100,ok=u.percentage>=70&&u.percentage<=100;
           const border=ov?"#fecaca":ok?"#a7f3d0":"#fde68a";
@@ -1677,7 +1689,7 @@ function AllocationsPage(){
           <span style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:"#64748b",fontSize:12}}>🔍</span>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search allocations..." style={{width:"100%",padding:"7px 10px 7px 27px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,outline:"none",background:"#fff",boxSizing:"border-box"}}/>
         </div>
-        <Sel value={filterEmp}  onChange={setFilterEmp}  options={[{v:"all",l:"All Employees"},...EMPLOYEES_INIT.map(e=>({v:e.id,l:e.name}))]}  style={{width:160}}/>
+        <Sel value={filterEmp}  onChange={setFilterEmp}  options={[{v:"all",l:"All Employees"},...realEmps.length>0?realEmps:EMPLOYEES_INIT.map(e=>({v:e.id,l:e.name}))]}  style={{width:160}}/>
         <Sel value={filterCli}  onChange={setFilterCli}  options={[{v:"all",l:"All Clients"},  ...CLIENTS.map(c=>({v:c.id,l:c.name}))]}          style={{width:145}}/>
         <Sel value={filterDept} onChange={setFilterDept} options={[{v:"all",l:"All Departments"},...ALLOC_DEPTS.map(d=>({v:d,l:d.replace(" Department","")}))]}  style={{width:160}}/>
         <Sel value={filterCat}  onChange={setFilterCat}  options={[{v:"all",l:"All Categories"},{v:"Retainer",l:"Retainer"},{v:"Project",l:"Project"},{v:"Adhoc",l:"Adhoc"}]} style={{width:145}}/>
@@ -1698,7 +1710,7 @@ function AllocationsPage(){
             </tr></thead>
             <tbody>
               {sorted.map((a,idx)=>{
-                const emp=EMPLOYEES_INIT.find(e=>e.id===a.employee_id);
+                const emp=realEmps.length>0?realEmps:EMPLOYEES_INIT.find(e=>e.id===a.employee_id);
                 const sb=statusBadge(a.status);
                 return(
                   <tr key={a.id} style={{borderBottom:"1px solid #f1f5f9",background:idx%2===0?"#fff":"#fafafa"}}>
@@ -1761,7 +1773,7 @@ function AllocationsPage(){
                 const act=formStep===(i+1);
                 return(
                   <div key={num} style={{display:"flex",alignItems:"center",gap:8}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 12px",borderRadius:999,background:act?"#6366f1":"#1E1E1E",color:act?"#000":"#777777",fontSize:12,fontWeight:600}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 12px",borderRadius:999,background:act?"#0f172a":"#f1f5f9",color:act?"#fff":"#64748b",fontSize:12,fontWeight:600}}>
                       <span style={{width:17,height:17,borderRadius:"50%",background:act?"rgba(255,255,255,.2)":"#e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10}}>{num}</span>{label}
                     </div>
                     {i===0&&<span style={{color:"#cbd5e1",fontSize:13}}>›</span>}
@@ -1781,7 +1793,7 @@ function AllocationsPage(){
                     <input value={empSearch} onChange={e=>setEmpSearch(e.target.value)} placeholder="Search employees..." style={{width:"100%",padding:"7px 10px 7px 27px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,outline:"none",background:"#fff",boxSizing:"border-box"}}/>
                   </div>
                   <div style={{border:"1px solid #e2e8f0",borderRadius:9,maxHeight:210,overflowY:"auto"}}>
-                    {EMPLOYEES_INIT
+                    {realEmps.length>0?realEmps:EMPLOYEES_INIT
                       .filter(e=>e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&selMonth&&e.inactive_effective_month>=selMonth))
                       .filter(e=>!empSearch||e.name.toLowerCase().includes(empSearch.toLowerCase()))
                       .map(emp=>{
@@ -1792,7 +1804,7 @@ function AllocationsPage(){
                       const bc=avail<=0?"#fee2e2":pct>=70?"#d1fae5":"#fef9c3";
                       const tc=avail<=0?"#EF4444":pct>=70?"#10b981":"#d97706";
                       return(
-                        <label key={emp.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",cursor:"pointer",background:isSel?"#1E1E1E":"#161616",borderBottom:"1px solid #e2e8f0"}}>
+                        <label key={emp.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",cursor:"pointer",background:isSel?"#1E1E1E":"#fff",borderBottom:"1px solid #e2e8f0"}}>
                           <input type="checkbox" checked={isSel} onChange={e=>handleEmpToggle(emp.id,e.target.checked)} style={{accentColor:"#0f172a",width:14,height:14,flexShrink:0}}/>
                           <div style={{flex:1}}><p style={{margin:0,fontWeight:600,fontSize:12,color:"#0f172a"}}>{emp.name}</p><p style={{margin:0,fontSize:10,color:"#64748b"}}>{emp.department?.replace(" Department","")}</p></div>
                           <Bdg bg={bc} color={tc}>{avail}h free</Bdg>
@@ -1815,7 +1827,7 @@ function AllocationsPage(){
                 <div style={{padding:"7px 12px",background:"#fff",borderRadius:8}}><p style={{margin:0,fontSize:12,color:"#475569"}}>Month: <strong style={{color:"#0f172a"}}>{ALLOC_MONTHS.find(m=>m.v===selMonth)?.l}</strong></p></div>
                 <div style={{display:"flex",flexDirection:"column",gap:10,maxHeight:330,overflowY:"auto"}}>
                   {selEmpIds.map(eid=>{
-                    const emp=EMPLOYEES_INIT.find(e=>e.id===eid);
+                    const emp=realEmps.length>0?realEmps:EMPLOYEES_INIT.find(e=>e.id===eid);
                     const ea=empAllocs[eid]||{};
                     const rem=getRemainingHours(eid,selMonth);
                     return(
