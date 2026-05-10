@@ -740,7 +740,9 @@ function DashboardPage(){
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function EmployeesPage(){
-  const [emps,setEmps]=useState(EMPLOYEES_INIT);
+  const {sb}=useAuth();
+  const [emps,setEmps]=useState([]);
+  const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState("");
   const [locF,setLocF]=useState("all");
   const [sk,setSk]=useState("name");
@@ -752,17 +754,48 @@ function EmployeesPage(){
   const [pendingInactive,setPendingInactive]=useState(null);
   const [inactiveMonth,setInactiveMonth]=useState(currentMonth);
 
+  useEffect(()=>{
+    sb.from('employees').select('*').order('name').then(({data})=>{
+      if(data) setEmps(data.map(e=>({...e,mc:e.monthly_cost||0,start:e.start_date||""})));
+      setLoading(false);
+    });
+  },[]);
+
+  const dbAdd=async p=>{
+    const{data,error}=await sb.from('employees').insert([{
+      name:p.name,designation:p.designation||"",department:p.department||"",
+      monthly_cost:parseFloat(p.mc)||0,email:p.email||"",status:p.status||"Active",
+      start_date:p.start||null,profile_picture_url:p.profile_picture_url||null
+    }]).select().single();
+    if(error){alert('Error: '+error.message);return;}
+    if(data) setEmps(x=>[...x,{...data,mc:data.monthly_cost,start:data.start_date}]);
+  };
+  const dbUpdate=async(id,p)=>{
+    const{data,error}=await sb.from('employees').update({
+      name:p.name,designation:p.designation||"",department:p.department||"",
+      monthly_cost:parseFloat(p.mc)||0,email:p.email||"",status:p.status||"Active",
+      start_date:p.start||null,inactive_effective_month:p.inactive_effective_month||null,
+      profile_picture_url:p.profile_picture_url||null
+    }).eq('id',id).select().single();
+    if(error){alert('Error: '+error.message);return;}
+    if(data) setEmps(x=>x.map(e=>e.id===id?{...data,mc:data.monthly_cost,start:data.start_date}:e));
+  };
+  const dbDelete=async id=>{
+    await sb.from('employees').delete().eq('id',id);
+    setEmps(x=>x.filter(e=>e.id!==id));
+  };
+
   const upd=(k,v)=>setForm(p=>({...p,[k]:v,...(k==="location"?{mc:{Jeddah:15000,Riyadh:18000}[v]||p.mc}:{})}));
   const openAdd=()=>{setEditing(null);setForm(EMPTY_EMP);setModalOpen(true);};
   const openEdit=e=>{setEditing(e);setForm({name:e.name,designation:e.designation,department:e.department,location:e.location,mc:e.mc,email:e.email,status:e.status,start:e.start});setModalOpen(true);};
   const close=()=>{setModalOpen(false);setEditing(null);};
 
-  const handleSubmit=e=>{
+  const handleSubmit=async e=>{
     e.preventDefault();
     const wasActive=editing?.status==="Active"||editing?.status==="On Leave";
     if(editing&&form.status==="Inactive"&&wasActive){setPendingInactive({id:editing.id,data:form});setInactiveModal(true);return;}
-    if(editing){setEmps(p=>p.map(emp=>emp.id===editing.id?{...emp,...form}:emp));}
-    else{setEmps(p=>[...p,{id:`e${Date.now()}`,...form}]);}
+    if(editing){ await dbUpdate(editing.id,{...form,mc:parseFloat(form.mc)||0}); }
+    else{ await dbAdd({...form,mc:parseFloat(form.mc)||0}); }
     close();
   };
   const confirmInactive=async()=>{
@@ -882,8 +915,31 @@ function ClientsPage(){
   useEffect(()=>{
     sb.from('clients').select('*').order('name').then(({data})=>{if(data)setClients(data);setLoading(false);});
   },[]);
-  const dbAdd=async p=>{const{data}=await sb.from('clients').insert([p]).select().single();if(data)setClients(x=>[...x,data]);};
-  const dbUpdate=async(id,p)=>{const{data}=await sb.from('clients').update(p).eq('id',id).select().single();if(data)setClients(x=>x.map(c=>c.id===id?data:c));};
+  const dbAdd=async p=>{
+    const{data,error}=await sb.from('clients').insert([{
+      name:p.name,industry:p.industry||"",status:p.status||"Active",
+      contact_person:p.contact_person||"",
+      contact_designation:p.contact_person_designation||p.contact_designation||"",
+      contact_email:p.contact_email||"",contact_phone:p.contact_phone||"",notes:p.notes||""
+    }]).select().single();
+    if(error){
+      console.error('Client insert error:',error);
+      alert('Failed to save client: '+error.message+' (Code: '+error.code+')');
+      return;
+    }
+    if(data) setClients(x=>[...x,data]);
+    else alert('Client was not saved - please check your permissions');
+  };
+  const dbUpdate=async(id,p)=>{
+    const{data,error}=await sb.from('clients').update({
+      name:p.name,industry:p.industry||"",status:p.status||"Active",
+      contact_person:p.contact_person||"",
+      contact_designation:p.contact_person_designation||p.contact_designation||"",
+      contact_email:p.contact_email||"",contact_phone:p.contact_phone||"",notes:p.notes||""
+    }).eq('id',id).select().single();
+    if(error){console.error('Client update error:',error);alert('Failed to update: '+error.message);return;}
+    if(data) setClients(x=>x.map(c=>c.id===id?data:c));
+  };
   const dbDelete=async id=>{await sb.from('clients').delete().eq('id',id);setClients(x=>x.filter(c=>c.id!==id));};
   const [search,setSearch]       = useState("");
   const [statusF,setStatusF]     = useState("all");
@@ -898,10 +954,10 @@ function ClientsPage(){
   const openEdit=c=>{setEditing(c);setForm({name:c.name,industry:c.industry,contact_person:c.contact_person,contact_person_designation:c.contact_person_designation,contact_email:c.contact_email,contact_phone:c.contact_phone,status:c.status,notes:c.notes||""});setModalOpen(true);};
   const close   =()=>{setModalOpen(false);setEditing(null);};
 
-  const handleSubmit=e=>{
+  const handleSubmit=async e=>{
     e.preventDefault();
-    if(editing){setClients(p=>p.map(c=>c.id===editing.id?{...c,...form}:c));}
-    else{setClients(p=>[...p,{id:`cl${Date.now()}`,...form}]);}
+    if(editing){ await dbUpdate(editing.id,form); }
+    else{ await dbAdd(form); }
     close();
   };
   const del=id=>{if(window.confirm("Delete this client?"))dbDelete(id);};
