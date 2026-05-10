@@ -1804,7 +1804,7 @@ function AllocationsPage(){
                       const bc=avail<=0?"#fee2e2":pct>=70?"#d1fae5":"#fef9c3";
                       const tc=avail<=0?"#EF4444":pct>=70?"#10b981":"#d97706";
                       return(
-                        <label key={emp.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",cursor:"pointer",background:isSel?"#1E1E1E":"#fff",borderBottom:"1px solid #e2e8f0"}}>
+                        <label key={emp.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",cursor:"pointer",background:isSel?"#eef2ff":"#fff",borderBottom:"1px solid #e2e8f0"}}>
                           <input type="checkbox" checked={isSel} onChange={e=>handleEmpToggle(emp.id,e.target.checked)} style={{accentColor:"#0f172a",width:14,height:14,flexShrink:0}}/>
                           <div style={{flex:1}}><p style={{margin:0,fontWeight:600,fontSize:12,color:"#0f172a"}}>{emp.name}</p><p style={{margin:0,fontSize:10,color:"#64748b"}}>{emp.department?.replace(" Department","")}</p></div>
                           <Bdg bg={bc} color={tc}>{avail}h free</Bdg>
