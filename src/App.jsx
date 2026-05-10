@@ -1935,6 +1935,7 @@ function ReportsPage(){
   const [realClients,setRealClients]     = useState([]);
   const [realAllocs,setRealAllocs]       = useState([]);
   const [realSnapshots,setRealSnapshots] = useState([]);
+  const [dataLoaded,setDataLoaded]       = useState(false);
 
   useEffect(()=>{
     Promise.all([
@@ -1949,6 +1950,7 @@ function ReportsPage(){
       if(cl) setRealClients(cl);
       if(al) setRealAllocs(al.map(x=>({...x,eid:x.employee_id,cid:x.client_id,h:parseFloat(x.allocated_hours)||0})));
       if(sn) setRealSnapshots(sn);
+      setDataLoaded(true);
     });
   },[sb]);
 
@@ -2736,6 +2738,135 @@ function ReportsPage(){
           </div>
         );
       })()}
+
+      {customTab==="contract-revenue-forecast"&&(()=>{
+        // Wait for Supabase data to load
+        if(!dataLoaded) return(
+          <div style={{textAlign:"center",padding:60,color:"#94a3b8"}}>
+            <div style={{fontSize:32,marginBottom:12}}>⏳</div>
+            <p style={{fontSize:14}}>Loading...</p>
+          </div>
+        );
+        if(realContracts.length===0) return(
+          <div style={{textAlign:"center",padding:60,color:"#94a3b8"}}>
+            <div style={{fontSize:40,marginBottom:12}}>📋</div>
+            <p style={{fontSize:14}}>No contracts found. Add contracts first.</p>
+          </div>
+        );
+
+        // Build month list from contract date range
+        const allDates=realContracts.flatMap(c=>[c.start_date,c.end_date]).filter(Boolean);
+        const minD=allDates.reduce((a,b)=>a<b?a:b).slice(0,7);
+        const maxD=allDates.reduce((a,b)=>a>b?a:b).slice(0,7);
+        const buildMonths=(from,to)=>{
+          const ms=[];let d=new Date(from+"-01");const e=new Date(to+"-01");
+          while(d<=e){ms.push(d.toISOString().slice(0,7));d=new Date(d.getFullYear(),d.getMonth()+1,1);}
+          return ms;
+        };
+        const allMonthsList=buildMonths(minD,maxD);
+
+        // Build rows - one per contract
+        const rows=realContracts.map(c=>{
+          const tenure=parseFloat(c.tenure_months)||1;
+          const cv=parseFloat(c.contract_value)||0;
+          const mr=Math.round(cv/tenure);
+          const monthValues={};
+          allMonthsList.forEach(m=>{monthValues[m]=isActive(c,m)?mr:null;});
+          const total=allMonthsList.reduce((s,m)=>s+(monthValues[m]||0),0);
+          return{
+            clientName:c.client_name||"—",
+            contractNumber:c.contract_number||"—",
+            contractValue:Math.round(cv),
+            tenureMonths:tenure,
+            startDate:(c.start_date||"—").slice(0,10),
+            endDate:(c.end_date||"—").slice(0,10),
+            status:c.status||"—",
+            monthValues,total
+          };
+        }).filter(r=>r.total>0).sort((a,b)=>a.clientName.localeCompare(b.clientName));
+
+        const colTotals=allMonthsList.map(m=>rows.reduce((s,r)=>s+(r.monthValues[m]||0),0));
+        const grandTotal=rows.reduce((s,r)=>s+r.total,0);
+
+        const TH=({children,align="left"})=><th style={{padding:"7px 10px",textAlign:align,fontSize:11,fontWeight:600,color:"#fff",background:"#1e293b",borderBottom:"1px solid #334155",whiteSpace:"nowrap",position:"sticky",top:0}}>{children}</th>;
+
+        return(
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                <span style={{fontSize:13,color:"#64748b"}}>From:</span>
+                <select value={minD} style={{padding:"6px 10px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:12}} onChange={()=>{}}>
+                  {allMonthsList.map(m=><option key={m} value={m}>{fmtLong(m)}</option>)}
+                </select>
+                <span style={{fontSize:13,color:"#64748b"}}>To:</span>
+                <select value={maxD} style={{padding:"6px 10px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:12}} onChange={()=>{}}>
+                  {allMonthsList.map(m=><option key={m} value={m}>{fmtLong(m)}</option>)}
+                </select>
+              </div>
+              <Btn variant="outline" size="sm" onClick={()=>{
+                const headers=["Client Name","Contract ID","Contract Value","Tenure (Month)","Start Date","End Date","Status",...allMonthsList.map(m=>fmtShort(m)),"Total"];
+                const wsData=[headers];
+                rows.forEach(r=>wsData.push([r.clientName,r.contractNumber,r.contractValue,r.tenureMonths,r.startDate,r.endDate,r.status,...allMonthsList.map(m=>r.monthValues[m]||""),r.total]));
+                wsData.push(["Total","","","","","","",...colTotals,grandTotal]);
+                exportXLSX(wsData,"Contract Revenue Forecast",`contract-forecast-${minD}-to-${maxD}.xlsx`);
+              }}>⬇ Export Excel</Btn>
+            </div>
+            <Card style={{overflow:"hidden"}}>
+              <div style={{padding:"12px 16px",borderBottom:"1px solid #e2e8f0"}}>
+                <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>Contract Revenue Forecast — {fmtLong(minD)} to {fmtLong(maxD)}</p>
+              </div>
+              <div style={{overflowX:"auto",maxHeight:600,overflowY:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                  <thead><tr>
+                    <TH>Client Name</TH>
+                    <TH>Contract ID</TH>
+                    <TH align="right">Contract Value</TH>
+                    <TH align="center">Tenure (Month)</TH>
+                    <TH>Start Date</TH>
+                    <TH>End Date</TH>
+                    <TH align="center">Status</TH>
+                    {allMonthsList.map(m=><TH key={m} align="right">{fmtShort(m)}</TH>)}
+                    <TH align="right">Total</TH>
+                  </tr></thead>
+                  <tbody>
+                    {rows.map((row,i)=>(
+                      <tr key={i} style={{background:i%2===0?"#fff":"#f8fafc"}}>
+                        <td style={{padding:"7px 10px",fontWeight:500,borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.clientName}</td>
+                        <td style={{padding:"7px 10px",fontFamily:"monospace",fontSize:11,borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.contractNumber}</td>
+                        <td style={{padding:"7px 10px",textAlign:"right",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.contractValue.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                        <td style={{padding:"7px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{row.tenureMonths}</td>
+                        <td style={{padding:"7px 10px",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.startDate}</td>
+                        <td style={{padding:"7px 10px",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.endDate}</td>
+                        <td style={{padding:"7px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
+                          <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:600,background:row.status==="Active"?"#d1fae5":"#f1f5f9",color:row.status==="Active"?"#059669":"#64748b"}}>{row.status}</span>
+                        </td>
+                        {allMonthsList.map(m=>(
+                          <td key={m} style={{padding:"7px 10px",textAlign:"right",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>
+                            {row.monthValues[m]!=null
+                              ?<span style={{color:"#059669",fontWeight:500}}>{row.monthValues[m].toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+                              :<span style={{color:"#cbd5e1"}}>-</span>}
+                          </td>
+                        ))}
+                        <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,borderBottom:"1px solid #f1f5f9",background:"#f8fafc",whiteSpace:"nowrap"}}>{row.total.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                      </tr>
+                    ))}
+                    <tr style={{background:"#e2e8f0",fontWeight:700,borderTop:"2px solid #cbd5e1"}}>
+                      <td colSpan={7} style={{padding:"7px 10px"}}>Total</td>
+                      {colTotals.map((t,i)=>(
+                        <td key={i} style={{padding:"7px 10px",textAlign:"right",color:t>0?"#059669":"#94a3b8",whiteSpace:"nowrap"}}>
+                          {t>0?t.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}):"-"}
+                        </td>
+                      ))}
+                      <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:"#059669",whiteSpace:"nowrap"}}>{grandTotal.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
+
         </div>
       )}
     </div>
@@ -3957,127 +4088,4 @@ function PlatformRoot(){
   if(!session) return <LoginPage/>;
   return <PlatformApp/>;
 
-
-
-      {/* Contract Revenue Forecast */}
-      {customTab==="contract-revenue-forecast"&&(()=>{
-        // Wait for data
-        if(realContracts.length===0) return(
-          <div style={{textAlign:"center",padding:60,color:"#94a3b8"}}>
-            <div style={{fontSize:32,marginBottom:12}}>📋</div>
-            <p style={{fontSize:14}}>No contracts found. Add contracts first.</p>
-          </div>
-        );
-
-        // Build month list from contract date range
-        const allDates=realContracts.flatMap(c=>[c.start_date,c.end_date]).filter(Boolean);
-        const minD=allDates.reduce((a,b)=>a<b?a:b).slice(0,7);
-        const maxD=allDates.reduce((a,b)=>a>b?a:b).slice(0,7);
-        const buildMonths=(from,to)=>{
-          const ms=[];let d=new Date(from+"-01");const e=new Date(to+"-01");
-          while(d<=e){ms.push(d.toISOString().slice(0,7));d=new Date(d.getFullYear(),d.getMonth()+1,1);}
-          return ms;
-        };
-        const allMonthsList=buildMonths(minD,maxD);
-
-        // Build rows - one per contract
-        const rows=realContracts.map(c=>{
-          const tenure=parseFloat(c.tenure_months)||1;
-          const cv=parseFloat(c.contract_value)||0;
-          const mr=Math.round(cv/tenure);
-          const monthValues={};
-          allMonthsList.forEach(m=>{monthValues[m]=isActive(c,m)?mr:null;});
-          const total=allMonthsList.reduce((s,m)=>s+(monthValues[m]||0),0);
-          return{
-            clientName:c.client_name||"—",
-            contractNumber:c.contract_number||"—",
-            contractValue:Math.round(cv),
-            tenureMonths:tenure,
-            startDate:(c.start_date||"—").slice(0,10),
-            endDate:(c.end_date||"—").slice(0,10),
-            status:c.status||"—",
-            monthValues,total
-          };
-        }).filter(r=>r.total>0).sort((a,b)=>a.clientName.localeCompare(b.clientName));
-
-        const colTotals=allMonthsList.map(m=>rows.reduce((s,r)=>s+(r.monthValues[m]||0),0));
-        const grandTotal=rows.reduce((s,r)=>s+r.total,0);
-
-        const TH=({children,align="left"})=><th style={{padding:"7px 10px",textAlign:align,fontSize:11,fontWeight:600,color:"#fff",background:"#1e293b",borderBottom:"1px solid #334155",whiteSpace:"nowrap",position:"sticky",top:0}}>{children}</th>;
-
-        return(
-          <div style={{display:"flex",flexDirection:"column",gap:14}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                <span style={{fontSize:13,color:"#64748b"}}>From:</span>
-                <select value={minD} style={{padding:"6px 10px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:12}} onChange={()=>{}}>
-                  {allMonthsList.map(m=><option key={m} value={m}>{fmtLong(m)}</option>)}
-                </select>
-                <span style={{fontSize:13,color:"#64748b"}}>To:</span>
-                <select value={maxD} style={{padding:"6px 10px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:12}} onChange={()=>{}}>
-                  {allMonthsList.map(m=><option key={m} value={m}>{fmtLong(m)}</option>)}
-                </select>
-              </div>
-              <Btn variant="outline" size="sm" onClick={()=>{
-                const headers=["Client Name","Contract ID","Contract Value","Tenure (Month)","Start Date","End Date","Status",...allMonthsList.map(m=>fmtShort(m)),"Total"];
-                const wsData=[headers];
-                rows.forEach(r=>wsData.push([r.clientName,r.contractNumber,r.contractValue,r.tenureMonths,r.startDate,r.endDate,r.status,...allMonthsList.map(m=>r.monthValues[m]||""),r.total]));
-                wsData.push(["Total","","","","","","",...colTotals,grandTotal]);
-                exportXLSX(wsData,"Contract Revenue Forecast",`contract-forecast-${minD}-to-${maxD}.xlsx`);
-              }}>⬇ Export Excel</Btn>
-            </div>
-            <Card style={{overflow:"hidden"}}>
-              <div style={{padding:"12px 16px",borderBottom:"1px solid #e2e8f0"}}>
-                <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>Contract Revenue Forecast — {fmtLong(minD)} to {fmtLong(maxD)}</p>
-              </div>
-              <div style={{overflowX:"auto",maxHeight:600,overflowY:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                  <thead><tr>
-                    <TH>Client Name</TH>
-                    <TH>Contract ID</TH>
-                    <TH align="right">Contract Value</TH>
-                    <TH align="center">Tenure (Month)</TH>
-                    <TH>Start Date</TH>
-                    <TH>End Date</TH>
-                    <TH align="center">Status</TH>
-                    {allMonthsList.map(m=><TH key={m} align="right">{fmtShort(m)}</TH>)}
-                    <TH align="right">Total</TH>
-                  </tr></thead>
-                  <tbody>
-                    {rows.map((row,i)=>(
-                      <tr key={i} style={{background:i%2===0?"#fff":"#f8fafc"}}>
-                        <td style={{padding:"7px 10px",fontWeight:500,borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.clientName}</td>
-                        <td style={{padding:"7px 10px",fontFamily:"monospace",fontSize:11,borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.contractNumber}</td>
-                        <td style={{padding:"7px 10px",textAlign:"right",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.contractValue.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-                        <td style={{padding:"7px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{row.tenureMonths}</td>
-                        <td style={{padding:"7px 10px",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.startDate}</td>
-                        <td style={{padding:"7px 10px",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>{row.endDate}</td>
-                        <td style={{padding:"7px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
-                          <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:600,background:row.status==="Active"?"#d1fae5":"#f1f5f9",color:row.status==="Active"?"#059669":"#64748b"}}>{row.status}</span>
-                        </td>
-                        {allMonthsList.map(m=>(
-                          <td key={m} style={{padding:"7px 10px",textAlign:"right",borderBottom:"1px solid #f1f5f9",whiteSpace:"nowrap"}}>
-                            {row.monthValues[m]!=null
-                              ?<span style={{color:"#059669",fontWeight:500}}>{row.monthValues[m].toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
-                              :<span style={{color:"#cbd5e1"}}>-</span>}
-                          </td>
-                        ))}
-                        <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,borderBottom:"1px solid #f1f5f9",background:"#f8fafc",whiteSpace:"nowrap"}}>{row.total.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-                      </tr>
-                    ))}
-                    <tr style={{background:"#e2e8f0",fontWeight:700,borderTop:"2px solid #cbd5e1"}}>
-                      <td colSpan={7} style={{padding:"7px 10px"}}>Total</td>
-                      {colTotals.map((t,i)=>(
-                        <td key={i} style={{padding:"7px 10px",textAlign:"right",color:t>0?"#059669":"#94a3b8",whiteSpace:"nowrap"}}>
-                          {t>0?t.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}):"-"}
-                        </td>
-                      ))}
-                      <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:"#059669",whiteSpace:"nowrap"}}>{grandTotal.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          </div>
-        );
-      })()}}
+}
