@@ -1404,7 +1404,20 @@ function ContractsPage(){
             <div><Lbl>Project Name *</Lbl><Inp value={form.project_name||""} onChange={e=>upd("project_name",e.target.value)} placeholder="Enter project name..." required/></div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               <div><Lbl>Contract Value (SAR) *</Lbl><Inp type="number" value={form.contract_value||""} onChange={e=>upd("contract_value",e.target.value)} placeholder="Total value" required/></div>
-              <div><Lbl>Tenure (Months) *</Lbl><Inp type="number" min="1" value={form.tenure_months||""} onChange={e=>handleTenure(e.target.value)} placeholder="e.g. 12" required/></div>
+              <div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                  <Lbl>Tenure (Months) *</Lbl>
+                  {form.tenure_months>0&&(
+                    <span style={{
+                      fontSize:11,fontWeight:700,padding:"2px 10px",borderRadius:999,
+                      ...(getCatFromTenure(form.tenure_months)==="Retainer"?{background:"#dbeafe",color:"#2563eb"}:
+                         getCatFromTenure(form.tenure_months)==="Project"?{background:"#f3e8ff",color:"#6366f1"}:
+                         {background:"#fef9c3",color:"#d97706"})
+                    }}>{getCatFromTenure(form.tenure_months)}</span>
+                  )}
+                </div>
+                <Inp type="number" min="1" value={form.tenure_months||""} onChange={e=>handleTenure(e.target.value)} placeholder="e.g. 12" required/>
+              </div>
             </div>
             {form.contract_value&&form.tenure_months>0&&(
               <div style={{padding:"8px 12px",background:"#fff",borderRadius:8}}>
