@@ -1,6 +1,16 @@
 import React, { useState, useMemo, useCallback, useEffect, useContext, createContext } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend, PieChart, Pie, LineChart, Line } from "recharts";
+import {
+  LayoutDashboard, Users, Building2, FileText, FolderKanban, TrendingUp, Calendar, Receipt, UserCog,
+  Wallet, Coins, BarChart3, ClipboardList, FileCheck,
+  AlertTriangle, TrendingDown, CalendarClock, UserPlus,
+  Search, Pencil, Trash2, Eye, X, Check, ChevronRight,
+  Mail, Phone, Lock, Unlock, PieChart as PieChartIcon, Filter,
+  Clock, Building, Plus, Save, ShieldCheck, AlertCircle, Send,
+  ShieldAlert, ShieldOff, Construction, FileWarning, User,
+  Upload, Download, Paperclip, FileSpreadsheet
+} from "lucide-react";
 
 // ─── SUPABASE CLIENT ──────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://hmvlgesnxaqebfdzizmy.supabase.co";
@@ -104,16 +114,16 @@ function LoginPage(){
               <label style={{display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:6}}>Email address</label>
               <input type="email" value={email} onChange={e=>setEmail(e.target.value)} required placeholder="you@company.com"
                 style={{width:"100%",padding:"11px 14px",border:"1px solid #e2e8f0",borderRadius:10,fontSize:14,color:"#0f172a",outline:"none",boxSizing:"border-box",transition:"border-color .2s"}}
-                onFocus={e=>e.target.style.borderColor="#6366f1"} onBlur={e=>e.target.style.borderColor="#e5e7eb"}/>
+                onFocus={e=>e.target.style.borderColor="#008A57"} onBlur={e=>e.target.style.borderColor="#e5e7eb"}/>
             </div>
             <div>
               <label style={{display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:6}}>Password</label>
               <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required placeholder="••••••••"
                 style={{width:"100%",padding:"11px 14px",border:"1px solid #e2e8f0",borderRadius:10,fontSize:14,color:"#0f172a",outline:"none",boxSizing:"border-box",transition:"border-color .2s"}}
-                onFocus={e=>e.target.style.borderColor="#6366f1"} onBlur={e=>e.target.style.borderColor="#e5e7eb"}/>
+                onFocus={e=>e.target.style.borderColor="#008A57"} onBlur={e=>e.target.style.borderColor="#e5e7eb"}/>
             </div>
             <button type="submit" disabled={loading}
-              style={{padding:"12px",borderRadius:10,border:"none",background:"#6366f1",color:"#000",fontSize:15,fontWeight:700,cursor:loading?"not-allowed":"pointer",opacity:loading?.7:1,marginTop:4,transition:"opacity .2s"}}>
+              style={{padding:"12px",borderRadius:10,border:"none",background:"#008A57",color:"#fff",fontSize:15,fontWeight:700,cursor:loading?"not-allowed":"pointer",opacity:loading?.7:1,marginTop:4,transition:"opacity .2s"}}>
               {loading?"Signing in…":"Sign In →"}
             </button>
           </form>
@@ -146,6 +156,7 @@ class ErrBoundary extends React.Component {
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const HPM = 176;
 const SAR = (v) => `SAR ${(v||0).toLocaleString("en-US",{maximumFractionDigits:0})}`;
+const fmtH = h => Math.round(parseFloat(h)||0).toLocaleString("en-US");
 const currentMonth = "2026-04";
 // ─── HELPER FUNCTIONS ─────────────────────────────────────────────────────────
 const isActive=(c,month)=>{
@@ -170,8 +181,21 @@ const fmtShort=(m)=>{
 const fmtDate=(d)=>{if(!d)return"—";return new Date(d).toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"});};
 const fmtDateShort=(d)=>{if(!d)return"—";return new Date(d).toLocaleDateString("en-US",{month:"short",day:"numeric"});};
 const daysBetween=(end,todayStr)=>{if(!end)return null;const t=todayStr?new Date(todayStr):new Date();return Math.ceil((new Date(end)-t)/(1000*60*60*24));};
-const addMonthsSimple=(dateStr,months)=>{if(!dateStr)return"";const d=new Date(dateStr);d.setMonth(d.getMonth()+months);return d.toISOString().slice(0,10);};
-const calcProfitPct=(total,prev,amount)=>{const t=parseFloat(total)||0,p=parseFloat(prev)||0,a=parseFloat(amount)||0;if(t<=0)return"";return(((t-p-a)/t)*100).toFixed(2);};
+const addMonthsSimple=(dateStr,months)=>{
+    if(!dateStr||!months) return"";
+    const d=new Date(dateStr);
+    const tm=parseInt(months)||0;
+    // Last day of the tenure month: day 0 of month+1 = last day of month
+    const end=new Date(d.getFullYear(),d.getMonth()+tm,0);
+    return end.toISOString().slice(0,10);
+  };
+const calcProfitPct=(total,prev,amount,category,thirdParty)=>{
+  const isRetainer=(category||"").toLowerCase().includes("retainer");
+  const base=isRetainer?(parseFloat(thirdParty)||0):(parseFloat(total)||0);
+  const p=parseFloat(prev)||0,a=parseFloat(amount)||0;
+  if(base<=0) return"";
+  return(((base-p-a)/base)*100).toFixed(2);
+};
 const genContractNum=(tenure,contracts)=>{
   const cat=tenure>=12?"CTR":tenure>=3?"PRJ":"ADH";
   const y=new Date().getFullYear();
@@ -329,7 +353,7 @@ const MC_MONTHS = Array.from({length:12},(_,i)=>{
   return {v,l};
 });
 const EXPENSE_TYPES = ["Freelancer","Production","Vendor","Other"];
-const EXP_TYPE_COLORS = {Freelancer:"#6366f1",Production:"#f59e0b",Vendor:"#6366f1",Other:"#94a3b8"};
+const EXP_TYPE_COLORS = {Freelancer:"#008A57",Production:"#f59e0b",Vendor:"#008A57",Other:"#94a3b8"};
 const MOCK_EXPENSES_INIT = [
   {id:"ex1", expense_number:"EXP-2026-001", request_date:"2026-01-15", contract_id:"ct1", contract_number:"CTR-2026-001", client_name:"SABIC",        contract_category:"Retainer", contract_start_date:"2026-01-01", contract_end_date:"2026-12-31", total_contract_value:480000, contract_notes:"Annual brand retainer.", expense_type:"Vendor",      vendor_name:"Al Madar Print",      department:"Production Department",       amount:18000, previous_requested_total_amount:0,      project_profit_pct:"96.25", bill_number:"INV-2026-001", bill_date:"2026-01-14", item_details:"Large format printing for SABIC campaign",     notes:"Approved by manager", status:"Approved", attachment_url:"", attachment_name:""},
   {id:"ex2", expense_number:"EXP-2026-002", request_date:"2026-01-20", contract_id:"ct2", contract_number:"CTR-2026-002", client_name:"Saudi Aramco",  contract_category:"Retainer", contract_start_date:"2026-01-01", contract_end_date:"2026-05-15", total_contract_value:360000, contract_notes:"",                   expense_type:"Freelancer",  vendor_name:"Ahmad Al-Shammari",    department:"Creative Department",         amount:12000, previous_requested_total_amount:0,      project_profit_pct:"96.67", bill_number:"INV-2026-002", bill_date:"2026-01-19", item_details:"Freelance motion graphics for Aramco brand",   notes:"Motion designer contract", status:"Approved", attachment_url:"", attachment_name:""},
@@ -342,7 +366,7 @@ const MOCK_EXPENSES_INIT = [
 const EMPTY_EXP_FORM = {
   expense_number:"",request_date:new Date().toISOString().slice(0,10),
   contract_id:"",contract_number:"",client_name:"",contract_category:"",
-  contract_start_date:"",contract_end_date:"",total_contract_value:"",contract_notes:"",
+  contract_start_date:"",contract_end_date:"",total_contract_value:"",budget_third_party:"",contract_notes:"",
   expense_type:"",vendor_name:"",amount:"",previous_requested_total_amount:"",
   project_profit_pct:"",department:"",item_details:"",
   bill_number:"",bill_date:"",attachment_url:"",attachment_name:"",notes:"",status:"Draft"
@@ -422,15 +446,15 @@ const MOCK_USERS_INIT = [
   {id:"u7", full_name:"",                   email:"nadia@company.com",      role:"manager", status:"invited", isPending:true,  departments:[]},
 ];
 const NAV=[
-  {id:"Dashboard",        label:"Dashboard",                 icon:"📊"},
-  {id:"Employees",        label:"Employees",                 icon:"👥"},
-  {id:"Clients",          label:"Clients",                   icon:"🏢"},
-  {id:"Contracts",        label:"Contracts",                 icon:"📄"},
-  {id:"Allocations",      label:"Allocations",               icon:"🗂"},
-  {id:"Reports",          label:"Reports",                   icon:"📈"},
-  {id:"MonthlyClose",     label:"Monthly Close",             icon:"📅"},
-  {id:"ContractExpenses", label:"Contract/Project Expenses", icon:"🧾"},
-  {id:"Settings",         label:"System Users",              icon:"👤"},
+  {id:"Dashboard",        label:"Dashboard",                 Icon:LayoutDashboard},
+  {id:"Employees",        label:"Employees",                 Icon:Users},
+  {id:"Clients",          label:"Clients",                   Icon:Building2},
+  {id:"Contracts",        label:"Contracts",                 Icon:FileText},
+  {id:"Allocations",      label:"Allocations",               Icon:FolderKanban},
+  {id:"Reports",          label:"Reports",                   Icon:TrendingUp},
+  {id:"MonthlyClose",     label:"Monthly Close",             Icon:Calendar},
+  {id:"ContractExpenses", label:"Contract/Project Expenses", Icon:Receipt},
+  {id:"Settings",         label:"System Users",              Icon:UserCog},
 ];
 const PAGE_PERM_KEY = {
   Dashboard:         "dashboard",
@@ -449,7 +473,7 @@ const PAGE_PERM_KEY = {
 function Card({children,style={}}){
   return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,boxShadow:"0 1px 3px rgba(0,0,0,.05)",...style}}>{children}</div>;
 }
-function Bdg({children,bg="#1E1E1E",color="#B3B3B3"}){
+function Bdg({children,bg="#e2e8f0",color="#0f172a"}){
   return <span style={{display:"inline-flex",alignItems:"center",padding:"3px 9px",borderRadius:999,background:bg,color,fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>;
 }
 function PBar({val,color}){
@@ -461,7 +485,7 @@ function PBar({val,color}){
 }
 function Avatar({name,size=36,style={}}){
   const initials=(name||"?").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase();
-  return <div style={{width:size,height:size,borderRadius:Math.round(size*.25),background:"linear-gradient(135deg,#1DC99A,#0F766E)",display:"flex",alignItems:"center",justifyContent:"center",color:"#000",fontSize:Math.round(size*.35),fontWeight:700,flexShrink:0,...style}}>{initials}</div>;
+  return <div style={{width:size,height:size,borderRadius:Math.round(size*.25),background:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:Math.round(size*.35),fontWeight:700,flexShrink:0,...style}}>{initials}</div>;
 }
 function Btn({children,onClick,variant="primary",size="md",type="button",disabled,style={}}){
   const sz={sm:{padding:"5px 12px",fontSize:12},md:{padding:"8px 16px",fontSize:13}};
@@ -480,7 +504,7 @@ function Btn({children,onClick,variant="primary",size="md",type="button",disable
 function Inp({value,onChange,placeholder,type="text",required,min,max,style={}}){
   return <input value={value} onChange={onChange} placeholder={placeholder} type={type} required={required} min={min} max={max}
     style={{width:"100%",padding:"9px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,color:"#0f172a",background:"#fff",outline:"none",boxSizing:"border-box",...style}}
-    onFocus={e=>e.target.style.borderColor="#6366f1"} onBlur={e=>e.target.style.borderColor="#e2e8f0"}
+    onFocus={e=>e.target.style.borderColor="#008A57"} onBlur={e=>e.target.style.borderColor="#e2e8f0"}
   />;
 }
 
@@ -510,7 +534,7 @@ function Modal({open,onClose,title,children}){
 }
 function SortTh({k,sk,sd,onSort,children,align="left"}){
   const active=sk===k;
-  return <th onClick={()=>onSort(k)} style={{padding:"9px 13px",textAlign:align,fontSize:11,fontWeight:600,color:active?"#6366f1":"#64748b",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",cursor:"pointer",userSelect:"none",whiteSpace:"nowrap"}}>
+  return <th onClick={()=>onSort(k)} style={{padding:"9px 13px",textAlign:align,fontSize:11,fontWeight:600,color:active?"#008A57":"#64748b",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",cursor:"pointer",userSelect:"none",whiteSpace:"nowrap"}}>
     {children}{active?sd==="asc"?" ↑":" ↓":""}
   </th>;
 }
@@ -566,11 +590,13 @@ function DashboardPage(){
     const tc=cp.reduce((s,c)=>s+c.rc,0);
     const tp=tr-tc,am=tr>0?(tp/tr)*100:0,lm=cp.filter(c=>c.mp<20&&c.mp>=0).length;
     const allAc=dbContracts.filter(c=>c.st==="Active"||c.status==="Active");
-    const tcv=allAc.reduce((s,c)=>s+(parseFloat(c.contract_value)||parseFloat(c.cv)||0),0);
+    // Total Contract Value = sum of all active contract values - total already closed (snapshotted) revenue
+    const totalClosed=dbSnapshots.reduce((s,sn)=>s+(parseFloat(sn.monthly_retainer)||0),0);
+    const tcv=allAc.reduce((s,c)=>s+(parseFloat(c.contract_value)||parseFloat(c.cv)||0),0)-totalClosed;
     const cvd=ac.map(c=>{const x=cp.find(p=>p.id===c.cid);return{name:c.cn.length>10?c.cn.slice(0,10)+"…":c.cn,monthly:Math.round(c.cv/c.tm),cost:Math.round(x?.rc||0),cid:c.cid};});
     const bld=(cs,as2)=>{
-      const d={"Client Servicing":{b:0,c:0},"Production":{b:0,c:0},"Creative":{b:0,c:0},"Planning":{b:0,c:0}};
-      cs.forEach(c=>{const f=c.tm>0?1/c.tm:0;d["Client Servicing"].b+=(c.bcs||0)*f;d["Production"].b+=(c.bp||0)*f;d["Creative"].b+=(c.bc||0)*f;d["Planning"].b+=(c.bpl||0)*f;});
+      const d={"Client Servicing":{b:0,c:0},"Production":{b:0,c:0},"Creative":{b:0,c:0},"Planning":{b:0,c:0},"3rd Party":{b:0,c:0}};
+      cs.forEach(c=>{const f=c.tm>0?1/c.tm:0;d["Client Servicing"].b+=(c.bcs||0)*f;d["Production"].b+=(c.bp||0)*f;d["Creative"].b+=(c.bc||0)*f;d["Planning"].b+=(c.bpl||0)*f;d["3rd Party"].b+=(parseFloat(c.budget_third_party)||0)*f;});
       as2.forEach(a=>{const e=em[a.eid];if(e){const cost=e.hr*a.h,dep=e.department||"";if(dep.includes("Client Servicing"))d["Client Servicing"].c+=cost;else if(dep.includes("Production"))d["Production"].c+=cost;else if(dep.includes("Creative"))d["Creative"].c+=cost;else if(dep.includes("Planning"))d["Planning"].c+=cost;}});
       return Object.entries(d).map(([n,v])=>({name:n,budget:Math.round(v.b),cost:Math.round(v.c)}));
     };
@@ -593,7 +619,7 @@ function DashboardPage(){
   const rd=rc==="all"?C.cvd:C.cvd.filter(d=>d.cid===rc);
   const cf=C.eu.filter(e=>capDept==="all"||e.department===capDept).sort((a,b)=>b.u-a.u);
 
-  const KPI=({label,value,sub,emoji,dark,iBg,iC,bg,bd})=>(
+  const KPI=({label,value,sub,Icon,dark,iBg,iC,bg,bd})=>(
     <Card style={{background:dark?"#0f172a":bg||"#fff",borderColor:bd||"#e2e8f0",padding:20}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
         <div>
@@ -601,7 +627,7 @@ function DashboardPage(){
           <p style={{fontSize:18,fontWeight:800,color:dark?"#fff":iC||"#0f172a",margin:"5px 0 3px"}}>{value}</p>
           <p style={{fontSize:10,color:dark?"#94a3b8":"#64748b",margin:0}}>{sub}</p>
         </div>
-        <div style={{background:dark?"#1e293b":iBg||"#f1f5f9",borderRadius:10,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>{emoji}</div>
+        <div style={{background:dark?"#1e293b":iBg||"#f1f5f9",borderRadius:10,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:dark?"#6ee7b7":iC||"#64748b"}}>{Icon&&<Icon size={18} strokeWidth={1.75}/>}</div>
       </div>
     </Card>
   );
@@ -612,26 +638,26 @@ function DashboardPage(){
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
         <div><h1 style={{fontSize:26,fontWeight:800,color:"#0f172a",margin:0}}>Dashboard</h1><p style={{fontSize:13,color:"#64748b",marginTop:3}}>Overview of finance and team metrics</p></div>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <span style={{fontSize:13,color:"#64748b"}}>📅</span>
+          <Calendar size={14} strokeWidth={1.75} style={{color:"#64748b",flexShrink:0}}/>
           <Sel value={month} onChange={setMonth} options={MONTHS.map(m=>({v:m,l:fmtLong(m)}))} style={{width:160}}/>
         </div>
       </div>
 
       {/* Tabs */}
       <div style={{display:"flex",gap:4,background:"#f1f5f9",borderRadius:10,padding:4,maxWidth:380}}>
-        {[["finance","📈 Financial Analysis"],["team","👥 Team & Renewals"]].map(([v,l])=>(
-          <button key={v} onClick={()=>setFinTab(v)} style={{flex:1,padding:"7px 10px",borderRadius:8,border:"none",background:finTab===v?"#fff":"transparent",fontWeight:finTab===v?700:500,fontSize:12,color:finTab===v?"#0f172a":"#64748b",cursor:"pointer",boxShadow:finTab===v?"0 1px 3px rgba(0,0,0,.1)":"none"}}>{l}</button>
+        {[["finance",TrendingUp,"Financial Analysis"],["team",Users,"Team & Renewals"]].map(([v,Ic,l])=>(
+          <button key={v} onClick={()=>setFinTab(v)} style={{flex:1,padding:"7px 10px",borderRadius:8,border:"none",background:finTab===v?"#fff":"transparent",fontWeight:finTab===v?700:500,fontSize:12,color:finTab===v?"#0f172a":"#64748b",cursor:"pointer",boxShadow:finTab===v?"0 1px 3px rgba(0,0,0,.1)":"none",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6}}><Ic size={14} strokeWidth={1.75}/>{l}</button>
         ))}
       </div>
 
       {finTab==="finance"&&(
         <div style={{display:"flex",flexDirection:"column",gap:18}}>
           <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10}}>
-            <KPI dark label="Total Revenue"        value={SAR(C.tr)}  sub="Monthly retainers"    emoji="💵"/>
-            <KPI label="Resource Cost"       value={SAR(C.tc)}  sub="Employee costs"       emoji="💰" iBg="#fef3c7" iC="#d97706"/>
-            <KPI label="Total Contract Value" value={SAR(C.tcv)} sub="All active contracts"  emoji="📋" iBg="#f3e8ff" iC="#6366f1"/>
-            <KPI label="Gross Profit"        value={SAR(C.tp)}  sub={`${C.am.toFixed(1)}% margin`} emoji="📊" iBg={C.tp>=0?"#d1fae5":"#fee2e2"} iC={C.tp>=0?"#10b981":"#EF4444"} bg={C.tp>=0?"#f0fdf4":"#fff5f5"} bd={C.tp>=0?"#a7f3d0":"#fecaca"}/>
-            <KPI label="Active Contracts"    value={C.acnt}     sub={`${C.lm} low margin`}  emoji="📄" iBg="#0d1f1a" iC="#6366f1"/>
+            <KPI dark label="Total Revenue"        value={SAR(C.tr)}  sub="Monthly retainers"    Icon={Wallet}/>
+            <KPI label="Resource Cost"       value={SAR(C.tc)}  sub="Employee costs"       Icon={Coins} iBg="#fef3c7" iC="#d97706"/>
+            <KPI label="Gross Profit"        value={SAR(C.tp)}  sub={`${C.am.toFixed(1)}% margin`} Icon={BarChart3} iBg={C.tp>=0?"#d1fae5":"#fee2e2"} iC={C.tp>=0?"#10b981":"#EF4444"} bg={C.tp>=0?"#f0fdf4":"#fff5f5"} bd={C.tp>=0?"#a7f3d0":"#fecaca"}/>
+            <KPI label="Total Contract Value" value={SAR(C.tcv)} sub="Remaining contract value"  Icon={ClipboardList} iBg="#e6f7f0" iC="#008A57"/>
+            <KPI label="Active Contracts"    value={C.acnt}     sub={`${C.lm} low margin`}  Icon={FileText} iBg="#e6f7f0" iC="#008A57"/>
           </div>
           <Card style={{padding:20}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8,marginBottom:12}}>
@@ -645,8 +671,8 @@ function DashboardPage(){
                 <YAxis tick={{fontSize:10,fill:"#64748b"}} tickFormatter={v=>`${v/1000}K`}/>
                 <Tooltip formatter={v=>SAR(v)} contentStyle={{borderRadius:8,border:"none",boxShadow:"0 4px 12px rgba(0,0,0,.1)"}}/>
                 <Legend wrapperStyle={{fontSize:11,color:"#64748b"}}/>
-                <Bar dataKey="retainer" name="Contract Value" fill="#6366f1" radius={[4,4,0,0]}/>
-                <Bar dataKey="cost"     name="Resource Cost"  fill="#f59e0b" radius={[4,4,0,0]}/>
+                <Bar dataKey="retainer" name="Contract Value" fill="#008A57" radius={[4,4,0,0]}/>
+                <Bar dataKey="cost"     name="Resource Cost"  fill="#475569" radius={[4,4,0,0]}/>
               </BarChart>
             </ResponsiveContainer>
           </Card>
@@ -663,8 +689,8 @@ function DashboardPage(){
                   <YAxis tick={{fontSize:9,fill:"#64748b"}} tickFormatter={v=>`${v/1000}K`}/>
                   <Tooltip formatter={v=>SAR(v)} contentStyle={{borderRadius:8,border:"none"}}/>
                   <Legend wrapperStyle={{fontSize:10,color:"#64748b"}}/>
-                  <Bar dataKey="monthly" name="Monthly Retainer" fill="#6366f1" radius={[4,4,0,0]}/>
-                  <Bar dataKey="cost"    name="Monthly Cost"     fill="#f59e0b" radius={[4,4,0,0]}/>
+                  <Bar dataKey="monthly" name="Monthly Retainer" fill="#008A57" radius={[4,4,0,0]}/>
+                  <Bar dataKey="cost"    name="Monthly Cost"     fill="#475569" radius={[4,4,0,0]}/>
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -680,8 +706,8 @@ function DashboardPage(){
                   <YAxis tick={{fontSize:9,fill:"#64748b"}} tickFormatter={v=>`${v/1000}K`}/>
                   <Tooltip formatter={v=>SAR(v)} contentStyle={{borderRadius:8,border:"none"}}/>
                   <Legend wrapperStyle={{fontSize:10,color:"#64748b"}}/>
-                  <Bar dataKey="budget" name="Budget"      fill="#6366f1" radius={[4,4,0,0]}/>
-                  <Bar dataKey="cost"   name="Actual Cost" fill="#f59e0b" radius={[4,4,0,0]}/>
+                  <Bar dataKey="budget" name="Budget"      fill="#008A57" radius={[4,4,0,0]}/>
+                  <Bar dataKey="cost"   name="Actual Cost" fill="#475569" radius={[4,4,0,0]}/>
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -705,10 +731,10 @@ function DashboardPage(){
       {finTab==="team"&&(
         <div style={{display:"flex",flexDirection:"column",gap:18}}>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
-            <KPI dark label="Active Employees" value={dbEmployees.filter(e=>e.status==="Active").length} sub="Team members" emoji="👥"/>
-            <KPI label="Over-utilized"  value={C.over.length} sub=">160 hrs/month" emoji="⚠️" iBg={C.over.length>0?"#fee2e2":"#f1f5f9"} iC={C.over.length>0?"#EF4444":"#0f172a"} bg={C.over.length>0?"#1a0808":"#161616"} bd={C.over.length>0?"#EF444444":"#262626"}/>
-            <KPI label="Under-utilized" value={C.under.length} sub="<70% capacity"  emoji="📉" iBg={C.under.length>0?"#fef9c3":"#f1f5f9"} iC={C.under.length>0?"#d97706":"#0f172a"} bg={C.under.length>0?"#1a1000":"#161616"} bd={C.under.length>0?"#F59E0B44":"#262626"}/>
-            <KPI label="Renewals"        value={C.ren.length}   sub="Within 60 days" emoji="📅" iBg="#0d1f1a" iC="#6366f1" bg={C.ren.length>0?"#0d1f1a":"#161616"} bd={C.ren.length>0?"#1DC99A44":"#262626"}/>
+            <KPI dark label="Active Employees" value={dbEmployees.filter(e=>e.status==="Active").length} sub="Team members" Icon={Users}/>
+            <KPI label="Over-utilized"  value={C.over.length} sub=">160 hrs/month" Icon={AlertTriangle} iBg={C.over.length>0?"#fee2e2":"#f1f5f9"} iC={C.over.length>0?"#EF4444":"#0f172a"} bg={C.over.length>0?"#fef2f2":"#fff"} bd={C.over.length>0?"#fecaca":"#e2e8f0"}/>
+            <KPI label="Under-utilized" value={C.under.length} sub="<70% capacity"  Icon={TrendingDown} iBg={C.under.length>0?"#fef9c3":"#f1f5f9"} iC={C.under.length>0?"#d97706":"#0f172a"} bg={C.under.length>0?"#fffbeb":"#fff"} bd={C.under.length>0?"#fde68a":"#e2e8f0"}/>
+            <KPI label="Renewals"        value={C.ren.length}   sub="Within 60 days" Icon={CalendarClock} iBg="#e6f7f0" iC="#008A57" bg={C.ren.length>0?"#f0fdf4":"#fff"} bd={C.ren.length>0?"#a7f3d0":"#e2e8f0"}/>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:14}}>
             <Card style={{padding:18}}>
@@ -719,14 +745,14 @@ function DashboardPage(){
                   <XAxis type="number" domain={[0,HPM]} tick={{fontSize:10,fill:"#64748b"}} tickFormatter={v=>`${v}h`}/>
                   <YAxis dataKey="name" type="category" tick={{fontSize:10,fill:"#64748b"}} width={42}/>
                   <Tooltip formatter={(v,n)=>[`${v} hrs`,n==="hours"?"Allocated":"Available"]} contentStyle={{borderRadius:8,border:"none"}}/>
-                  <Bar dataKey="hours" stackId="a" name="Allocated">{C.chart.slice(0,8).map((e,i)=><Cell key={i} fill={e.u>100?"#ef4444":e.u>=70?"#6366f1":"#f59e0b"}/>)}</Bar>
+                  <Bar dataKey="hours" stackId="a" name="Allocated">{C.chart.slice(0,8).map((e,i)=><Cell key={i} fill={e.u>100?"#ef4444":e.u>=70?"#008A57":"#f59e0b"}/>)}</Bar>
                   <Bar dataKey="available" stackId="a" fill="#e2e8f0" name="Available"/>
                 </BarChart>
               </ResponsiveContainer>
             </Card>
             <Card style={{padding:18}}>
               <p style={{margin:"0 0 10px",fontWeight:700,fontSize:13,color:"#0f172a"}}>Contract Renewals</p>
-              {C.ren.length===0?(<div style={{textAlign:"center",padding:"20px 0",color:"#64748b"}}><div style={{fontSize:28,marginBottom:6}}>📅</div><p style={{fontSize:12}}>No renewals in 60 days</p></div>):(
+              {C.ren.length===0?(<div style={{textAlign:"center",padding:"20px 0",color:"#64748b"}}><CalendarClock size={28} strokeWidth={1.5} style={{margin:"0 auto 6px",display:"block",color:"#94a3b8"}}/><p style={{fontSize:12}}>No renewals in 60 days</p></div>):(
                 <div style={{display:"flex",flexDirection:"column",gap:7}}>
                   {C.ren.slice(0,4).map(c=>{const d=diffDays(c.ed),urg=d<=7,warn=d<=30&&!urg;return(<div key={c.id} style={{padding:10,borderRadius:9,border:`1px solid ${urg?"#fecaca":warn?"#fde68a":"#e2e8f0"}`,background:"#fff",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <div><p style={{margin:0,fontWeight:600,fontSize:12,color:"#0f172a"}}>{c.cn}</p><p style={{margin:"1px 0 0",fontSize:10,color:"#64748b"}}>{fmtDate(c.ed)}</p></div>
@@ -747,9 +773,9 @@ function DashboardPage(){
                   <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:5}}>
                     <div style={{width:22,height:22,borderRadius:6,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:ov?"#EF4444":un?"#d97706":"#10b981",flexShrink:0}}>{emp.name.slice(0,2).toUpperCase()}</div>
                     <p style={{margin:0,fontSize:10,fontWeight:600,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{emp.name.split(" ")[0]}</p>
-                    {ov&&<span style={{fontSize:9}}>⚠️</span>}
+                    {ov&&<AlertTriangle size={10} strokeWidth={2} style={{color:"#ef4444",flexShrink:0}}/>}
                   </div>
-                  <PBar val={emp.u} color={ov?"#ef4444":un?"#f59e0b":"#6366f1"}/>
+                  <PBar val={emp.u} color={ov?"#ef4444":un?"#f59e0b":"#008A57"}/>
                   <div style={{display:"flex",justifyContent:"space-between"}}>
                     <span style={{fontSize:10,fontWeight:700,color:ov?"#EF4444":un?"#d97706":"#10b981"}}>{Math.min(emp.u,999).toFixed(0)}%</span>
                     <span style={{fontSize:9,color:"#64748b"}}>{emp.h}h</span>
@@ -793,6 +819,7 @@ function EmployeesPage(){
   const dbAdd=async p=>{
     const{data,error}=await sb.from('employees').insert([{
       name:p.name,designation:p.designation||"",department:p.department||"",
+      location:p.location||null,
       monthly_cost:parseFloat(p.mc)||0,email:p.email||"",status:p.status||"Active",
       start_date:p.start||null,profile_picture_url:p.profile_picture_url||null
     }]).select().single();
@@ -802,6 +829,7 @@ function EmployeesPage(){
   const dbUpdate=async(id,p)=>{
     const{data,error}=await sb.from('employees').update({
       name:p.name,designation:p.designation||"",department:p.department||"",
+      location:p.location||null,
       monthly_cost:parseFloat(p.mc)||0,email:p.email||"",status:p.status||"Active",
       start_date:p.start||null,inactive_effective_month:p.inactive_effective_month||null,
       profile_picture_url:p.profile_picture_url||null
@@ -850,17 +878,17 @@ function EmployeesPage(){
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
         <div><h1 style={{fontSize:26,fontWeight:800,color:"#0f172a",margin:0}}>Employees</h1><p style={{fontSize:13,color:"#64748b",marginTop:3}}>Manage your team members and their costs</p></div>
         <div style={{display:"flex",gap:8}}>
-          <Btn variant="outline">⬆ Import</Btn>
-          <Btn variant="primary" onClick={openAdd}>＋ Add Employee</Btn>
+          <Btn variant="outline" style={{gap:6}}><Upload size={13} strokeWidth={1.75}/>Import</Btn>
+          <Btn variant="primary" onClick={openAdd} style={{gap:6}}><Plus size={14} strokeWidth={2}/>Add Employee</Btn>
         </div>
       </div>
       <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
         <div style={{position:"relative",flex:1,minWidth:180}}>
-          <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#64748b",fontSize:13}}>🔍</span>
+          <Search size={14} strokeWidth={1.75} style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#64748b"}}/>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search employees..." style={{width:"100%",padding:"8px 12px 8px 30px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,outline:"none",background:"#fff",boxSizing:"border-box"}}/>
         </div>
-        <Sel value={locF} onChange={setLocF} options={[{v:"all",l:"All Locations"},{v:"Jeddah",l:"Jeddah"},{v:"Riyadh",l:"Riyadh"},{v:"Remote",l:"Remote"}]} style={{width:150}}/>
-        <Btn variant="outline">⬇ Export</Btn>
+        <Sel value={locF} onChange={setLocF} options={[{v:"all",l:"All Locations"},{v:"Jeddah",l:"Jeddah"},{v:"Riyadh",l:"Riyadh"},{v:"Cairo",l:"Cairo"},{v:"Remote",l:"Remote"}]} style={{width:150}}/>
+        <Btn variant="outline" style={{gap:6}}><Download size={13} strokeWidth={1.75}/>Export</Btn>
       </div>
       <Card style={{overflow:"hidden"}}>
         <div style={{overflowX:"auto"}}>
@@ -882,7 +910,7 @@ function EmployeesPage(){
                 return(<tr key={emp.id} style={{borderBottom:"1px solid #f1f5f9",background:idx%2===0?"#fff":"#fafafa"}}>
                   <td style={{padding:"11px 13px"}}><div style={{display:"flex",alignItems:"center",gap:10}}><Avatar name={emp.name}/><div><p style={{margin:0,fontWeight:600,fontSize:13,color:"#0f172a"}}>{emp.name}</p><p style={{margin:"1px 0 0",fontSize:11,color:"#64748b"}}>{emp.designation}</p></div></div></td>
                   <td style={{padding:"11px 13px"}}><Bdg>{emp.department?.replace(" Department","")}</Bdg></td>
-                  <td style={{padding:"11px 13px",fontSize:13,color:"#475569"}}>📍 {emp.location}</td>
+                  <td style={{padding:"11px 13px",fontSize:13,color:"#475569"}}>{emp.location||"—"}</td>
                   <td style={{padding:"11px 13px",textAlign:"right",fontWeight:600,fontSize:13,color:"#0f172a"}}>{SAR(emp.mc)}</td>
                   <td style={{padding:"11px 13px",textAlign:"right",fontSize:13,color:"#64748b"}}>SAR {hr.toFixed(0)}/hr</td>
                   <td style={{padding:"11px 13px",textAlign:"center"}}>
@@ -891,7 +919,7 @@ function EmployeesPage(){
                       {emp.status==="Inactive"&&emp.inactive_effective_month&&<span style={{fontSize:10,color:"#64748b"}}>from {emp.inactive_effective_month}</span>}
                     </div>
                   </td>
-                  <td style={{padding:"11px 13px",textAlign:"right"}}><div style={{display:"flex",justifyContent:"flex-end",gap:4}}><Btn variant="ghost" size="sm" onClick={()=>openEdit(emp)}>✏️</Btn><Btn variant="danger" size="sm" onClick={()=>del(emp.id)}>🗑</Btn></div></td>
+                  <td style={{padding:"11px 13px",textAlign:"right"}}><div style={{display:"flex",justifyContent:"flex-end",gap:4}}><Btn variant="ghost" size="sm" onClick={()=>openEdit(emp)}><Pencil size={14} strokeWidth={1.75}/></Btn><Btn variant="danger" size="sm" onClick={()=>del(emp.id)}><Trash2 size={14} strokeWidth={1.75}/></Btn></div></td>
                 </tr>);
               })}
               {sorted.length>0&&<tr style={{background:"#f1f5f9",borderTop:"2px solid #cbd5e1"}}>
@@ -901,7 +929,7 @@ function EmployeesPage(){
               </tr>}
             </tbody>
           </table>
-          {sorted.length===0&&<div style={{textAlign:"center",padding:"40px",color:"#64748b"}}><div style={{fontSize:36,marginBottom:10}}>👤</div><p style={{fontSize:14}}>No employees found</p></div>}
+          {sorted.length===0&&<div style={{textAlign:"center",padding:"40px",color:"#64748b"}}><User size={36} strokeWidth={1.25} style={{margin:"0 auto 10px",display:"block",color:"#cbd5e1"}}/><p style={{fontSize:14}}>No employees found</p></div>}
         </div>
       </Card>
 
@@ -912,7 +940,7 @@ function EmployeesPage(){
           <div><Lbl>Designation *</Lbl><Inp value={form.designation} onChange={e=>upd("designation",e.target.value)} placeholder="Job title" required/></div>
           <div><Lbl>Department *</Lbl><Sel value={form.department} onChange={v=>upd("department",v)} options={[{v:"",l:"Select department"},...DEPTS.map(d=>({v:d,l:d}))]} style={{}}/></div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <div><Lbl>Location *</Lbl><Sel value={form.location} onChange={v=>upd("location",v)} options={["Jeddah","Riyadh","Remote"].map(l=>({v:l,l}))}/></div>
+            <div><Lbl>Location *</Lbl><Sel value={form.location} onChange={v=>upd("location",v)} options={["Jeddah","Riyadh","Cairo","Remote"].map(l=>({v:l,l}))}/></div>
             <div><Lbl>Status</Lbl><Sel value={form.status} onChange={v=>upd("status",v)} options={["Active","Inactive","On Leave"].map(s=>({v:s,l:s}))}/></div>
           </div>
           <div><Lbl>Monthly Cost (SAR) *</Lbl><Inp type="number" value={form.mc} onChange={e=>upd("mc",parseFloat(e.target.value))} placeholder="15000" required/></div>
@@ -940,9 +968,17 @@ function EmployeesPage(){
 function ClientsPage(){
   const {sb}=useAuth();
   const [clients,setClients]=useState([]);
+  const [contracts,setContracts]=useState([]);
   const [loading,setLoading]=useState(true);
   useEffect(()=>{
-    sb.from('clients').select('*').order('name').then(({data})=>{if(data)setClients(data);setLoading(false);});
+    Promise.all([
+      sb.from('clients').select('*').order('name'),
+      sb.from('contracts').select('id,client_id,contract_value,tenure_months,status,contract_category').eq('status','Active'),
+    ]).then(([{data:cl},{data:ct}])=>{
+      if(cl) setClients(cl);
+      if(ct) setContracts(ct);
+      setLoading(false);
+    });
   },[sb]);
   const dbAdd=async p=>{
     const{data,error}=await sb.from('clients').insert([{
@@ -992,8 +1028,8 @@ function ClientsPage(){
   const del=id=>{if(window.confirm("Delete this client?"))dbDelete(id);};
   const sort=k=>{if(sk===k)setSd(d=>d==="asc"?"desc":"asc");else{setSk(k);setSd("asc");}};
 
-  // Link to mock contracts by client id
-  const getContract=cid=>CONTRACTS.find(c=>c.cid===cid&&c.st==="Active");
+  // Link to real contracts by client_id
+  const getContract=cid=>contracts.find(c=>c.client_id===cid&&c.status==="Active");
 
   const filtered=useMemo(()=>clients.filter(c=>{
     const ms=!search||c.name.toLowerCase().includes(search.toLowerCase())||c.industry.toLowerCase().includes(search.toLowerCase());
@@ -1007,7 +1043,7 @@ function ClientsPage(){
 
   const statusStyle=s=>({
     Active:  {bg:"#d1fae5",color:"#10b981"},
-    Prospect:{bg:"#dbeafe",color:"#6366f1"},
+    Prospect:{bg:"#dbeafe",color:"#008A57"},
     Inactive:{bg:"#f1f5f9",color:"#64748b"},
     Churned: {bg:"#fee2e2",color:"#EF4444"},
   }[s]||{bg:"#f1f5f9",color:"#64748b"});
@@ -1020,17 +1056,17 @@ function ClientsPage(){
           <h1 style={{fontSize:26,fontWeight:800,color:"#0f172a",margin:0}}>Clients</h1>
           <p style={{fontSize:13,color:"#64748b",marginTop:3}}>Manage your client portfolio</p>
         </div>
-        <Btn variant="primary" onClick={openAdd}>＋ Add Client</Btn>
+        <Btn variant="primary" onClick={openAdd} style={{gap:6}}><Plus size={14} strokeWidth={2}/>Add Client</Btn>
       </div>
 
       {/* Filters */}
       <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
         <div style={{position:"relative",flex:1,minWidth:180}}>
-          <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#64748b",fontSize:13}}>🔍</span>
+          <Search size={14} strokeWidth={1.75} style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#64748b"}}/>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search clients..." style={{width:"100%",padding:"8px 12px 8px 30px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,outline:"none",background:"#fff",boxSizing:"border-box"}}/>
         </div>
         <Sel value={statusF} onChange={setStatusF} options={[{v:"all",l:"All Status"},{v:"Active",l:"Active"},{v:"Prospect",l:"Prospect"},{v:"Inactive",l:"Inactive"},{v:"Churned",l:"Churned"}]} style={{width:150}}/>
-        <Btn variant="outline">⬇ Export</Btn>
+        <Btn variant="outline" style={{gap:6}}><Download size={13} strokeWidth={1.75}/>Export</Btn>
       </div>
 
       {/* Table */}
@@ -1055,7 +1091,7 @@ function ClientsPage(){
                     {/* Client name + industry */}
                     <td style={{padding:"12px 13px"}}>
                       <div style={{display:"flex",alignItems:"center",gap:10}}>
-                        <div style={{width:40,height:40,borderRadius:10,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:15,flexShrink:0}}>
+                        <div style={{width:40,height:40,borderRadius:10,background:"linear-gradient(135deg,#008A57,#0EA5E9)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:15,flexShrink:0}}>
                           {client.name.charAt(0)}
                         </div>
                         <div>
@@ -1069,16 +1105,16 @@ function ClientsPage(){
                       <div style={{display:"flex",flexDirection:"column",gap:2}}>
                         {client.contact_person&&<p style={{margin:0,fontSize:13,fontWeight:500,color:"#0f172a"}}>{client.contact_person}</p>}
                         {client.contact_person_designation&&<p style={{margin:0,fontSize:11,color:"#64748b"}}>{client.contact_person_designation}</p>}
-                        {client.contact_email&&<p style={{margin:"2px 0 0",fontSize:11,color:"#64748b",display:"flex",alignItems:"center",gap:3}}>✉ {client.contact_email}</p>}
-                        {client.contact_phone&&<p style={{margin:0,fontSize:11,color:"#64748b",display:"flex",alignItems:"center",gap:3}}>📞 {client.contact_phone}</p>}
+                        {client.contact_email&&<p style={{margin:"2px 0 0",fontSize:11,color:"#64748b",display:"flex",alignItems:"center",gap:3}}><Mail size={11} strokeWidth={1.75} style={{flexShrink:0}}/>{client.contact_email}</p>}
+                        {client.contact_phone&&<p style={{margin:0,fontSize:11,color:"#64748b",display:"flex",alignItems:"center",gap:3}}><Phone size={11} strokeWidth={1.75} style={{flexShrink:0}}/>{client.contact_phone}</p>}
                       </div>
                     </td>
                     {/* Active contract */}
                     <td style={{padding:"12px 13px"}}>
                       {contract?(
                         <div>
-                          <p style={{margin:0,fontWeight:600,fontSize:13,color:"#0f172a"}}>SAR {Math.round(contract.cv/contract.tm).toLocaleString("en-US")}/mo</p>
-                          <p style={{margin:"1px 0 0",fontSize:11,color:"#64748b"}}>{contract.tm} months</p>
+                          <p style={{margin:0,fontWeight:600,fontSize:13,color:"#0f172a"}}>SAR {Math.round(contract.contract_value/contract.tenure_months).toLocaleString("en-US")}/mo</p>
+                          <p style={{margin:"1px 0 0",fontSize:11,color:"#64748b"}}>{contract.tenure_months} months</p>
                         </div>
                       ):(
                         <span style={{fontSize:12,color:"#cbd5e1"}}>No active contract</span>
@@ -1091,8 +1127,8 @@ function ClientsPage(){
                     {/* Actions */}
                     <td style={{padding:"12px 13px",textAlign:"right"}}>
                       <div style={{display:"flex",justifyContent:"flex-end",gap:4}}>
-                        <Btn variant="ghost" size="sm" onClick={()=>openEdit(client)}>✏️</Btn>
-                        <Btn variant="danger" size="sm" onClick={()=>del(client.id)}>🗑</Btn>
+                        <Btn variant="ghost" size="sm" onClick={()=>openEdit(client)}><Pencil size={14} strokeWidth={1.75}/></Btn>
+                        <Btn variant="danger" size="sm" onClick={()=>del(client.id)}><Trash2 size={14} strokeWidth={1.75}/></Btn>
                       </div>
                     </td>
                   </tr>
@@ -1102,7 +1138,7 @@ function ClientsPage(){
           </table>
           {sorted.length===0&&(
             <div style={{textAlign:"center",padding:"48px 24px",color:"#64748b"}}>
-              <div style={{fontSize:40,marginBottom:12}}>🏢</div>
+              <Building2 size={40} strokeWidth={1.25} style={{margin:"0 auto 12px",display:"block",color:"#cbd5e1"}}/>
               <p style={{fontSize:14}}>No clients found</p>
             </div>
           )}
@@ -1155,7 +1191,7 @@ function ContractSearchSelect({contracts,value,onChange}){
     return ms&&(catF==="all"||(c.contract_category||"Retainer")===catF);
   });
   const selected=contracts.find(c=>c.id===value);
-  const catColors={all:{a:"#0f172a",b:"#f1f5f9"},Retainer:{a:"#1d4ed8",b:"#dbeafe"},Project:{a:"#6d28d9",b:"#f3e8ff"},Adhoc:{a:"#d97706",b:"#fef9c3"}};
+  const catColors={all:{a:"#0f172a",b:"#f1f5f9"},Retainer:{a:"#1d4ed8",b:"#dbeafe"},Project:{a:"#047857",b:"#e6f7f0"},Adhoc:{a:"#d97706",b:"#fef9c3"}};
   return(
     <div style={{border:"1px solid #e2e8f0",borderRadius:8,overflow:"hidden",background:"#fff"}}>
       <div style={{display:"flex",borderBottom:"1px solid #f1f5f9"}}>
@@ -1165,17 +1201,17 @@ function ContractSearchSelect({contracts,value,onChange}){
         })}
       </div>
       <div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 8px",borderBottom:"1px solid #f1f5f9"}}>
-        <span style={{fontSize:11,color:"#64748b"}}>🔍</span>
+        <Search size={12} strokeWidth={1.75} style={{color:"#64748b",flexShrink:0}}/>
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{flex:1,fontSize:11,outline:"none",border:"none",background:"transparent",color:"#0f172a"}}/>
-        {selected&&<button type="button" onClick={()=>onChange("")} style={{fontSize:11,color:"#64748b",border:"none",background:"none",cursor:"pointer"}}>✕</button>}
+        {selected&&<button type="button" onClick={()=>onChange("")} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#64748b",border:"none",background:"none",cursor:"pointer"}}><X size={12} strokeWidth={2}/></button>}
       </div>
-      {selected&&<div style={{padding:"3px 8px",background:"#eef2ff",fontSize:11,fontWeight:600,color:"#6366f1",borderBottom:"1px solid #e0e7ff"}}>✓ {selected.contract_number} – {selected.cn}</div>}
+      {selected&&<div style={{padding:"3px 8px",background:"#e6f7f0",fontSize:11,fontWeight:600,color:"#008A57",borderBottom:"1px solid #c7ebd9",display:"flex",alignItems:"center",gap:5}}><Check size={11} strokeWidth={2.5}/>{selected.contract_number} – {selected.cn}</div>}
       <div style={{maxHeight:110,overflowY:"auto"}}>
         {filtered.length===0
           ?<p style={{padding:"6px 8px",fontSize:11,color:"#64748b",textAlign:"center"}}>No contracts</p>
           :filtered.map(c=>(
             <button key={c.id} type="button" onClick={()=>{onChange(c.id);setSearch("");}}
-              style={{width:"100%",textAlign:"left",padding:"5px 8px",fontSize:11,border:"none",background:c.id===value?"#eef2ff":"#fff",cursor:"pointer",borderBottom:"1px solid #f8fafc",display:"flex",gap:6,alignItems:"baseline"}}>
+              style={{width:"100%",textAlign:"left",padding:"5px 8px",fontSize:11,border:"none",background:c.id===value?"#e6f7f0":"#fff",cursor:"pointer",borderBottom:"1px solid #f8fafc",display:"flex",gap:6,alignItems:"baseline"}}>
               <span style={{fontFamily:"monospace",color:"#64748b",flexShrink:0}}>{c.contract_number}</span>
               <span style={{color:"#0f172a",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.cn}</span>
               {c.st==="Expired"&&<span style={{color:"#ef4444",flexShrink:0}}>(Expired)</span>}
@@ -1244,7 +1280,7 @@ function ContractsPage(){
   };
 
   const openAdd =()=>{setEditing(null);setForm(EMPTY_CONTRACT);setModalOpen(true);};
-  const openEdit=c=>{setEditing(c);setForm({client_id:c.client_id,client_name:c.client_name,contract_value:c.contract_value,tenure_months:c.tenure_months,start_date:c.start_date,end_date:c.end_date,status:c.status,contract_category:c.contract_category,budget_client_servicing:c.budget_client_servicing||0,budget_production:c.budget_production||0,budget_creative:c.budget_creative||0,budget_planning:c.budget_planning||0,contract_pdf_url:c.contract_pdf_url||"",notes:c.notes||"",contract_number:c.contract_number});setModalOpen(true);};
+  const openEdit=c=>{setEditing(c);setForm({client_id:c.client_id,client_name:c.client_name,project_name:c.project_name||"",contract_value:c.contract_value,tenure_months:c.tenure_months,start_date:c.start_date,end_date:c.end_date,status:c.status,contract_category:c.contract_category,budget_client_servicing:c.budget_client_servicing||"",budget_production:c.budget_production||"",budget_creative:c.budget_creative||"",budget_planning:c.budget_planning||"",budget_third_party:c.budget_third_party||"",contract_pdf_url:c.contract_pdf_url||"",notes:c.notes||"",contract_number:c.contract_number});setModalOpen(true);};
   const close=()=>{setModalOpen(false);setEditing(null);};
 
   const handleSubmit=async e=>{
@@ -1282,8 +1318,8 @@ function ContractsPage(){
 
   // Budget summary widgets
   const budgetSummary=[
-    {label:"Client Servicing",key:"budget_client_servicing",bg:"#eff6ff",border:"#bfdbfe",color:"#6366f1"},
-    {label:"Production",      key:"budget_production",       bg:"#f5f3ff",border:"#ddd6fe",color:"#6d28d9"},
+    {label:"Client Servicing",key:"budget_client_servicing",bg:"#eff6ff",border:"#bfdbfe",color:"#008A57"},
+    {label:"Production",      key:"budget_production",       bg:"#f5f3ff",border:"#ddd6fe",color:"#047857"},
     {label:"Creative",        key:"budget_creative",         bg:"#f0fdf4",border:"#bbf7d0",color:"#10b981"},
     {label:"Planning",        key:"budget_planning",         bg:"#fffbeb",border:"#fde68a",color:"#d97706"},
     {label:"3rd Party",       key:"budget_third_party",      bg:"#fff1f2",border:"#fecdd3",color:"#e11d48"},
@@ -1294,20 +1330,20 @@ function ContractsPage(){
   const allocMatch=formCV>0&&Math.abs(totalAlloc-formCV)<0.01;
   const allocOver=totalAlloc>formCV;
 
-  const catStyle=c=>({Retainer:{bg:"#dbeafe",col:"#2563eb"},Project:{bg:"#f3e8ff",col:"#6366f1"},Adhoc:{bg:"#fef9c3",col:"#d97706"}}[c]||{bg:"#f1f5f9",col:"#475569"});
+  const catStyle=c=>({Retainer:{bg:"#dbeafe",col:"#2563eb"},Project:{bg:"#e6f7f0",col:"#008A57"},Adhoc:{bg:"#fef9c3",col:"#d97706"}}[c]||{bg:"#f1f5f9",col:"#475569"});
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:18}}>
       {/* Header */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
         <div><h1 style={{fontSize:26,fontWeight:800,color:"#0f172a",margin:0}}>Contracts</h1><p style={{fontSize:13,color:"#64748b",marginTop:3}}>Manage client contracts and retainers</p></div>
-        <Btn variant="primary" onClick={openAdd}>＋ Add Contract</Btn>
+        <Btn variant="primary" onClick={openAdd} style={{gap:6}}><Plus size={14} strokeWidth={2}/>Add Contract</Btn>
       </div>
 
       {/* Budget summary cards */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10}}>
         {budgetSummary.map(w=>(
-          <Card key={w.label} style={{background:w.bg,borderColor:w.border,padding:16}}>
+          <Card key={w.label} style={{background:w.bg,borderColor:w.border,padding:"12px 14px"}}>
             <p style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".05em",color:w.color,margin:"0 0 6px"}}>{w.label}</p>
             <p style={{fontSize:18,fontWeight:800,color:w.color,margin:"0 0 2px"}}>SAR {w.total.toLocaleString("en-US")}</p>
             <p style={{fontSize:10,color:"#64748b",margin:0}}>across all contracts</p>
@@ -1318,12 +1354,12 @@ function ContractsPage(){
       {/* Filters */}
       <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
         <div style={{position:"relative",flex:1,minWidth:180}}>
-          <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#64748b",fontSize:13}}>🔍</span>
+          <Search size={14} strokeWidth={1.75} style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#64748b"}}/>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search contracts..." style={{width:"100%",padding:"8px 12px 8px 30px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,outline:"none",background:"#fff",boxSizing:"border-box"}}/>
         </div>
         <Sel value={statusF} onChange={setStatusF} options={[{v:"all",l:"All Status"},{v:"Active",l:"Active"},{v:"Expired",l:"Expired"}]} style={{width:140}}/>
         <Sel value={catF} onChange={setCatF} options={[{v:"all",l:"All Categories"},{v:"Retainer",l:"Retainer"},{v:"Project",l:"Project"},{v:"Adhoc",l:"Adhoc"}]} style={{width:160}}/>
-        <Btn variant="outline">⬇ Export</Btn>
+        <Btn variant="outline" style={{gap:6}}><Download size={13} strokeWidth={1.75}/>Export</Btn>
       </div>
 
       {/* Table */}
@@ -1357,18 +1393,14 @@ function ContractsPage(){
                     <td style={{padding:"11px 13px",textAlign:"right",fontSize:13,color:"#475569"}}>SAR {monthly.toLocaleString("en-US")}</td>
                     <td style={{padding:"11px 13px"}}>
                       <div style={{display:"flex",alignItems:"center",gap:6}}>
-                        <span style={{fontSize:12,color:"#64748b"}}>📅</span>
-                        <div>
-                          <p style={{margin:0,fontSize:12,color:"#0f172a"}}>{fmtDateShort(c.start_date)}</p>
-                          <p style={{margin:"1px 0 0",fontSize:11,color:"#64748b"}}>to {fmtDateShort(c.end_date)}</p>
-                        </div>
+                        <span style={{fontSize:12,color:"#64748b"}}>{fmtDateShort(c.start_date)} to {fmtDateShort(c.end_date)}</span>
                       </div>
                     </td>
                     <td style={{padding:"11px 13px",textAlign:"center"}}>
                       {expired
                         ?<Bdg bg="#fee2e2" color="#EF4444">{dl} days</Bdg>
                         :soon
-                          ?<Bdg bg="#fef9c3" color="#d97706">⚠ {dl}d left</Bdg>
+                          ?<Bdg bg="#fef9c3" color="#d97706"><span style={{display:"inline-flex",alignItems:"center",gap:3}}><AlertTriangle size={10} strokeWidth={2}/>{dl}d left</span></Bdg>
                           :<Bdg bg="#f1f5f9" color="#64748b">{dl}d left</Bdg>
                       }
                     </td>
@@ -1377,8 +1409,8 @@ function ContractsPage(){
                     </td>
                     <td style={{padding:"11px 13px",textAlign:"right"}}>
                       <div style={{display:"flex",justifyContent:"flex-end",gap:4}}>
-                        <Btn variant="ghost" size="sm" onClick={()=>openEdit(c)}>✏️</Btn>
-                        <Btn variant="danger" size="sm" onClick={()=>del(c.id)}>🗑</Btn>
+                        <Btn variant="ghost" size="sm" onClick={()=>openEdit(c)}><Pencil size={14} strokeWidth={1.75}/></Btn>
+                        <Btn variant="danger" size="sm" onClick={()=>del(c.id)}><Trash2 size={14} strokeWidth={1.75}/></Btn>
                       </div>
                     </td>
                   </tr>
@@ -1395,7 +1427,7 @@ function ContractsPage(){
               )}
             </tbody>
           </table>
-          {sorted.length===0&&<div style={{textAlign:"center",padding:"48px 24px",color:"#64748b"}}><div style={{fontSize:40,marginBottom:12}}>📄</div><p style={{fontSize:14}}>No contracts found</p></div>}
+          {sorted.length===0&&<div style={{textAlign:"center",padding:"48px 24px",color:"#64748b"}}><FileText size={40} strokeWidth={1.25} style={{margin:"0 auto 12px",display:"block",color:"#cbd5e1"}}/><p style={{fontSize:14}}>No contracts found</p></div>}
         </div>
       </Card>
 
@@ -1419,7 +1451,7 @@ function ContractsPage(){
                     <span style={{
                       fontSize:11,fontWeight:700,padding:"2px 10px",borderRadius:999,
                       ...(getCatFromTenure(form.tenure_months)==="Retainer"?{background:"#dbeafe",color:"#2563eb"}:
-                         getCatFromTenure(form.tenure_months)==="Project"?{background:"#f3e8ff",color:"#6366f1"}:
+                         getCatFromTenure(form.tenure_months)==="Project"?{background:"#e6f7f0",color:"#008A57"}:
                          {background:"#fef9c3",color:"#d97706"})
                     }}>{getCatFromTenure(form.tenure_months)}</span>
                   )}
@@ -1494,16 +1526,21 @@ function AllocationsPage(){
   const [empSearch,setEmpSearch] = useState("");
   const [confirmOpen,setConfirmOpen]=useState(false);
   const [editForm,setEditForm]   = useState({allocated_hours:"",month:"2026-04",notes:""});
+  const [expandedMonths,setExpandedMonths] = useState(()=>new Set([currentMonth]));
+  const [monthViewMode,setMonthViewMode]   = useState({});
   const [realEmps,setRealEmps]   = useState([]);
   const [realContracts,setRealContracts] = useState([]);
+  const [snapshots,setSnapshots] = useState([]);
 
   useEffect(()=>{
     Promise.all([
       sb.from('employees').select('*').order('name'),
       sb.from('contracts').select('*'),
-    ]).then(([{data:e},{data:ct}])=>{
+      sb.from('monthly_snapshots').select('month,is_closed'),
+    ]).then(([{data:e},{data:ct},{data:sn}])=>{
       if(e) setRealEmps(e.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0})));
       if(ct) setRealContracts(ct.map(x=>({...x,cid:x.client_id,cn:x.client_name,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status})));
+      if(sn) setSnapshots(sn);
     });
   },[sb]);
   const [sk,setSk]=useState("employee_name");
@@ -1514,7 +1551,7 @@ function AllocationsPage(){
 
   const utilForMonth=useCallback((month)=>{
     const map={};
-    (realEmps.length>0?realEmps:EMPLOYEES_INIT).forEach(emp=>{
+    (realEmps).forEach(emp=>{
       const h=allocs.filter(a=>a.employee_id===emp.id&&a.month===month).reduce((s,a)=>s+(a.allocated_hours||0),0);
       map[emp.id]={totalHours:h,availableHours:Math.max(0,HPM-h),percentage:(h/HPM)*100};
     });
@@ -1525,7 +1562,7 @@ function AllocationsPage(){
 
   const contractsForMonth=useMemo(()=>{
     if(!selMonth) return [];
-    return (realContracts.length>0?realContracts:MOCK_CONTRACTS_FULL).filter(c=>isActive(c,selMonth));
+    return (realContracts).filter(c=>isActive(c,selMonth));
   },[selMonth]);
 
   const getRemainingHours=(empId,month,excludeId=null)=>{
@@ -1534,11 +1571,22 @@ function AllocationsPage(){
   };
 
   const filtered=useMemo(()=>allocs.filter(a=>{
-    const emp=(realEmps.length>0?realEmps:EMPLOYEES_INIT).find(e=>e.id===a.employee_id);
-    const ct=(realContracts.length>0?realContracts:MOCK_CONTRACTS_FULL).find(c=>c.id===a.contract_id);
+    const emp=(realEmps).find(e=>e.id===a.employee_id);
+    const ct=(realContracts).find(c=>c.id===a.contract_id);
     const ms=!search||a.employee_name?.toLowerCase().includes(search.toLowerCase())||a.client_name?.toLowerCase().includes(search.toLowerCase());
     return ms&&(filterEmp==="all"||a.employee_id===filterEmp)&&(filterCli==="all"||a.client_id===filterCli)&&(filterDept==="all"||emp?.department===filterDept)&&(filterCat==="all"||(ct?.contract_category||"Retainer")===filterCat);
   }),[allocs,search,filterEmp,filterCli,filterDept,filterCat]);
+
+  // Group allocations by month for the new grouped view
+  const groupedMonths=useMemo(()=>{
+    const months=[...new Set(filtered.map(a=>a.month))].sort().reverse();
+    return months.map(month=>({
+      month,
+      label:fmtLong(month),
+      isClosed:snapshots.some(s=>s.month===month&&s.is_closed),
+      items:filtered.filter(a=>a.month===month),
+    }));
+  },[filtered,snapshots]);
 
   const sorted=useMemo(()=>[...filtered].sort((a,b)=>{
     const av=a[sk]||"",bv=b[sk]||"";
@@ -1549,7 +1597,7 @@ function AllocationsPage(){
   const chartAllocs=useMemo(()=>allocs.filter(a=>a.month===chartMonth),[allocs,chartMonth]);
   // Mirror Base44: inactive employees whose inactive_effective_month >= chartMonth still count
   const isEmpActiveForMonth=(e,month)=>e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=month);
-  const activeEmps=(realEmps.length>0?realEmps:EMPLOYEES_INIT).filter(e=>isEmpActiveForMonth(e,chartMonth));
+  const activeEmps=(realEmps).filter(e=>isEmpActiveForMonth(e,chartMonth));
   const totalCap=activeEmps.length*HPM;
   const utilizedHours=chartAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
   const availHours=Math.max(0,totalCap-utilizedHours);
@@ -1574,7 +1622,7 @@ function AllocationsPage(){
     const toCreate=selEmpIds.flatMap(eid=>{
       const ea=empAllocs[eid]||{};
       if(!ea.client_id||!parseFloat(ea.hours)) return [];
-      const emp=(realEmps.length>0?realEmps:EMPLOYEES_INIT).find(e=>e.id===eid);
+      const emp=(realEmps).find(e=>e.id===eid);
       const ct=contractsForMonth.find(c=>c.id===ea.client_id);
       return [{
         employee_id:eid, employee_name:emp?.name||"",
@@ -1605,7 +1653,7 @@ function AllocationsPage(){
       {/* Header */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
         <div><h1 style={{fontSize:26,fontWeight:800,color:"#0f172a",margin:0}}>Team Allocations</h1><p style={{fontSize:13,color:"#64748b",marginTop:3}}>Assign employees to client projects</p></div>
-        <Btn variant="primary" onClick={openAdd}>＋ Add Allocation</Btn>
+        <Btn variant="primary" onClick={openAdd} style={{gap:6}}><Plus size={14} strokeWidth={2}/>Add Allocation</Btn>
       </div>
 
       {/* Chart month selector */}
@@ -1619,22 +1667,22 @@ function AllocationsPage(){
       {/* Charts row */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
         <Card style={{padding:18}}>
-          <p style={{margin:"0 0 10px",fontWeight:700,fontSize:13,color:"#0f172a"}}>🥧 Hours Utilization</p>
+          <p style={{margin:"0 0 10px",fontWeight:700,fontSize:13,color:"#0f172a",display:"flex",alignItems:"center",gap:7}}><PieChartIcon size={14} strokeWidth={1.75} style={{color:"#64748b"}}/>Hours Utilization</p>
           {totalCap>0?(
             <div style={{display:"flex",alignItems:"center",gap:16}}>
               <div style={{flex:1}}>
                 <ResponsiveContainer width="100%" height={180}>
                   <PieChart>
                     <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={72} dataKey="hours" labelLine={false}>
-                      <Cell fill="#6366f1"/><Cell fill="#e2e8f0"/>
+                      <Cell fill="#008A57"/><Cell fill="#e2e8f0"/>
                     </Pie>
                     <Tooltip formatter={v=>`${Math.round(v)} hrs`}/>
                   </PieChart>
                 </ResponsiveContainer>
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:10,minWidth:120}}>
-                <div><div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}><div style={{width:10,height:10,borderRadius:"50%",background:"#6366f1"}}/><span style={{fontSize:11,color:"#64748b"}}>Utilized</span></div><p style={{margin:0,fontSize:17,fontWeight:800,color:"#0f172a"}}>{utilizedHours}h</p><p style={{margin:0,fontSize:10,color:"#64748b"}}>{totalCap>0?((utilizedHours/totalCap)*100).toFixed(0):0}% of capacity</p></div>
-                <div><div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}><div style={{width:10,height:10,borderRadius:"50%",background:"#e2e8f0"}}/><span style={{fontSize:11,color:"#64748b"}}>Available</span></div><p style={{margin:0,fontSize:17,fontWeight:800,color:"#0f172a"}}>{availHours}h</p><p style={{margin:0,fontSize:10,color:"#64748b"}}>of {totalCap}h total</p></div>
+                <div><div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}><div style={{width:10,height:10,borderRadius:"50%",background:"#008A57"}}/><span style={{fontSize:11,color:"#64748b"}}>Utilized</span></div><p style={{margin:0,fontSize:17,fontWeight:800,color:"#0f172a"}}>{fmtH(utilizedHours)}h</p><p style={{margin:0,fontSize:10,color:"#64748b"}}>{totalCap>0?((utilizedHours/totalCap)*100).toFixed(0):0}% of capacity</p></div>
+                <div><div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}><div style={{width:10,height:10,borderRadius:"50%",background:"#e2e8f0"}}/><span style={{fontSize:11,color:"#64748b"}}>Available</span></div><p style={{margin:0,fontSize:17,fontWeight:800,color:"#0f172a"}}>{fmtH(availHours)}h</p><p style={{margin:0,fontSize:10,color:"#64748b"}}>of {fmtH(totalCap)}h total</p></div>
                 <div style={{paddingTop:7,borderTop:"1px solid #f1f5f9"}}><p style={{margin:"0 0 1px",fontSize:10,color:"#64748b"}}>Resources</p><p style={{margin:0,fontSize:17,fontWeight:800,color:"#0f172a"}}>{activeEmps.length}</p><p style={{margin:0,fontSize:10,color:"#64748b"}}>active employees</p></div>
               </div>
             </div>
@@ -1642,7 +1690,7 @@ function AllocationsPage(){
         </Card>
 
         <Card style={{padding:18}}>
-          <p style={{margin:"0 0 10px",fontWeight:700,fontSize:13,color:"#0f172a"}}>👥 Top Clients by Hours</p>
+          <p style={{margin:"0 0 10px",fontWeight:700,fontSize:13,color:"#0f172a",display:"flex",alignItems:"center",gap:7}}><Users size={14} strokeWidth={1.75} style={{color:"#64748b"}}/>Top Clients by Hours</p>
           {clientChartData.length>0?(
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={clientChartData} margin={{top:5,right:5,left:0,bottom:36}}>
@@ -1650,7 +1698,7 @@ function AllocationsPage(){
                 <XAxis dataKey="name" tick={{fontSize:9,fill:"#64748b"}} angle={-40} textAnchor="end"/>
                 <YAxis tick={{fontSize:9,fill:"#64748b"}}/>
                 <Tooltip formatter={v=>`${v} hrs`}/>
-                <Bar dataKey="hours" fill="#6366f1" radius={[4,4,0,0]}/>
+                <Bar dataKey="hours" fill="#008A57" radius={[4,4,0,0]}/>
               </BarChart>
             </ResponsiveContainer>
           ):<div style={{height:180,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:13}}>No allocation data</div>}
@@ -1658,8 +1706,8 @@ function AllocationsPage(){
       </div>
 
       {/* Capacity cards — all active employees for chartMonth (mirrors Base44) */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
-        {(realEmps.length>0?realEmps:EMPLOYEES_INIT).filter(e=>isEmpActiveForMonth(e,chartMonth)).map(emp=>{
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
+        {(realEmps).filter(e=>isEmpActiveForMonth(e,chartMonth)).map(emp=>{
           const u=utilMap[emp.id]||{totalHours:0,availableHours:HPM,percentage:0};
           const ov=u.percentage>100,ok=u.percentage>=70&&u.percentage<=100;
           const border=ov?"#fecaca":ok?"#a7f3d0":"#fde68a";
@@ -1672,11 +1720,11 @@ function AllocationsPage(){
                   <div style={{width:30,height:30,borderRadius:8,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:clr,flexShrink:0}}>{emp.name.slice(0,2).toUpperCase()}</div>
                   <div><p style={{margin:0,fontWeight:600,fontSize:12,color:"#0f172a"}}>{emp.name}</p><p style={{margin:0,fontSize:10,color:"#64748b"}}>{emp.designation}</p></div>
                 </div>
-                {ov&&<span style={{fontSize:12}}>⚠️</span>}
+                {ov&&<AlertTriangle size={12} strokeWidth={2} style={{color:"#ef4444",flexShrink:0}}/>}
               </div>
               <PBar val={u.percentage} color={clr}/>
               <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#64748b",marginTop:3}}>
-                <span>{u.totalHours}h allocated</span><span>{u.availableHours}h available</span>
+                <span>{fmtH(u.totalHours)}h allocated</span><span>{fmtH(u.availableHours)}h available</span>
               </div>
             </Card>
           );
@@ -1684,60 +1732,146 @@ function AllocationsPage(){
       </div>
 
       {/* Filters */}
+      {/* ── Search / Filter bar ─────────────────────────────────── */}
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <div style={{position:"relative",flex:1,minWidth:155}}>
-          <span style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:"#64748b",fontSize:12}}>🔍</span>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search allocations..." style={{width:"100%",padding:"7px 10px 7px 27px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,outline:"none",background:"#fff",boxSizing:"border-box"}}/>
+        <div style={{position:"relative",flex:1,minWidth:200}}>
+          <Search size={14} strokeWidth={1.75} style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#94a3b8"}}/>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search allocations..."
+            style={{width:"100%",padding:"8px 10px 8px 32px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,outline:"none"}}/>
         </div>
-        <Sel value={filterEmp}  onChange={setFilterEmp}  options={[{v:"all",l:"All Employees"},...(realEmps.length>0?realEmps:EMPLOYEES_INIT).map(e=>({v:e.id,l:e.name}))]}  style={{width:160}}/>
-        <Sel value={filterCli}  onChange={setFilterCli}  options={[{v:"all",l:"All Clients"},  ...CLIENTS.map(c=>({v:c.id,l:c.name}))]}          style={{width:145}}/>
-        <Sel value={filterDept} onChange={setFilterDept} options={[{v:"all",l:"All Departments"},...ALLOC_DEPTS.map(d=>({v:d,l:d.replace(" Department","")}))]}  style={{width:160}}/>
-        <Sel value={filterCat}  onChange={setFilterCat}  options={[{v:"all",l:"All Categories"},{v:"Retainer",l:"Retainer"},{v:"Project",l:"Project"},{v:"Adhoc",l:"Adhoc"}]} style={{width:145}}/>
-        <Btn variant="outline">⬇ Export</Btn>
+        <Sel value={filterEmp} onChange={setFilterEmp} options={[{v:"all",l:"All Employees"},...[...new Set((realEmps).map(e=>e.id))].map(id=>{const e=(realEmps).find(x=>x.id===id);return{v:id,l:e?.name||id};})]} style={{width:180}}/>
+        <Sel value={filterCli} onChange={setFilterCli} options={[{v:"all",l:"All Clients"},...[...new Set(allocs.map(a=>a.client_name))].filter(Boolean).map(c=>({v:c,l:c}))]} style={{width:160}}/>
+        <Sel value={filterDept} onChange={setFilterDept} options={[{v:"all",l:"All Departments"},...DEPTS.map(d=>({v:d,l:d.replace(" Department","")}))]  } style={{width:180}}/>
+        <Sel value={filterCat} onChange={setFilterCat} options={[{v:"all",l:"All Categories"},{v:"Retainer",l:"Retainer"},{v:"Project",l:"Project"},{v:"Adhoc",l:"Adhoc"}]} style={{width:160}}/>
+        <Btn variant="outline" size="sm" onClick={()=>{const rows=sorted.map(a=>[a.employee_name,a.client_name,a.allocated_hours,a.month,a.status]);exportXLSX([["Employee","Client","Hours","Month","Status"],...rows],"Allocations","allocations.xlsx");}} style={{gap:6}}><Download size={13} strokeWidth={1.75}/>Export</Btn>
       </div>
 
-      {/* Table */}
-      <Card style={{overflow:"hidden"}}>
-        <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead><tr>
-              <SortTh k="employee_name"   sk={sk} sd={sd} onSort={sortFn}>Employee</SortTh>
-              <SortTh k="client_name"     sk={sk} sd={sd} onSort={sortFn}>Client</SortTh>
-              <SortTh k="allocated_hours" sk={sk} sd={sd} onSort={sortFn} align="center">Hours/Month</SortTh>
-              <SortTh k="month"           sk={sk} sd={sd} onSort={sortFn} align="center">Month</SortTh>
-              <SortTh k="status"          sk={sk} sd={sd} onSort={sortFn} align="center">Status</SortTh>
-              <th style={{padding:"9px 13px",fontSize:11,fontWeight:600,color:"#64748b",background:"#fff",borderBottom:"1px solid #e2e8f0",textAlign:"right"}}>Actions</th>
-            </tr></thead>
-            <tbody>
-              {sorted.map((a,idx)=>{
-                const emp=(realEmps.length>0?realEmps:EMPLOYEES_INIT).find(e=>e.id===a.employee_id);
-                const sb=statusBadge(a.status);
-                return(
-                  <tr key={a.id} style={{borderBottom:"1px solid #f1f5f9",background:idx%2===0?"#fff":"#fafafa"}}>
-                    <td style={{padding:"11px 13px"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:10}}>
-                        <div style={{width:36,height:36,borderRadius:9,background:"linear-gradient(135deg,#3b82f6,#6366f1)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:12,fontWeight:700,flexShrink:0}}>{(a.employee_name||"?").split(" ").map(n=>n[0]).join("").slice(0,2)}</div>
-                        <div><p style={{margin:0,fontWeight:600,fontSize:13,color:"#0f172a"}}>{a.employee_name}</p><p style={{margin:"1px 0 0",fontSize:10,color:"#64748b"}}>{emp?.department?.replace(" Department","")}</p></div>
+      {/* ── Grouped by Month ─────────────────────────────────────── */}
+      <div style={{display:"flex",flexDirection:"column",gap:10,marginTop:4}}>
+        {groupedMonths.length===0
+          ?<Card><div style={{textAlign:"center",padding:40,color:"#94a3b8"}}><Users size={32} strokeWidth={1.25} style={{margin:"0 auto 12px",display:"block",color:"#cbd5e1"}}/><p style={{fontSize:14}}>No allocations found</p></div></Card>
+          :groupedMonths.map(({month,label,isClosed,items})=>{
+            const expanded=expandedMonths.has(month);
+            const totalHours=items.reduce((s,a)=>s+(parseFloat(a.allocated_hours)||0),0);
+            const empCount=[...new Set(items.map(a=>a.employee_id))].length;
+            return(
+              <Card key={month} style={{overflow:"hidden",border:isClosed?"1px solid #a7f3d0":"1px solid #e2e8f0",background:isClosed?"#f0fdf4":"#fff"}}>
+                {/* Month header - click to expand/collapse */}
+                <div onClick={()=>setExpandedMonths(prev=>{const s=new Set(prev);s.has(month)?s.delete(month):s.add(month);return s;})}
+                  style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",userSelect:"none"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    {isClosed?<Lock size={15} strokeWidth={1.75} style={{color:"#64748b",flexShrink:0}}/>:<Calendar size={15} strokeWidth={1.75} style={{color:"#64748b",flexShrink:0}}/>}
+                    <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>{label}</p>
+                    {isClosed&&<span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:600,background:"#d1fae5",color:"#059669"}}>Closed</span>}
+                    <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,background:"#f1f5f9",color:"#475569"}}>{empCount} employee{empCount!==1?"s":""}</span>
+                    <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,background:"#eff6ff",color:"#3b82f6"}}>{fmtH(totalHours)}h total</span>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    {expanded&&(
+                      <div style={{display:"flex",gap:4,background:"#f1f5f9",borderRadius:8,padding:3}}>
+                        <button onClick={e=>{e.stopPropagation();setMonthViewMode(prev=>({...prev,[month]:"list"}));}}
+                          style={{padding:"3px 8px",borderRadius:6,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,
+                            background:(!monthViewMode[month]||monthViewMode[month]==="list")?"#fff":"transparent",
+                            color:(!monthViewMode[month]||monthViewMode[month]==="list")?"#0f172a":"#64748b",
+                            boxShadow:(!monthViewMode[month]||monthViewMode[month]==="list")?"0 1px 3px rgba(0,0,0,.1)":"none"}}>≡ List</button>
+                        <button onClick={e=>{e.stopPropagation();setMonthViewMode(prev=>({...prev,[month]:"cards"}));}}
+                          style={{padding:"3px 8px",borderRadius:6,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,
+                            background:monthViewMode[month]==="cards"?"#fff":"transparent",
+                            color:monthViewMode[month]==="cards"?"#0f172a":"#64748b",
+                            boxShadow:monthViewMode[month]==="cards"?"0 1px 3px rgba(0,0,0,.1)":"none"}}>⊞ Cards</button>
                       </div>
-                    </td>
-                    <td style={{padding:"11px 13px",fontSize:13,color:"#0f172a"}}>{a.client_name}</td>
-                    <td style={{padding:"11px 13px",textAlign:"center"}}><Bdg bg="#f1f5f9" color="#475569">🕐 {a.allocated_hours} hrs</Bdg></td>
-                    <td style={{padding:"11px 13px",textAlign:"center",fontSize:12,color:"#64748b"}}>{a.month||"—"}</td>
-                    <td style={{padding:"11px 13px",textAlign:"center"}}><Bdg bg={sb.bg} color={sb.col}>{a.status}</Bdg></td>
-                    <td style={{padding:"11px 13px",textAlign:"right"}}>
-                      <div style={{display:"flex",justifyContent:"flex-end",gap:4}}>
-                        <Btn variant="ghost" size="sm" onClick={()=>openEdit(a)}>✏️</Btn>
-                        <Btn variant="danger" size="sm" onClick={()=>del(a.id)}>🗑</Btn>
+                    )}
+                    <span style={{fontSize:14,color:"#94a3b8",transition:"transform .2s",display:"inline-block",transform:expanded?"rotate(90deg)":"rotate(0deg)"}}>›</span>
+                  </div>
+                </div>
+
+                {/* Expanded content */}
+                {expanded&&(
+                  <div style={{borderTop:"1px solid #e2e8f0"}}>
+                    {(!monthViewMode[month]||monthViewMode[month]==="list")?(
+                      /* LIST VIEW */
+                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                        <thead><tr>
+                          {["Employee","Client","Hours/Month","Status","Actions"].map((h,i)=>(
+                            <th key={h} style={{padding:"8px 13px",textAlign:i>=2&&i<=3?"center":i===4?"right":"left",fontSize:11,fontWeight:600,color:"#64748b",background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>{h}</th>
+                          ))}
+                        </tr></thead>
+                        <tbody>
+                          {items.map((a,i)=>{
+                            const emp=(realEmps).find(e=>e.id===a.employee_id);
+                            const sb2=statusBadge(a.status);
+                            return(
+                              <tr key={a.id} style={{borderBottom:"1px solid #f1f5f9",background:i%2===0?"#fff":"#fafafa"}}>
+                                <td style={{padding:"10px 13px"}}>
+                                  <div style={{display:"flex",alignItems:"center",gap:9}}>
+                                    <div style={{width:32,height:32,borderRadius:8,background:"linear-gradient(135deg,#3b82f6,#008A57)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:11,fontWeight:700,flexShrink:0}}>{(a.employee_name||"?").split(" ").map(n=>n[0]).join("").slice(0,2)}</div>
+                                    <div><p style={{margin:0,fontWeight:600,fontSize:13,color:"#0f172a"}}>{a.employee_name||"—"}</p><p style={{margin:0,fontSize:11,color:"#64748b"}}>{emp?.department?.replace(" Department","")||""}</p></div>
+                                  </div>
+                                </td>
+                                <td style={{padding:"10px 13px",color:"#0f172a"}}>{a.client_name||"—"}</td>
+                                <td style={{padding:"10px 13px",textAlign:"center"}}>
+                                  <span style={{display:"inline-flex",alignItems:"center",gap:5,background:"#f1f5f9",padding:"3px 10px",borderRadius:999,fontSize:12}}>
+                                    <span style={{display:"inline-flex",alignItems:"center",gap:4}}><Clock size={11} strokeWidth={1.75}/>{a.allocated_hours} hrs</span>
+                                  </span>
+                                </td>
+                                <td style={{padding:"10px 13px",textAlign:"center"}}>
+                                  <span style={{padding:"2px 10px",borderRadius:999,fontSize:11,fontWeight:600,background:sb2.bg,color:sb2.color}}>{a.status}</span>
+                                </td>
+                                <td style={{padding:"10px 13px",textAlign:"right"}}>
+                                  <div style={{display:"flex",justifyContent:"flex-end",gap:4}}>
+                                    {isClosed
+                                      ?<Lock size={14} strokeWidth={1.75} title="Month is closed — cannot edit" style={{cursor:"not-allowed",opacity:0.35,color:"#64748b"}}/>
+                                      :<Btn variant="ghost" size="sm" onClick={()=>openEdit(a)}><Pencil size={14} strokeWidth={1.75}/></Btn>}
+                                    {!isClosed&&<Btn variant="danger" size="sm" onClick={()=>del(a.id)}><Trash2 size={14} strokeWidth={1.75}/></Btn>}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    ):(
+                      /* CARD VIEW */
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12,padding:16}}>
+                        {items.map(a=>{
+                          const emp=(realEmps).find(e=>e.id===a.employee_id);
+                          const util=utilForMonth(month)[a.employee_id]||{totalHours:0,availableHours:HPM,percentage:0};
+                          const pct=Math.min(100,util.percentage||0);
+                          const clr=pct>100?"#ef4444":pct>=70?"#10b981":"#d97706";
+                          const sb2=statusBadge(a.status);
+                          return(
+                            <div key={a.id} style={{border:"1px solid #e2e8f0",borderRadius:10,padding:12,background:"#fff",display:"flex",flexDirection:"column",gap:8}}>
+                              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                <div style={{width:36,height:36,borderRadius:9,background:"linear-gradient(135deg,#3b82f6,#008A57)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:12,fontWeight:700,flexShrink:0}}>{(a.employee_name||"?").split(" ").map(n=>n[0]).join("").slice(0,2)}</div>
+                                <div style={{flex:1,minWidth:0}}>
+                                  <p style={{margin:0,fontWeight:600,fontSize:12,color:"#0f172a",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{a.employee_name||"—"}</p>
+                                  <p style={{margin:0,fontSize:11,color:"#64748b"}}>{emp?.department?.replace(" Department","")||""}</p>
+                                </div>
+                                {isClosed
+                                  ?<Lock size={13} strokeWidth={1.75} title="Closed" style={{opacity:0.4,color:"#64748b"}}/>
+                                  :<Btn variant="ghost" size="sm" onClick={()=>openEdit(a)}><Pencil size={14} strokeWidth={1.75}/></Btn>}
+                              </div>
+                              <p style={{margin:0,fontSize:12,color:"#475569",fontWeight:500}}>{a.client_name||"—"}</p>
+                              <div style={{background:"#e2e8f0",borderRadius:99,height:6,overflow:"hidden"}}>
+                                <div style={{width:`${pct}%`,height:"100%",background:clr,borderRadius:99,transition:"width .3s"}}/>
+                              </div>
+                              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#64748b"}}>
+                                <span>{fmtH(a.allocated_hours)}h allocated</span>
+                                <span>{fmtH(util.availableHours)}h free</span>
+                              </div>
+                              <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:600,background:sb2.bg,color:sb2.color,alignSelf:"flex-start"}}>{a.status}</span>
+                            </div>
+                          );
+                        })}
                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {sorted.length===0&&<div style={{textAlign:"center",padding:"48px",color:"#64748b"}}><div style={{fontSize:40,marginBottom:12}}>👥</div><p style={{fontSize:14}}>No allocations found</p></div>}
-        </div>
-      </Card>
+                    )}
+                  </div>
+                )}
+              </Card>
+            );
+          })
+        }
+      </div>
 
       {/* Add / Edit modal */}
       <Modal open={modalOpen} onClose={closeModal} title={editing?"Edit Allocation":"Add New Allocation"}>
@@ -1789,11 +1923,11 @@ function AllocationsPage(){
                 <div>
                   <Lbl>Employees *</Lbl>
                   <div style={{position:"relative",marginBottom:6}}>
-                    <span style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:"#64748b",fontSize:12}}>🔍</span>
+                    <Search size={13} strokeWidth={1.75} style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:"#64748b"}}/>
                     <input value={empSearch} onChange={e=>setEmpSearch(e.target.value)} placeholder="Search employees..." style={{width:"100%",padding:"7px 10px 7px 27px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,outline:"none",background:"#fff",boxSizing:"border-box"}}/>
                   </div>
                   <div style={{border:"1px solid #e2e8f0",borderRadius:9,maxHeight:210,overflowY:"auto"}}>
-                    {(realEmps.length>0?realEmps:EMPLOYEES_INIT)
+                    {(realEmps)
                       .filter(e=>e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&selMonth&&e.inactive_effective_month>=selMonth))
                       .filter(e=>!empSearch||e.name.toLowerCase().includes(empSearch.toLowerCase()))
                       .map(emp=>{
@@ -1804,7 +1938,7 @@ function AllocationsPage(){
                       const bc=avail<=0?"#fee2e2":pct>=70?"#d1fae5":"#fef9c3";
                       const tc=avail<=0?"#EF4444":pct>=70?"#10b981":"#d97706";
                       return(
-                        <label key={emp.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",cursor:"pointer",background:isSel?"#eef2ff":"#fff",borderBottom:"1px solid #e2e8f0"}}>
+                        <label key={emp.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",cursor:"pointer",background:isSel?"#e6f7f0":"#fff",borderBottom:"1px solid #e2e8f0"}}>
                           <input type="checkbox" checked={isSel} onChange={e=>handleEmpToggle(emp.id,e.target.checked)} style={{accentColor:"#0f172a",width:14,height:14,flexShrink:0}}/>
                           <div style={{flex:1}}><p style={{margin:0,fontWeight:600,fontSize:12,color:"#0f172a"}}>{emp.name}</p><p style={{margin:0,fontSize:10,color:"#64748b"}}>{emp.department?.replace(" Department","")}</p></div>
                           <Bdg bg={bc} color={tc}>{avail}h free</Bdg>
@@ -1827,14 +1961,14 @@ function AllocationsPage(){
                 <div style={{padding:"7px 12px",background:"#fff",borderRadius:8}}><p style={{margin:0,fontSize:12,color:"#475569"}}>Month: <strong style={{color:"#0f172a"}}>{ALLOC_MONTHS.find(m=>m.v===selMonth)?.l}</strong></p></div>
                 <div style={{display:"flex",flexDirection:"column",gap:10,maxHeight:330,overflowY:"auto"}}>
                   {selEmpIds.map(eid=>{
-                    const emp=(realEmps.length>0?realEmps:EMPLOYEES_INIT).find(e=>e.id===eid);
+                    const emp=(realEmps).find(e=>e.id===eid);
                     const ea=empAllocs[eid]||{};
                     const rem=getRemainingHours(eid,selMonth);
                     return(
                       <div key={eid} style={{border:"1px solid #e2e8f0",borderRadius:10,padding:13,background:"#fff"}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}>
-                          <div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontSize:13}}>👤</span><span style={{fontWeight:600,fontSize:13,color:"#0f172a"}}>{emp?.name}</span></div>
-                          <Btn variant="danger" size="sm" onClick={()=>{setSelEmpIds(p=>p.filter(x=>x!==eid));setEmpAllocs(p=>{const n={...p};delete n[eid];return n;});}}>✕</Btn>
+                          <div style={{display:"flex",alignItems:"center",gap:7}}><User size={13} strokeWidth={1.75} style={{color:"#64748b",flexShrink:0}}/><span style={{fontWeight:600,fontSize:13,color:"#0f172a"}}>{emp?.name}</span></div>
+                          <Btn variant="danger" size="sm" onClick={()=>{setSelEmpIds(p=>p.filter(x=>x!==eid));setEmpAllocs(p=>{const n={...p};delete n[eid];return n;});}}><X size={12} strokeWidth={2}/></Btn>
                         </div>
                         <div style={{marginBottom:8}}><Lbl>Contract *</Lbl><ContractSearchSelect contracts={contractsForMonth} value={ea.client_id||""} onChange={v=>updEmpAlloc(eid,"client_id",v)}/></div>
                         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
@@ -1880,7 +2014,7 @@ function AllocationsPage(){
 // REPORTS PAGE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const REPORT_COLORS = ['#10b981','#6366f1','#f59e0b','#ef4444','#8b5cf6','#ec4899'];
+const REPORT_COLORS = ['#008A57','#475569','#10b981','#f59e0b','#ef4444','#94a3b8'];
 
 // Shared mock snapshots for custom reports tab (extends the existing SNAPSHOTS)
 
@@ -2118,7 +2252,7 @@ function ReportsPage(){
     return <Bdg bg={bg} color={col}>{pct(m)}</Bdg>;
   };
   const riskBadge=(level)=>{
-    const s={High:{bg:"#ef4444",col:"#fff"},Medium:{bg:"#f59e0b",col:"#fff"},Low:{bg:"#6366f1",col:"#fff"}}[level]||{bg:"#e2e8f0",col:"#64748b"};
+    const s={High:{bg:"#ef4444",col:"#fff"},Medium:{bg:"#f59e0b",col:"#fff"},Low:{bg:"#008A57",col:"#fff"}}[level]||{bg:"#e2e8f0",col:"#64748b"};
     return <Bdg bg={s.bg} color={s.col}>{level}</Bdg>;
   };
 
@@ -2156,9 +2290,12 @@ function ReportsPage(){
     </div>
   );
 
-  const ExportBtn=({label,onClick})=>(
-    <Btn variant="outline" size="sm" onClick={onClick}>{label}</Btn>
-  );
+  const ExportBtn=({label,onClick})=>{
+    const cleanLabel=(label||"").replace(/^[⬇⬆]\s*/,"").trim();
+    return(
+      <Btn variant="outline" size="sm" onClick={onClick} style={{gap:6}}><Download size={12} strokeWidth={1.75}/>{cleanLabel}</Btn>
+    );
+  };
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:18}}>
@@ -2170,8 +2307,8 @@ function ReportsPage(){
 
       {/* Top section tabs */}
       <div style={{display:"flex",gap:4,background:"#f1f5f9",borderRadius:12,padding:4,maxWidth:420}}>
-        {[["charts","📈 Charts & Graphs"],["custom","📋 Custom Reports"]].map(([v,l])=>(
-          <button key={v} onClick={()=>setSection(v)} style={{flex:1,padding:"9px 14px",borderRadius:9,border:"none",background:section===v?"#fff":"transparent",fontWeight:section===v?700:500,fontSize:13,color:section===v?"#0f172a":"#64748b",cursor:"pointer",boxShadow:section===v?"0 1px 3px rgba(0,0,0,.1)":"none"}}>{l}</button>
+        {[["charts",TrendingUp,"Charts & Graphs"],["custom",ClipboardList,"Custom Reports"]].map(([v,Ic,l])=>(
+          <button key={v} onClick={()=>setSection(v)} style={{flex:1,padding:"9px 14px",borderRadius:9,border:"none",background:section===v?"#fff":"transparent",fontWeight:section===v?700:500,fontSize:13,color:section===v?"#0f172a":"#64748b",cursor:"pointer",boxShadow:section===v?"0 1px 3px rgba(0,0,0,.1)":"none",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}><Ic size={14} strokeWidth={1.75}/>{l}</button>
         ))}
       </div>
 
@@ -2189,7 +2326,7 @@ function ReportsPage(){
                   <Sel value={selMonth} onChange={setSelMonth} options={MONTHS.map(m=>({v:m,l:fmtLong(m)}))} style={{width:155}}/>
                 </div>
                 <div style={{display:"flex",gap:8}}>
-                  <ExportBtn label="⬇ CSV" onClick={()=>exportCSV(R.profitByClient.map(c=>[c.name,c.contractValue,c.tenure,c.resourceCost,c.monthlyProfit,c.marginPercent.toFixed(2),c.allocatedHours]),["Client","Contract Value","Tenure","Resource Cost","Net Profit","Margin%","Hours"],"profit-by-client.csv")}/>
+                  <ExportBtn label="CSV" onClick={()=>exportCSV(R.profitByClient.map(c=>[c.name,c.contractValue,c.tenure,c.resourceCost,c.monthlyProfit,c.marginPercent.toFixed(2),c.allocatedHours]),["Client","Contract Value","Tenure","Resource Cost","Net Profit","Margin%","Hours"],"profit-by-client.csv")}/>
                 </div>
               </div>
               <Card style={{padding:18}}>
@@ -2201,9 +2338,9 @@ function ReportsPage(){
                     <YAxis tick={{fontSize:10,fill:"#64748b"}} tickFormatter={v=>`${v/1000}K`}/>
                     <Tooltip formatter={v=>SAR(v)} contentStyle={{borderRadius:8,border:"none"}}/>
                     <Legend wrapperStyle={{fontSize:11,color:"#64748b"}}/>
-                    <Bar dataKey="monthlyRetainer" name="Monthly Retainer" fill="#6366f1" radius={[3,3,0,0]}/>
-                    <Bar dataKey="resourceCost"    name="Resource Cost"    fill="#f59e0b" radius={[3,3,0,0]}/>
-                    <Bar dataKey="monthlyProfit"   name="Monthly Profit"   fill="#6366f1" radius={[3,3,0,0]}/>
+                    <Bar dataKey="monthlyRetainer" name="Monthly Retainer" fill="#008A57" radius={[3,3,0,0]}/>
+                    <Bar dataKey="resourceCost"    name="Resource Cost"    fill="#475569" radius={[3,3,0,0]}/>
+                    <Bar dataKey="monthlyProfit"   name="Monthly Profit"   fill="#34D399" radius={[3,3,0,0]}/>
                   </BarChart>
                 </ResponsiveContainer>
                 <div style={{overflowX:"auto",marginTop:16}}>
@@ -2229,7 +2366,7 @@ function ReportsPage(){
           {chartTab==="profit-by-department"&&(
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
               <div style={{display:"flex",justifyContent:"flex-end"}}>
-                <ExportBtn label="⬇ CSV" onClick={()=>exportCSV(R.profitByDepartment.map(d=>[d.name,d.budget,d.cost,d.profit,d.margin.toFixed(2)]),["Department","Budget","Cost","Profit","Margin%"],"profit-by-dept.csv")}/>
+                <ExportBtn label="CSV" onClick={()=>exportCSV(R.profitByDepartment.map(d=>[d.name,d.budget,d.cost,d.profit,d.margin.toFixed(2)]),["Department","Budget","Cost","Profit","Margin%"],"profit-by-dept.csv")}/>
               </div>
               <Card style={{padding:18}}>
                 <p style={{margin:"0 0 14px",fontWeight:700,fontSize:14,color:"#0f172a"}}>Profit by Department vs Contract Budget</p>
@@ -2240,9 +2377,9 @@ function ReportsPage(){
                     <YAxis tick={{fontSize:10,fill:"#64748b"}} tickFormatter={v=>`${v/1000}K`}/>
                     <Tooltip formatter={v=>SAR(v)} contentStyle={{borderRadius:8,border:"none"}}/>
                     <Legend wrapperStyle={{fontSize:11,color:"#64748b"}}/>
-                    <Bar dataKey="budget" name="Budget"      fill="#6366f1" radius={[3,3,0,0]}/>
-                    <Bar dataKey="cost"   name="Actual Cost" fill="#f59e0b" radius={[3,3,0,0]}/>
-                    <Bar dataKey="profit" name="Profit"      fill="#6366f1" radius={[3,3,0,0]}/>
+                    <Bar dataKey="budget" name="Budget"      fill="#008A57" radius={[3,3,0,0]}/>
+                    <Bar dataKey="cost"   name="Actual Cost" fill="#475569" radius={[3,3,0,0]}/>
+                    <Bar dataKey="profit" name="Profit"      fill="#008A57" radius={[3,3,0,0]}/>
                   </BarChart>
                 </ResponsiveContainer>
                 <div style={{overflowX:"auto",marginTop:16}}>
@@ -2268,7 +2405,7 @@ function ReportsPage(){
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
                 <Sel value={selDept} onChange={setSelDept} options={[{v:"all",l:"All Departments"},{v:"Client Servicing",l:"Client Servicing"},{v:"Production",l:"Production"},{v:"Creative",l:"Creative"},{v:"Planning",l:"Planning"}]} style={{width:200}}/>
-                <ExportBtn label="⬇ CSV" onClick={()=>{
+                <ExportBtn label="CSV" onClick={()=>{
                   const rows=R.resourceByDepartment.filter(d=>selDept==="all"||d.department===selDept).flatMap(d=>d.clientBreakdown.map(c=>[d.department,c.client,c.hours,c.cost]));
                   exportCSV(rows,["Department","Client","Hours","Cost"],"resource-allocation.csv");
                 }}/>
@@ -2277,7 +2414,7 @@ function ReportsPage(){
                 <Card key={dept.department} style={{padding:18}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                     <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>{dept.department} Department</p>
-                    <span style={{fontSize:12,color:"#64748b"}}>{dept.employeeCount} employees · {dept.totalHours}h · {dept.avgUtilization.toFixed(0)}% utilized</span>
+                    <span style={{fontSize:12,color:"#64748b"}}>{dept.employeeCount} employees · {fmtH(dept.totalHours)}h · {dept.avgUtilization.toFixed(0)}% utilized</span>
                   </div>
                   <ResponsiveContainer width="100%" height={200}>
                     <BarChart data={dept.clientBreakdown} margin={{top:5,right:10,left:5,bottom:36}}>
@@ -2286,8 +2423,8 @@ function ReportsPage(){
                       <YAxis tick={{fontSize:9,fill:"#64748b"}}/>
                       <Tooltip formatter={(v,n)=>n==="hours"?`${v}h`:SAR(v)} contentStyle={{borderRadius:8,border:"none"}}/>
                       <Legend wrapperStyle={{fontSize:10,color:"#64748b"}}/>
-                      <Bar dataKey="hours" name="Hours" fill="#6366f1" radius={[3,3,0,0]}/>
-                      <Bar dataKey="cost"  name="Cost"  fill="#6366f1" radius={[3,3,0,0]}/>
+                      <Bar dataKey="hours" name="Hours" fill="#008A57" radius={[3,3,0,0]}/>
+                      <Bar dataKey="cost"  name="Cost"  fill="#475569" radius={[3,3,0,0]}/>
                     </BarChart>
                   </ResponsiveContainer>
                   <table style={{width:"100%",borderCollapse:"collapse",marginTop:12}}>
@@ -2297,7 +2434,7 @@ function ReportsPage(){
                         <tr key={i}><TD><strong>{c.client}</strong></TD><TD align="center">{c.hours}h</TD><TD align="right" style={{color:"#10b981"}}>{SAR(c.cost)}</TD></tr>
                       ))}
                       <tr style={{background:"#fff",fontWeight:700}}>
-                        <TD>Total</TD><TD align="center">{dept.totalHours}h</TD><TD align="right">{SAR(Math.round(dept.totalCost))}</TD>
+                        <TD>Total</TD><TD align="center">{fmtH(dept.totalHours)}h</TD><TD align="right">{SAR(Math.round(dept.totalCost))}</TD>
                       </tr>
                     </tbody>
                   </table>
@@ -2310,7 +2447,7 @@ function ReportsPage(){
           {chartTab==="cash-flow"&&(
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
               <div style={{display:"flex",justifyContent:"flex-end"}}>
-                <ExportBtn label="⬇ CSV" onClick={()=>exportCSV(R.cashFlow.map(r=>[r.month,r.expectedRevenue,r.expectedCost,r.netCashFlow,r.cumulativeCash]),["Month","Revenue","Cost","Net","Cumulative"],"cash-flow.csv")}/>
+                <ExportBtn label="CSV" onClick={()=>exportCSV(R.cashFlow.map(r=>[r.month,r.expectedRevenue,r.expectedCost,r.netCashFlow,r.cumulativeCash]),["Month","Revenue","Cost","Net","Cumulative"],"cash-flow.csv")}/>
               </div>
               <Card style={{padding:18}}>
                 <p style={{margin:"0 0 14px",fontWeight:700,fontSize:14,color:"#0f172a"}}>12-Month Cash Flow Forecast</p>
@@ -2321,9 +2458,9 @@ function ReportsPage(){
                     <YAxis tick={{fontSize:10,fill:"#64748b"}} tickFormatter={v=>`${v/1000}K`}/>
                     <Tooltip formatter={v=>SAR(v)} contentStyle={{borderRadius:8,border:"none"}}/>
                     <Legend wrapperStyle={{fontSize:11,color:"#64748b"}}/>
-                    <Line type="monotone" dataKey="expectedRevenue" name="Revenue"       stroke="#6366f1" strokeWidth={3}/>
-                    <Line type="monotone" dataKey="expectedCost"    name="Cost"          stroke="#f59e0b" strokeWidth={3}/>
-                    <Line type="monotone" dataKey="netCashFlow"     name="Net Cash Flow" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5"/>
+                    <Line type="monotone" dataKey="expectedRevenue" name="Revenue"       stroke="#008A57" strokeWidth={3}/>
+                    <Line type="monotone" dataKey="expectedCost"    name="Cost"          stroke="#475569" strokeWidth={3}/>
+                    <Line type="monotone" dataKey="netCashFlow"     name="Net Cash Flow" stroke="#34D399" strokeWidth={2} strokeDasharray="5 5"/>
                   </LineChart>
                 </ResponsiveContainer>
                 <div style={{overflowX:"auto",marginTop:16}}>
@@ -2334,7 +2471,7 @@ function ReportsPage(){
                         <TD><strong>{r.month}</strong></TD>
                         <TD align="right" style={{color:"#10b981"}}>{SAR(r.expectedRevenue)}</TD>
                         <TD align="right" style={{color:"#d97706"}}>{SAR(r.expectedCost)}</TD>
-                        <TD align="right" style={{fontWeight:700,color:r.netCashFlow>=0?"#6366f1":"#EF4444"}}>{SAR(r.netCashFlow)}</TD>
+                        <TD align="right" style={{fontWeight:700,color:r.netCashFlow>=0?"#008A57":"#EF4444"}}>{SAR(r.netCashFlow)}</TD>
                         <TD align="right">{SAR(r.cumulativeCash)}</TD>
                       </tr>
                     ))}</tbody>
@@ -2348,7 +2485,7 @@ function ReportsPage(){
           {chartTab==="risk-analysis"&&(
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
               <div style={{display:"flex",justifyContent:"flex-end"}}>
-                <ExportBtn label="⬇ CSV" onClick={()=>exportCSV(R.clientRisk.map(c=>[c.name,c.contractValue,c.monthlyProfit,c.marginPercent.toFixed(1),c.riskScore,c.riskLevel,c.recommendation]),["Client","Contract Value","Net Profit","Margin%","Risk Score","Risk Level","Recommendation"],"risk-analysis.csv")}/>
+                <ExportBtn label="CSV" onClick={()=>exportCSV(R.clientRisk.map(c=>[c.name,c.contractValue,c.monthlyProfit,c.marginPercent.toFixed(1),c.riskScore,c.riskLevel,c.recommendation]),["Client","Contract Value","Net Profit","Margin%","Risk Score","Risk Level","Recommendation"],"risk-analysis.csv")}/>
               </div>
               <Card style={{padding:18}}>
                 <p style={{margin:"0 0 14px",fontWeight:700,fontSize:14,color:"#0f172a"}}>Client Risk Analysis & Recommendations</p>
@@ -2380,7 +2517,7 @@ function ReportsPage(){
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
                 <Sel value={selClosedClient} onChange={setSelClosedClient} options={[{v:"all",l:"All Clients"},...R.uniqueClosedClients.map(c=>({v:c,l:c}))]} style={{width:200}}/>
-                <ExportBtn label="⬇ CSV" onClick={()=>{
+                <ExportBtn label="CSV" onClick={()=>{
                   const rows=R.closedMonths.flatMap(m=>m.clients.filter(c=>selClosedClient==="all"||c.name===selClosedClient).map(c=>[m.monthFormatted,c.name,c.retainer,c.cost,c.profit]));
                   exportCSV(rows,["Month","Client","Retainer","Cost","Profit"],"monthly-closed.csv");
                 }}/>
@@ -2398,9 +2535,9 @@ function ReportsPage(){
                     <YAxis tick={{fontSize:10,fill:"#64748b"}} tickFormatter={v=>`${v/1000}K`}/>
                     <Tooltip formatter={v=>SAR(v)} contentStyle={{borderRadius:8,border:"none"}}/>
                     <Legend wrapperStyle={{fontSize:11,color:"#64748b"}}/>
-                    <Bar dataKey="retainer" name="Monthly Retainer" fill="#6366f1" radius={[3,3,0,0]}/>
-                    <Bar dataKey="cost"     name="Resource Cost"    fill="#f59e0b" radius={[3,3,0,0]}/>
-                    <Bar dataKey="profit"   name="Profit"           fill="#6366f1" radius={[3,3,0,0]}/>
+                    <Bar dataKey="retainer" name="Monthly Retainer" fill="#008A57" radius={[3,3,0,0]}/>
+                    <Bar dataKey="cost"     name="Resource Cost"    fill="#475569" radius={[3,3,0,0]}/>
+                    <Bar dataKey="profit"   name="Profit"           fill="#008A57" radius={[3,3,0,0]}/>
                   </BarChart>
                 </ResponsiveContainer>
                 <div style={{overflowX:"auto",marginTop:14}}>
@@ -2457,7 +2594,7 @@ function ReportsPage(){
                       <Sel value={selRevCat} onChange={setSelRevCat} options={[{v:"all",l:"All Categories"},{v:"Retainer",l:"Retainer"},{v:"Project",l:"Project"},{v:"Adhoc",l:"Adhoc"}]} style={{width:150}}/>
                     </div>
                   </div>
-                  <ExportBtn label="⬇ Export Excel" onClick={()=>exportCSV(rows.map(r=>[r.month,r.client_name,r.contract_number,r.contract_value,r.start_date,r.end_date,r.monthly_retainer,r.allocated_hours,r.resource_cost,r.profit,r.margin,r.status]),["Month","Client","Contract#","Value","Start","End","Revenue","Hours","Cost","Profit","Margin%","Status"],"revenue-profit.csv")}/>
+                  <ExportBtn label="Export Excel" onClick={()=>exportCSV(rows.map(r=>[r.month,r.client_name,r.contract_number,r.contract_value,r.start_date,r.end_date,r.monthly_retainer,r.allocated_hours,r.resource_cost,r.profit,r.margin,r.status]),["Month","Client","Contract#","Value","Start","End","Revenue","Hours","Cost","Profit","Margin%","Status"],"revenue-profit.csv")}/>
                 </div>
                 <Card style={{overflow:"hidden"}}>
                   <div style={{padding:"14px 18px",borderBottom:"1px solid #f1f5f9"}}><p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>Revenue & Profit by Contract</p></div>
@@ -2528,7 +2665,7 @@ function ReportsPage(){
                     <span style={{fontSize:12,color:"#64748b"}}>Month:</span>
                     <Sel value={selUtilMonth} onChange={setSelUtilMonth} options={availMonths.map(m=>({v:m,l:fmtLong(m)}))} style={{width:155}}/>
                   </div>
-                  <ExportBtn label="⬇ Export Excel" onClick={()=>exportCSV(rows.map(r=>[selUtilMonth,r.name,r.department?.replace(" Department",""),r.ah,r.avail,r.pct,r.hr,r.cost,r.contracts.join(", "),r.over?"Yes":"No"]),["Month","Employee","Dept","Alloc Hrs","Avail Hrs","Util%","Hourly Cost","Resource Cost","Contracts","Overalloc"],"employee-util.csv")}/>
+                  <ExportBtn label="Export Excel" onClick={()=>exportCSV(rows.map(r=>[selUtilMonth,r.name,r.department?.replace(" Department",""),r.ah,r.avail,r.pct,r.hr,r.cost,r.contracts.join(", "),r.over?"Yes":"No"]),["Month","Employee","Dept","Alloc Hrs","Avail Hrs","Util%","Hourly Cost","Resource Cost","Contracts","Overalloc"],"employee-util.csv")}/>
                 </div>
                 <Card style={{overflow:"hidden"}}>
                   <div style={{padding:"14px 18px",borderBottom:"1px solid #f1f5f9"}}><p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>Employee Utilization — {fmtLong(selUtilMonth)}</p></div>
@@ -2601,7 +2738,7 @@ function ReportsPage(){
                     <span style={{fontSize:12,color:"#64748b"}}>Month:</span>
                     <Sel value={selDeptMonth} onChange={setSelDeptMonth} options={availMonths.map(m=>({v:m,l:fmtLong(m)}))} style={{width:155}}/>
                   </div>
-                  <ExportBtn label="⬇ Export Excel" onClick={()=>exportCSV(rows.map(r=>[r.dept,r.empCount,r.totalHours,r.util,r.totalBudget,r.totalCost,r.profit,r.margin]),["Dept","Employees","Hours","Util%","Budget","Cost","Profit","Margin%"],"dept-performance.csv")}/>
+                  <ExportBtn label="Export Excel" onClick={()=>exportCSV(rows.map(r=>[r.dept,r.empCount,r.totalHours,r.util,r.totalBudget,r.totalCost,r.profit,r.margin]),["Dept","Employees","Hours","Util%","Budget","Cost","Profit","Margin%"],"dept-performance.csv")}/>
                 </div>
                 <Card style={{padding:18}}>
                   <p style={{margin:"0 0 14px",fontWeight:700,fontSize:14,color:"#0f172a"}}>Department Performance — {fmtLong(selDeptMonth)}</p>
@@ -2612,9 +2749,9 @@ function ReportsPage(){
                       <YAxis tick={{fontSize:10,fill:"#64748b"}} tickFormatter={v=>`${v/1000}K`}/>
                       <Tooltip formatter={v=>typeof v==="number"&&v>100?SAR(v):`${v}`} contentStyle={{borderRadius:8,border:"none"}}/>
                       <Legend wrapperStyle={{fontSize:11,color:"#64748b"}}/>
-                      <Bar dataKey="totalBudget" name="Budget" fill="#6366f1" radius={[3,3,0,0]}/>
-                      <Bar dataKey="totalCost"   name="Cost"   fill="#f59e0b" radius={[3,3,0,0]}/>
-                      <Bar dataKey="profit"      name="Profit" fill="#6366f1" radius={[3,3,0,0]}/>
+                      <Bar dataKey="totalBudget" name="Budget" fill="#008A57" radius={[3,3,0,0]}/>
+                      <Bar dataKey="totalCost"   name="Cost"   fill="#475569" radius={[3,3,0,0]}/>
+                      <Bar dataKey="profit"      name="Profit" fill="#34D399" radius={[3,3,0,0]}/>
                     </BarChart>
                   </ResponsiveContainer>
                   <div style={{overflowX:"auto",marginTop:16}}>
@@ -2629,7 +2766,7 @@ function ReportsPage(){
                         <tr key={r.dept} style={{background:i%2===0?"#fff":"#fafafa"}}>
                           <td style={{padding:"8px 10px",fontWeight:600,fontSize:13,borderBottom:"1px solid #f1f5f9"}}>{r.dept}</td>
                           <td style={{padding:"8px 10px",textAlign:"center",fontSize:13,borderBottom:"1px solid #f1f5f9"}}>{r.empCount}</td>
-                          <td style={{padding:"8px 10px",textAlign:"center",fontSize:13,borderBottom:"1px solid #f1f5f9"}}>{r.totalHours}h</td>
+                          <td style={{padding:"8px 10px",textAlign:"center",fontSize:13,borderBottom:"1px solid #f1f5f9"}}>{fmtH(r.totalHours)}h</td>
                           <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{marginBadge(r.util)}</td>
                           <td style={{padding:"8px 10px",textAlign:"center",fontSize:13,borderBottom:"1px solid #f1f5f9"}}>{SAR(r.totalBudget)}</td>
                           <td style={{padding:"8px 10px",textAlign:"center",fontSize:13,color:"#d97706",borderBottom:"1px solid #f1f5f9"}}>{SAR(r.totalCost)}</td>
@@ -2690,12 +2827,12 @@ function ReportsPage(){
                     ...rows.map(r=>[selDeptCapMonth,r.dept,r.totalEmployees,r.totalMonthlyCost,r.totalClientBudget,r.budgetCoveragePct+'%',r.allocatedHours+'h',r.capacityHours+'h',r.utilizationPct+'%',r.budgetSurplusDeficit]),
                   ];
                   exportXLSX(wsData,'Dept Capacity vs Budget',`dept-capacity-${selDeptCapMonth}.xlsx`);
-                }}>⬇ Export Excel</Btn>
+                }} style={{gap:6}}><FileSpreadsheet size={13} strokeWidth={1.75}/>Export Excel</Btn>
                 <Btn variant="outline" size="sm" onClick={()=>{
                   const headers=['Department','Employees','Resource Cost','Client Budget','Coverage %','Alloc Hrs','Cap Hrs','Util %','Surplus/Deficit'];
                   const pdfRows=rows.map(r=>[r.dept,r.totalEmployees,r.totalMonthlyCost.toLocaleString(),r.totalClientBudget.toLocaleString(),r.budgetCoveragePct+'%',r.allocatedHours+'h',r.capacityHours+'h',r.utilizationPct+'%',r.budgetSurplusDeficit.toLocaleString()]);
                   exportPDFTable(`Department Capacity vs Budget — ${fmtLong(selDeptCapMonth)}`,headers,pdfRows,`dept-capacity-${selDeptCapMonth}.pdf`);
-                }}>⬇ Export PDF</Btn>
+                }} style={{gap:6}}><Download size={13} strokeWidth={1.75}/>Export PDF</Btn>
               </div>
             </div>
             <Card style={{overflow:"hidden"}}>
@@ -2763,13 +2900,13 @@ function ReportsPage(){
         // Wait for Supabase data to load
         if(!dataLoaded) return(
           <div style={{textAlign:"center",padding:60,color:"#94a3b8"}}>
-            <div style={{fontSize:32,marginBottom:12}}>⏳</div>
+            <Clock size={32} strokeWidth={1.25} style={{margin:"0 auto 12px",display:"block",color:"#cbd5e1"}}/>
             <p style={{fontSize:14}}>Loading...</p>
           </div>
         );
         if(realContracts.length===0) return(
           <div style={{textAlign:"center",padding:60,color:"#94a3b8"}}>
-            <div style={{fontSize:40,marginBottom:12}}>📋</div>
+            <ClipboardList size={40} strokeWidth={1.25} style={{margin:"0 auto 12px",display:"block",color:"#cbd5e1"}}/>
             <p style={{fontSize:14}}>No contracts found. Add contracts first.</p>
           </div>
         );
@@ -2830,7 +2967,7 @@ function ReportsPage(){
                 rows.forEach(r=>wsData.push([r.clientName,r.contractNumber,r.contractValue,r.tenureMonths,r.startDate,r.endDate,r.status,...allMonthsList.map(m=>r.monthValues[m]||""),r.total]));
                 wsData.push(["Total","","","","","","",...colTotals,grandTotal]);
                 exportXLSX(wsData,"Contract Revenue Forecast",`contract-forecast-${minD}-to-${maxD}.xlsx`);
-              }}>⬇ Export Excel</Btn>
+              }} style={{gap:6}}><FileSpreadsheet size={13} strokeWidth={1.75}/>Export Excel</Btn>
             </div>
             <Card style={{overflow:"hidden"}}>
               <div style={{padding:"12px 16px",borderBottom:"1px solid #e2e8f0"}}>
@@ -2906,8 +3043,23 @@ function MonthlyClosePage(){
   const {sb}=useAuth();
   const [snapshots,setSnapshots]=useState([]);
   const [loading,setLoading]=useState(true);
+  const [realContracts,setRealContracts]=useState([]);
+  const [realEmployees,setRealEmployees]=useState([]);
+  const [realAllocs,setRealAllocs]=useState([]);
+
   useEffect(()=>{
-    sb.from('monthly_snapshots').select('*').order('month',{ascending:false}).then(({data})=>{if(data)setSnapshots(data);setLoading(false);});
+    Promise.all([
+      sb.from('monthly_snapshots').select('*').order('month',{ascending:false}),
+      sb.from('contracts').select('*'),
+      sb.from('employees').select('*'),
+      sb.from('allocations').select('*'),
+    ]).then(([{data:sn},{data:ct},{data:em},{data:al}])=>{
+      if(sn) setSnapshots(sn);
+      if(ct) setRealContracts(ct.map(x=>({...x,cid:x.client_id,cn:x.client_name,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status})));
+      if(em) setRealEmployees(em.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0})));
+      if(al) setRealAllocs(al.map(x=>({...x,eid:x.employee_id,cid:x.client_id,h:parseFloat(x.allocated_hours)||0})));
+      setLoading(false);
+    });
   },[sb]);
   const dbBulkAdd=async items=>{const{data}=await sb.from('monthly_snapshots').insert(items.map(s=>({month:s.month,contract_id:s.contract_id,contract_number:s.contract_number,client_name:s.client_name,monthly_retainer:s.monthly_retainer,resource_cost:s.resource_cost,profit:s.profit,allocated_hours:s.allocated_hours,is_closed:true}))).select();if(data)setSnapshots(p=>[...p,...data]);};
   const dbDelete=async month=>{await sb.from('monthly_snapshots').delete().eq('month',month);setSnapshots(p=>p.filter(s=>s.month!==month));};
@@ -2933,19 +3085,22 @@ function MonthlyClosePage(){
 
   // Build preview data from mock allocs + contracts
   const buildPreview = (month) => {
-    const als = ALLOCS_BY_MONTH[month]||[];
+    const contracts = realContracts.length>0 ? realContracts : MOCK_CONTRACTS_FULL;
+    const employees = realEmployees.length>0 ? realEmployees : EMPLOYEES_INIT;
+    const allAllocs = realAllocs.length>0 ? realAllocs : (ALLOCS_BY_MONTH[month]||[]);
+    const als = allAllocs.filter(a=>a.month===month);
     const em  = {};
-    EMPLOYEES_INIT.forEach(e=>{em[e.id]={...e,hr:e.mc/HPM};});
-    return MOCK_CONTRACTS_FULL.filter(c=>isActive(c,month)&&c.st==="Active").map(c=>{
+    employees.forEach(e=>{em[e.id]={...e,hr:(e.mc||e.monthly_cost||0)/HPM};});
+    return contracts.filter(c=>isActive(c,month)&&(c.st||c.status)==="Active").map(c=>{
       let rc=0,ah=0;
-      als.filter(a=>a.cid===c.cid).forEach(a=>{
-        const e=em[a.eid];
-        rc+=(e?e.hr:0)*a.h;
-        ah+=a.h;
+      als.filter(a=>(a.cid||a.client_id)===c.client_id||(a.contract_id===c.id)).forEach(a=>{
+        const e=em[a.eid||a.employee_id];
+        rc+=(e?e.hr:0)*(a.h||a.allocated_hours||0);
+        ah+=(a.h||a.allocated_hours||0);
       });
-      const mr=c.cv/c.tm;
-      return{contract_id:c.id,contract_number:c.contract_number,client_name:c.cn,month,
-        resource_cost:Math.round(rc),allocated_hours:ah,monthly_retainer:Math.round(mr),
+      const mr=Math.round((c.cv||parseFloat(c.contract_value)||0)/(c.tm||parseFloat(c.tenure_months)||1));
+      return{contract_id:c.id,contract_number:c.contract_number,client_name:c.cn||c.client_name,month,
+        resource_cost:Math.round(rc),allocated_hours:Math.round(ah*10)/10,monthly_retainer:mr,
         profit:Math.round(mr-rc),is_closed:true,closed_date:new Date().toISOString()};
     });
   };
@@ -3000,16 +3155,20 @@ function MonthlyClosePage(){
 
   // Employee breakdown for a closed month
   const getEmpBreakdown = (month) => {
-    const als = ALLOCS_BY_MONTH[month]||[];
+    const employees = realEmployees.length>0 ? realEmployees : EMPLOYEES_INIT;
+    const allAllocs = realAllocs.length>0 ? realAllocs : (ALLOCS_BY_MONTH[month]||[]);
+    const als = allAllocs.filter(a=>a.month===month);
     const em  = {};
-    EMPLOYEES_INIT.forEach(e=>{em[e.id]={...e,hr:e.mc/HPM};});
+    employees.forEach(e=>{em[e.id]={...e,hr:(e.mc||e.monthly_cost||0)/HPM};});
     const map = {};
     als.forEach(a=>{
-      if(!map[a.eid]) map[a.eid]={name:EMPLOYEES_INIT.find(e=>e.id===a.eid)?.name||"—",department:(EMPLOYEES_INIT.find(e=>e.id===a.eid)?.department||"—").replace(" Department",""),totalHours:0,totalCost:0,clients:[]};
-      const e=em[a.eid];
-      map[a.eid].totalHours+=a.h;
-      map[a.eid].totalCost+=(e?e.hr:0)*a.h;
-      map[a.eid].clients.push(a.client_name);
+      const eid=a.eid||a.employee_id;
+      const emp=employees.find(e=>e.id===eid);
+      if(!map[eid]) map[eid]={name:emp?.name||"—",department:(emp?.department||"—").replace(" Department",""),totalHours:0,totalCost:0,clients:[]};
+      const e=em[eid];
+      map[eid].totalHours+=(a.h||a.allocated_hours||0);
+      map[eid].totalCost+=(e?e.hr:0)*(a.h||a.allocated_hours||0);
+      map[eid].clients.push(a.client_name||"");
     });
     return Object.values(map).sort((a,b)=>b.totalCost-a.totalCost);
   };
@@ -3031,7 +3190,7 @@ function MonthlyClosePage(){
         <p style={{margin:"0 0 14px",fontWeight:700,fontSize:15,color:"#0f172a"}}>2026 Months</p>
         {/* Warning banner */}
         <div style={{padding:"12px 16px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,marginBottom:16,display:"flex",gap:10}}>
-          <span style={{fontSize:18,flexShrink:0}}>⚠️</span>
+          <AlertTriangle size={18} strokeWidth={2} style={{color:"#d97706",flexShrink:0}}/>
           <div>
             <p style={{margin:0,fontWeight:600,fontSize:13,color:"#92400e"}}>Important</p>
             <p style={{margin:"3px 0 0",fontSize:12,color:"#a16207"}}>You can only close past months. Closing a month will freeze all resource costs, allocations, and reset employee hours to {HPM} for the next period.</p>
@@ -3041,24 +3200,32 @@ function MonthlyClosePage(){
           {MC_MONTHS.map(m=>{
             const closed=isMonthClosed(m.v);
             const past=isPast(m.v);
-            const canClose=past&&!closed;
+            // Sequential check: all previous past months must be closed first
+            const prevMonths=MC_MONTHS.filter(x=>x.v<m.v&&isPast(x.v));
+            const allPrevClosed=prevMonths.every(x=>isMonthClosed(x.v));
+            const canClose=past&&!closed&&allPrevClosed;
             const canDelete=closed&&m.v===latestClosed;
             return(
-              <div key={m.v} style={{padding:16,border:`1px solid ${closed?"#a7f3d0":"#e2e8f0"}`,borderRadius:12,background:"#fff",display:"flex",flexDirection:"column",gap:8}}>
+              <div key={m.v} style={{padding:16,border:`1px solid ${closed?"#a7f3d0":"#e2e8f0"}`,borderRadius:12,background:closed?"#f0fdf4":"#fff",display:"flex",flexDirection:"column",gap:8}}>
                 <div style={{display:"flex",alignItems:"center",gap:7}}>
-                  <span style={{fontSize:16}}>{closed?"🔒":"📅"}</span>
+                  {closed?<Lock size={15} strokeWidth={1.75} style={{color:"#64748b",flexShrink:0}}/>:<Calendar size={15} strokeWidth={1.75} style={{color:"#64748b",flexShrink:0}}/>}
                   <p style={{margin:0,fontWeight:600,fontSize:13,color:"#0f172a"}}>{m.l}</p>
                 </div>
                 {closed&&<Bdg bg="#d1fae5" color="#10b981">Closed</Bdg>}
                 <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:"auto"}}>
                   {closed?(
                     <>
-                      <Btn variant="outline" size="sm" onClick={()=>{setDetailMonth(m.v);setDetailModal(true);}} style={{width:"100%",justifyContent:"center"}}>👁 View</Btn>
-                      {canDelete&&<Btn variant="danger" size="sm" onClick={()=>handleDeleteMonth(m.v)} style={{width:"100%",justifyContent:"center"}}>🗑 Delete</Btn>}
+                      <Btn variant="outline" size="sm" onClick={()=>{setDetailMonth(m.v);setDetailModal(true);}} style={{width:"100%",justifyContent:"center",gap:6}}><Eye size={13} strokeWidth={1.75}/>View</Btn>
+                      {canDelete&&<Btn variant="danger" size="sm" onClick={()=>handleDeleteMonth(m.v)} style={{width:"100%",justifyContent:"center",gap:6}}><Trash2 size={13} strokeWidth={1.75}/>Delete</Btn>}
                     </>
                   ):(
-                    <Btn variant={canClose?"primary":"outline"} size="sm" onClick={()=>canClose&&handlePreview(m.v)} disabled={!canClose} style={{width:"100%",justifyContent:"center",opacity:canClose?1:0.45}}>
-                      🔒 Close
+                    <Btn variant={canClose?"primary":"outline"} size="sm" 
+                      onClick={()=>canClose&&handlePreview(m.v)} 
+                      disabled={!canClose} 
+                      title={!allPrevClosed?"Close previous months first":!past?"Future month":"Already closed"}
+                      style={{width:"100%",justifyContent:"center",opacity:canClose?1:0.45}}
+                    >
+                      <span style={{display:"inline-flex",alignItems:"center",gap:6}}><Lock size={13} strokeWidth={1.75}/>Close</span>
                     </Btn>
                   )}
                 </div>
@@ -3075,7 +3242,7 @@ function MonthlyClosePage(){
         </div>
         {closedSummary.length===0?(
           <div style={{textAlign:"center",padding:"48px",color:"#64748b"}}>
-            <div style={{fontSize:40,marginBottom:12}}>📅</div>
+            <Calendar size={40} strokeWidth={1.25} style={{margin:"0 auto 12px",display:"block",color:"#cbd5e1"}}/>
             <p style={{fontSize:14}}>No months closed yet</p>
           </div>
         ):(
@@ -3090,7 +3257,7 @@ function MonthlyClosePage(){
                 const margin=m.totalRetainer>0?(m.totalProfit/m.totalRetainer)*100:0;
                 return(
                   <tr key={m.month}>
-                    <TD><div style={{display:"flex",alignItems:"center",gap:7}}><span>🔒</span><strong>{fmtLong(m.month)}</strong></div></TD>
+                    <TD><div style={{display:"flex",alignItems:"center",gap:7}}><Lock size={13} strokeWidth={1.75} style={{color:"#64748b",flexShrink:0}}/><strong>{fmtLong(m.month)}</strong></div></TD>
                     <TD align="center">{m.contracts}</TD>
                     <TD align="right" style={{color:"#10b981",fontWeight:600}}>{SAR(m.totalRetainer)}</TD>
                     <TD align="right" style={{color:"#d97706"}}>{SAR(m.totalCost)}</TD>
@@ -3098,9 +3265,9 @@ function MonthlyClosePage(){
                     <TD align="center">{marginBadge(margin)}</TD>
                     <TD align="center">
                       <div style={{display:"flex",justifyContent:"center",gap:4}}>
-                        <Btn variant="ghost" size="sm" onClick={()=>{setDetailMonth(m.month);setDetailModal(true);}}>👁</Btn>
-                        <Btn variant="ghost" size="sm" onClick={()=>handleViewEmployees(m.month)}>👥</Btn>
-                        {m.month===latestClosed&&<Btn variant="danger" size="sm" onClick={()=>handleDeleteMonth(m.month)}>🗑</Btn>}
+                        <Btn variant="ghost" size="sm" onClick={()=>{setDetailMonth(m.month);setDetailModal(true);}}><Eye size={14} strokeWidth={1.75}/></Btn>
+                        <Btn variant="ghost" size="sm" onClick={()=>handleViewEmployees(m.month)}><Users size={14} strokeWidth={1.75}/></Btn>
+                        {m.month===latestClosed&&<Btn variant="danger" size="sm" onClick={()=>handleDeleteMonth(m.month)}><Trash2 size={14} strokeWidth={1.75}/></Btn>}
                       </div>
                     </TD>
                   </tr>
@@ -3138,13 +3305,13 @@ function MonthlyClosePage(){
           {previewData.length===0&&<p style={{textAlign:"center",color:"#64748b",fontSize:13}}>No active contracts with allocations found for this month.</p>}
           {blockError&&(
             <div style={{padding:"12px 16px",background:"#1a0a0a",border:"1px solid #fecaca",borderRadius:9}}>
-              <p style={{margin:"0 0 6px",fontWeight:700,fontSize:13,color:"#EF4444"}}>⛔ Monthly Close Blocked — Over-Recognition Detected</p>
+              <p style={{margin:"0 0 6px",fontWeight:700,fontSize:13,color:"#EF4444",display:"flex",alignItems:"center",gap:7}}><ShieldOff size={14} strokeWidth={2}/>Monthly Close Blocked — Over-Recognition Detected</p>
               <p style={{margin:0,fontSize:12,color:"#EF4444"}}><strong>{blockError.client_name}</strong> ({blockError.contract_number}): Total recognized would be <strong>SAR {blockError.total.toLocaleString("en-US",{maximumFractionDigits:0})}</strong>, exceeding contract value of <strong>SAR {blockError.cv.toLocaleString("en-US",{maximumFractionDigits:0})}</strong>.</p>
             </div>
           )}
           <div style={{display:"flex",justifyContent:"flex-end",gap:8}}>
             <Btn variant="outline" onClick={()=>{setPreviewModal(false);setBlockError(null);}}>Cancel</Btn>
-            <Btn variant="primary" disabled={!!blockError} onClick={handleConfirmClose}>🔒 Confirm Close</Btn>
+            <Btn variant="primary" disabled={!!blockError} onClick={handleConfirmClose} style={{gap:6}}><Lock size={13} strokeWidth={1.75}/>Confirm Close</Btn>
           </div>
         </div>
       </Modal>
@@ -3253,7 +3420,7 @@ function ExpenseCharts({expenses}){
     return Object.values(m).map(({contract,profits})=>({contract,avg_profit:profits.length?parseFloat((profits.reduce((a,b)=>a+b,0)/profits.length).toFixed(1)):null})).filter(d=>d.avg_profit!==null);
   },[expenses]);
   const fmt=v=>`SAR ${Number(v||0).toLocaleString()}`;
-  const EXP_COLORS=["#6366f1","#f59e0b","#6366f1","#ef4444","#3b82f6","#6366f1"];
+  const EXP_COLORS=["#008A57","#f59e0b","#008A57","#ef4444","#3b82f6","#008A57"];
   return(
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
       <Card style={{padding:16,gridColumn:"1/-1"}}>
@@ -3265,7 +3432,7 @@ function ExpenseCharts({expenses}){
             <YAxis tick={{fontSize:10,fill:"#64748b"}} tickFormatter={v=>`${(v/1000).toFixed(0)}k`}/>
             <Tooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:8,border:"none"}}/>
             <Legend wrapperStyle={{fontSize:11,color:"#64748b"}}/>
-            <Bar dataKey="approved" name="Approved" fill="#6366f1" radius={[3,3,0,0]}/>
+            <Bar dataKey="approved" name="Approved" fill="#008A57" radius={[3,3,0,0]}/>
             <Bar dataKey="draft"    name="Draft"    fill="#f59e0b" radius={[3,3,0,0]}/>
           </BarChart>
         </ResponsiveContainer>
@@ -3289,7 +3456,7 @@ function ExpenseCharts({expenses}){
             <XAxis type="number" tick={{fontSize:10,fill:"#64748b"}} tickFormatter={v=>`${(v/1000).toFixed(0)}k`}/>
             <YAxis type="category" dataKey="dept" tick={{fontSize:10,fill:"#64748b"}} width={88}/>
             <Tooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:8,border:"none"}}/>
-            <Bar dataKey="total" name="Total" fill="#6366f1" radius={[0,3,3,0]}/>
+            <Bar dataKey="total" name="Total" fill="#008A57" radius={[0,3,3,0]}/>
           </BarChart>
         </ResponsiveContainer>
       </Card>
@@ -3303,7 +3470,7 @@ function ExpenseCharts({expenses}){
               <YAxis tick={{fontSize:10,fill:"#64748b"}} unit="%" domain={[0,100]}/>
               <Tooltip formatter={v=>`${v}%`} contentStyle={{borderRadius:8,border:"none"}}/>
               <Bar dataKey="avg_profit" name="Avg Profit %">
-                {profitData.map((e,i)=><Cell key={i} fill={e.avg_profit>=30?"#6366f1":e.avg_profit>=10?"#f59e0b":"#ef4444"}/>)}
+                {profitData.map((e,i)=><Cell key={i} fill={e.avg_profit>=30?"#008A57":e.avg_profit>=10?"#f59e0b":"#ef4444"}/>)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -3316,18 +3483,211 @@ function ExpenseCharts({expenses}){
 function ContractExpensesPage(){
   const {sb}=useAuth();
   const [expenses,setExpenses]=useState([]);
+  const [realContracts,setRealContracts]=useState([]);
   const [loading,setLoading]=useState(true);
   useEffect(()=>{
-    sb.from('contract_expenses').select('*').order('created_at',{ascending:false}).then(({data})=>{if(data)setExpenses(data);setLoading(false);});
+    Promise.all([
+      sb.from('contract_expenses').select('*').order('created_at',{ascending:false}),
+      sb.from('contracts').select('*').order('contract_number'),
+    ]).then(([{data:ex},{data:ct}])=>{
+      if(ex) setExpenses(ex);
+      if(ct) setRealContracts(ct.map(x=>({
+        ...x,
+        cn:x.client_name,
+        cid:x.client_id,
+        cv:parseFloat(x.contract_value)||0,
+        tm:parseFloat(x.tenure_months)||1,
+        sd:x.start_date,
+        ed:x.end_date,
+        st:x.status,
+        contract_category:x.contract_category||'Retainer',
+      })));
+      setLoading(false);
+    });
   },[sb]);
-  const dbAdd=async p=>{const{data}=await sb.from('contract_expenses').insert([p]).select().single();if(data)setExpenses(x=>[data,...x]);};
-  const dbUpdate=async(id,p)=>{const{data}=await sb.from('contract_expenses').update(p).eq('id',id).select().single();if(data)setExpenses(x=>x.map(e=>e.id===id?data:e));};
+  const dbAdd=async p=>{
+    const{data,error}=await sb.from('contract_expenses').insert([{
+      expense_number:p.expense_number,request_date:p.request_date,
+      contract_id:p.contract_id||null,contract_number:p.contract_number||"",
+      client_name:p.client_name||"",contract_category:p.contract_category||"",
+      contract_start_date:p.contract_start_date||null,contract_end_date:p.contract_end_date||null,
+      total_contract_value:parseFloat(p.total_contract_value)||0,
+      budget_third_party:parseFloat(p.budget_third_party)||0,
+      contract_notes:p.contract_notes||"",
+      expense_type:p.expense_type||"",vendor_name:p.vendor_name||"",
+      amount:parseFloat(p.amount)||0,
+      previous_requested_total_amount:parseFloat(p.previous_requested_total_amount)||0,
+      project_profit_pct:parseFloat(p.project_profit_pct)||0,
+      department:p.department||"",item_details:p.item_details||"",
+      bill_number:p.bill_number||"",bill_date:p.bill_date||null,
+      attachment_url:p.attachment_url||"",attachment_name:p.attachment_name||"",
+      notes:p.notes||"",status:p.status||"Draft"
+    }]).select().single();
+    if(error){alert('Error saving expense: '+error.message);return;}
+    if(data)setExpenses(x=>[data,...x]);
+  };
+  const dbUpdate=async(id,p)=>{
+    const{data,error}=await sb.from('contract_expenses').update({
+      expense_number:p.expense_number,request_date:p.request_date,
+      contract_id:p.contract_id||null,contract_number:p.contract_number||"",
+      client_name:p.client_name||"",contract_category:p.contract_category||"",
+      contract_start_date:p.contract_start_date||null,contract_end_date:p.contract_end_date||null,
+      total_contract_value:parseFloat(p.total_contract_value)||0,
+      budget_third_party:parseFloat(p.budget_third_party)||0,
+      contract_notes:p.contract_notes||"",
+      expense_type:p.expense_type||"",vendor_name:p.vendor_name||"",
+      amount:parseFloat(p.amount)||0,
+      previous_requested_total_amount:parseFloat(p.previous_requested_total_amount)||0,
+      project_profit_pct:parseFloat(p.project_profit_pct)||0,
+      department:p.department||"",item_details:p.item_details||"",
+      bill_number:p.bill_number||"",bill_date:p.bill_date||null,
+      attachment_url:p.attachment_url||"",attachment_name:p.attachment_name||"",
+      notes:p.notes||"",status:p.status||"Draft"
+    }).eq('id',id).select().single();
+    if(error){alert('Error updating expense: '+error.message);return;}
+    if(data)setExpenses(x=>x.map(e=>e.id===id?data:e));};
   const dbDelete=async id=>{await sb.from('contract_expenses').delete().eq('id',id);setExpenses(x=>x.filter(e=>e.id!==id));};
   const [modalOpen,setModalOpen] = useState(false);
   const [editing,setEditing]     = useState(null);
   const [form,setForm]           = useState(EMPTY_EXP_FORM);
   const [search,setSearch]       = useState("");
   const [contractFilter,setContractFilter] = useState("all");
+  const [viewExpense,setViewExpense] = useState(null);
+
+  // ── PDF Download (matches Base44 structure) ──────────────────────────────
+  const handleDownloadPDF = (expense) => {
+    const doExport = () => {
+      const {jsPDF} = window.jspdf;
+      const doc = new jsPDF();
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      const margin = 18;
+      const colW = pageW - margin * 2;
+      let y = 0;
+
+      // Header
+      doc.setFillColor(30, 41, 59);
+      doc.rect(0, 0, pageW, 32, "F");
+      doc.setFontSize(16); doc.setFont("helvetica", "bold"); doc.setTextColor(255,255,255);
+      doc.text("Contract/Project Expense Report", margin, 14);
+      doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(148,163,184);
+      doc.text(`Generated: ${new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}`, margin, 22);
+
+      // Status badge
+      const sColor = expense.status==="Approved"?[16,185,129]:[245,158,11];
+      doc.setFillColor(...sColor);
+      doc.roundedRect(pageW-margin-28, 10, 28, 10, 3, 3, "F");
+      doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+      doc.text(expense.status||"Draft", pageW-margin-14, 16.5, {align:"center"});
+
+      y = 42;
+
+      const sectionHeader = (title, color=[30,41,59]) => {
+        doc.setFillColor(...color); doc.rect(margin, y, colW, 8, "F");
+        doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+        doc.text(title.toUpperCase(), margin+4, y+5.5); y += 11;
+      };
+
+      const row = (label, value, highlight=false) => {
+        if(highlight) doc.setFillColor(248,250,252); else doc.setFillColor(255,255,255);
+        doc.rect(margin, y-1, colW, 7, "F");
+        doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(71,85,105);
+        doc.text(label, margin+3, y+4);
+        doc.setFont("helvetica","normal"); doc.setTextColor(15,23,42);
+        doc.text(String(value??"-"), margin+72, y+4);
+        doc.setDrawColor(226,232,240); doc.line(margin, y+6, margin+colW, y+6);
+        y += 7;
+      };
+
+      sectionHeader("Expense Reference", [15,23,42]);
+      row("Expense Number", expense.expense_number||"-", false);
+      row("Request Date", expense.request_date||"-", true);
+      y += 4;
+
+      sectionHeader("Contract Details", [30,41,59]);
+      row("Contract Number", expense.contract_number, false);
+      row("Client Name", expense.client_name, true);
+      row("Category", expense.contract_category, false);
+      row("Total Contract Value (SAR)", Number(expense.total_contract_value||0).toLocaleString(), true);
+      if((expense.contract_category||"").toLowerCase().includes("retainer")){
+        row("3rd Party Budget (SAR)", Number(expense.budget_third_party||0).toLocaleString(), false);
+      }
+      row("Start Date", expense.contract_start_date, false);
+      row("End Date", expense.contract_end_date, true);
+      if(expense.contract_notes) row("Notes", expense.contract_notes, false);
+      y += 6;
+
+      sectionHeader("Expense Details", [51,65,85]);
+      row("Expense Type", expense.expense_type, false);
+      row("Vendor Name", expense.vendor_name, true);
+      row("Department", expense.department, false);
+      row("Amount (SAR)", Number(expense.amount||0).toLocaleString(), true);
+      row("Previous Requested Total (SAR)", Number(expense.previous_requested_total_amount||0).toLocaleString(), false);
+      row("Bill Number", expense.bill_number, true);
+      row("Bill Date", expense.bill_date, false);
+      row("Item Details", expense.item_details, true);
+      row("Notes", expense.notes, false);
+      y += 6;
+
+      sectionHeader("Profitability Overview", [15,118,110]);
+      const isRetainer=(expense.contract_category||"").toLowerCase().includes("retainer");
+      const profBase=isRetainer?(parseFloat(expense.budget_third_party)||0):(parseFloat(expense.total_contract_value)||0);
+      const total=parseFloat(expense.total_contract_value)||0;
+      const prev=parseFloat(expense.previous_requested_total_amount)||0;
+      const current=parseFloat(expense.amount)||0;
+      const profit=profBase-prev-current;
+      const profitPct=parseFloat(expense.project_profit_pct)||0;
+
+      if(profBase>0){
+        const barX=margin+4, barY=y+2, barH=14, barW=colW-8;
+        const prevR=Math.min(prev/profBase,1), currR=Math.min(current/profBase,1-prevR), profR=Math.max(0,1-prevR-currR);
+        if(prevR>0){doc.setFillColor(245,158,11);doc.rect(barX,barY,barW*prevR,barH,"F");}
+        if(currR>0){doc.setFillColor(239,68,68);doc.rect(barX+barW*prevR,barY,barW*currR,barH,"F");}
+        if(profR>0){doc.setFillColor(16,185,129);doc.rect(barX+barW*(prevR+currR),barY,barW*profR,barH,"F");}
+        doc.setDrawColor(200,200,200); doc.rect(barX,barY,barW,barH);
+      }
+      y += 22;
+
+      const legend=[
+        {label:"Previous Expenses",color:[245,158,11],value:`SAR ${prev.toLocaleString()}`},
+        {label:"Current Expense",color:[239,68,68],value:`SAR ${current.toLocaleString()}`},
+        {label:`Profit (${profitPct}%)`,color:[16,185,129],value:`SAR ${profit.toLocaleString()}`},
+      ];
+      const legW=colW/3;
+      legend.forEach((item,i)=>{
+        const lx=margin+4+i*legW;
+        doc.setFillColor(...item.color); doc.rect(lx,y,5,5,"F");
+        doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(71,85,105);
+        doc.text(item.label,lx+7,y+4);
+        doc.setFont("helvetica","normal"); doc.setTextColor(15,23,42);
+        doc.text(item.value,lx+7,y+9);
+      });
+      y += 18;
+
+      const pctColor=profitPct>=30?[16,185,129]:profitPct>=10?[245,158,11]:[239,68,68];
+      doc.setFillColor(...pctColor.map(c=>Math.round(c*0.12+243)));
+      doc.roundedRect(margin,y,colW,16,3,3,"F");
+      doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(...pctColor);
+      doc.text(`Profit: ${profitPct}%  |  Remaining: SAR ${profit.toLocaleString()}  |  Total: SAR ${total.toLocaleString()}`, margin+colW/2, y+10, {align:"center"});
+      y += 22;
+
+      // Footer
+      doc.setFillColor(241,245,249); doc.rect(0,pageH-12,pageW,12,"F");
+      doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(148,163,184);
+      doc.text("Confidential — Contract/Project Expense Report", margin, pageH-4.5);
+      doc.text(`Ref: ${expense.contract_number||expense.id}`, pageW-margin, pageH-4.5, {align:"right"});
+
+      doc.save(`expense-${expense.expense_number||expense.id}.pdf`);
+    };
+
+    if(window.jspdf) { doExport(); }
+    else {
+      const script=document.createElement('script');
+      script.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      script.onload=doExport;
+      document.head.appendChild(script);
+    }
+  };
 
   const genExpNum=()=>{
     const y=new Date().getFullYear();
@@ -3336,21 +3696,22 @@ function ContractExpensesPage(){
   };
 
   const handleContractSelect=cid=>{
-    const c=MOCK_CONTRACTS_FULL.find(x=>x.id===cid);
+    const contracts=realContracts.length>0?realContracts:MOCK_CONTRACTS_FULL;
+    const c=contracts.find(x=>x.id===cid);
     if(!c) return;
     const prev=expenses.filter(e=>e.contract_id===cid&&e.id!==editing?.id).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
     setForm(p=>{
       const n={...p,contract_id:c.id,contract_number:c.contract_number,client_name:c.cn,
         contract_category:c.contract_category||"Retainer",contract_start_date:c.sd,contract_end_date:c.ed,
-        total_contract_value:c.cv,contract_notes:c.notes||"",previous_requested_total_amount:prev};
-      n.project_profit_pct=calcProfitPct(n.total_contract_value,n.previous_requested_total_amount,n.amount);
+        total_contract_value:c.cv,budget_third_party:parseFloat(c.budget_third_party)||0,contract_notes:c.notes||"",previous_requested_total_amount:prev};
+      n.project_profit_pct=calcProfitPct(n.total_contract_value,n.previous_requested_total_amount,n.amount,n.contract_category,n.budget_third_party);
       return n;
     });
   };
 
   const updF=(k,v)=>setForm(p=>{
     const n={...p,[k]:v};
-    n.project_profit_pct=calcProfitPct(n.total_contract_value,n.previous_requested_total_amount,n.amount);
+    n.project_profit_pct=calcProfitPct(n.total_contract_value,n.previous_requested_total_amount,n.amount,n.contract_category,n.budget_third_party);
     return n;
   });
 
@@ -3402,7 +3763,7 @@ function ContractExpensesPage(){
           <h1 style={{fontSize:26,fontWeight:800,color:"#0f172a",margin:0}}>Contract/Project Expenses</h1>
           <p style={{fontSize:13,color:"#64748b",marginTop:3}}>Track and manage expenses per contract/project</p>
         </div>
-        <Btn variant="primary" onClick={openAdd}>＋ Add Expense</Btn>
+        <Btn variant="primary" onClick={openAdd} style={{gap:6}}><Plus size={14} strokeWidth={2}/>Add Expense</Btn>
       </div>
 
       {/* KPI Cards */}
@@ -3410,21 +3771,21 @@ function ContractExpensesPage(){
         {/* Total */}
         <Card style={{padding:18}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <div style={{width:40,height:40,borderRadius:10,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>💰</div>
+            <div style={{width:40,height:40,borderRadius:10,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",flexShrink:0}}><Wallet size={20} strokeWidth={1.75}/></div>
             <div><p style={{margin:0,fontSize:11,color:"#64748b"}}>Total Expenses</p><p style={{margin:"2px 0 0",fontSize:17,fontWeight:800,color:"#0f172a"}}>{SAR(totalExp)}</p></div>
           </div>
         </Card>
         {/* Approved */}
         <Card style={{padding:18}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <div style={{width:40,height:40,borderRadius:10,background:"#d1fae5",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>✅</div>
+            <div style={{width:40,height:40,borderRadius:10,background:"#d1fae5",display:"flex",alignItems:"center",justifyContent:"center",color:"#10b981",flexShrink:0}}><Check size={20} strokeWidth={2}/></div>
             <div><p style={{margin:0,fontSize:11,color:"#64748b"}}>Approved</p><p style={{margin:"2px 0 0",fontSize:17,fontWeight:800,color:"#10b981"}}>{SAR(approvedExp)}</p></div>
           </div>
         </Card>
         {/* Draft */}
         <Card style={{padding:18}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <div style={{width:40,height:40,borderRadius:10,background:"#fef9c3",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>📝</div>
+            <div style={{width:40,height:40,borderRadius:10,background:"#fef9c3",display:"flex",alignItems:"center",justifyContent:"center",color:"#d97706",flexShrink:0}}><Pencil size={20} strokeWidth={1.75}/></div>
             <div><p style={{margin:0,fontSize:11,color:"#64748b"}}>Draft</p><p style={{margin:"2px 0 0",fontSize:17,fontWeight:800,color:"#d97706"}}>{SAR(draftExp)}</p></div>
           </div>
         </Card>
@@ -3452,7 +3813,7 @@ function ContractExpensesPage(){
 
       {/* Search */}
       <div style={{position:"relative",maxWidth:320}}>
-        <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#64748b",fontSize:13}}>🔍</span>
+        <Search size={14} strokeWidth={1.75} style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#64748b"}}/>
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search expenses..."
           style={{width:"100%",padding:"8px 12px 8px 30px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,outline:"none",background:"#fff",boxSizing:"border-box"}}/>
       </div>
@@ -3485,8 +3846,10 @@ function ContractExpensesPage(){
                     <TD align="center"><Bdg bg={sb.bg} color={sb.col}>{e.status}</Bdg></TD>
                     <TD align="right">
                       <div style={{display:"flex",justifyContent:"flex-end",gap:4}}>
-                        <Btn variant="ghost" size="sm" onClick={()=>openEdit(e)}>✏️</Btn>
-                        <Btn variant="danger" size="sm" onClick={()=>del(e.id)}>🗑</Btn>
+                        <Btn variant="ghost" size="sm" onClick={()=>openEdit(e)} title="Edit"><Pencil size={14} strokeWidth={1.75}/></Btn>
+                        <Btn variant="ghost" size="sm" onClick={()=>handleDownloadPDF(e)} title="Download PDF" style={{color:"#3b82f6"}}><Download size={14} strokeWidth={1.75}/></Btn>
+                        <Btn variant="ghost" size="sm" onClick={()=>setViewExpense(e)} title="View Details" style={{color:"#008A57"}}><Eye size={14} strokeWidth={1.75}/></Btn>
+                        <Btn variant="danger" size="sm" onClick={()=>del(e.id)} title="Delete"><Trash2 size={14} strokeWidth={1.75}/></Btn>
                       </div>
                     </TD>
                   </tr>
@@ -3494,7 +3857,7 @@ function ContractExpensesPage(){
               })}
             </tbody>
           </table>
-          {filtered.length===0&&<div style={{textAlign:"center",padding:"48px",color:"#64748b"}}><div style={{fontSize:40,marginBottom:12}}>🧾</div><p style={{fontSize:14}}>No expenses found</p></div>}
+          {filtered.length===0&&<div style={{textAlign:"center",padding:"48px",color:"#64748b"}}><Receipt size={40} strokeWidth={1.25} style={{margin:"0 auto 12px",display:"block",color:"#cbd5e1"}}/><p style={{fontSize:14}}>No expenses found</p></div>}
         </div>
       </Card>
 
@@ -3510,7 +3873,7 @@ function ContractExpensesPage(){
             {/* Contract selector */}
             <div><Lbl>Contract *</Lbl>
               <Sel value={form.contract_id} onChange={handleContractSelect}
-                options={[{v:"",l:"Select a contract..."},...MOCK_CONTRACTS_FULL.map(c=>({v:c.id,l:`${c.contract_number} — ${c.cn}`}))]}
+                options={[{v:"",l:"Select a contract..."},...(realContracts.length>0?realContracts:MOCK_CONTRACTS_FULL).map(c=>({v:c.id,l:`${c.contract_number} — ${c.cn||c.client_name}`}))]}
                 style={{opacity:editing?.contract_id?0.6:1}}/>
             </div>
             {/* Read-only contract info */}
@@ -3541,7 +3904,7 @@ function ContractExpensesPage(){
             {/* Profit calc */}
             {form.contract_id&&(
               <div style={{padding:"12px 16px",background:"#fff",borderRadius:10,display:"flex",alignItems:"center",gap:14}}>
-                <div style={{width:38,height:38,borderRadius:9,background:"#fff",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>📈</div>
+                <div data-chart-tile="1" style={{width:38,height:38,borderRadius:9,background:"#fff",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#10b981"}}><TrendingUp size={18} strokeWidth={1.75}/></div>
                 <div>
                   <p style={{margin:0,fontSize:11,color:"#64748b",fontWeight:600}}>Project Profit % (Auto-calculated)</p>
                   <p style={{margin:"2px 0 0",fontSize:20,fontWeight:800,color:profitColor(form.project_profit_pct)}}>{form.project_profit_pct!==""&&form.project_profit_pct!=null?`${form.project_profit_pct}%`:"—"}</p>
@@ -3552,7 +3915,7 @@ function ContractExpensesPage(){
             {/* Attachment placeholder */}
             <div><Lbl>Attachment</Lbl>
               <div style={{border:"2px dashed #e2e8f0",borderRadius:10,padding:"16px 20px",textAlign:"center",color:"#64748b",cursor:"not-allowed"}}>
-                <p style={{margin:0,fontSize:13}}>📎 Click to upload PDF attachment</p>
+                <p style={{margin:0,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Paperclip size={14} strokeWidth={1.75}/>Click to upload PDF attachment</p>
                 <p style={{margin:"4px 0 0",fontSize:11}}>(File upload available in deployed version)</p>
               </div>
             </div>
@@ -3563,6 +3926,78 @@ function ContractExpensesPage(){
           </div>
         </form>
       </Modal>
+
+    {/* View Expense Modal */}
+    {viewExpense&&(
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+        <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:640,maxHeight:"90vh",overflow:"auto",boxShadow:"0 25px 50px rgba(0,0,0,.2)"}}>
+          <div style={{padding:"18px 24px",borderBottom:"1px solid #e2e8f0",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,background:"#fff",zIndex:1}}>
+            <div>
+              <p style={{margin:0,fontWeight:700,fontSize:15,color:"#0f172a"}}>Expense Details</p>
+              <p style={{margin:0,fontSize:12,color:"#64748b"}}>{viewExpense.expense_number||"—"}</p>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <Btn variant="outline" size="sm" onClick={()=>handleDownloadPDF(viewExpense)} style={{gap:6}}><Download size={13} strokeWidth={1.75}/>Download PDF</Btn>
+              <button onClick={()=>setViewExpense(null)} style={{background:"none",border:"none",cursor:"pointer",color:"#64748b",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:4}}><X size={18} strokeWidth={2}/></button>
+            </div>
+          </div>
+          <div style={{padding:24,display:"flex",flexDirection:"column",gap:20}}>
+            {/* Status */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{padding:"4px 12px",borderRadius:999,fontSize:12,fontWeight:600,background:viewExpense.status==="Approved"?"#d1fae5":"#fef3c7",color:viewExpense.status==="Approved"?"#059669":"#d97706"}}>{viewExpense.status||"Draft"}</span>
+              <span style={{fontSize:12,color:"#64748b"}}>{viewExpense.request_date||"—"}</span>
+            </div>
+            {/* Contract Details */}
+            <div style={{background:"#f8fafc",borderRadius:10,padding:16}}>
+              <p style={{margin:"0 0 10px",fontWeight:700,fontSize:12,color:"#0f172a",textTransform:"uppercase",letterSpacing:".05em"}}>Contract Details</p>
+              {[["Contract","contract_number"],["Client","client_name"],["Category","contract_category"],["Contract Value","total_contract_value"],...((viewExpense.contract_category||"").toLowerCase().includes("retainer")?[["3rd Party Budget","budget_third_party"]]:[]),["Start Date","contract_start_date"],["End Date","contract_end_date"]].map(([l,k])=>(
+                <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #e2e8f0",fontSize:13}}>
+                  <span style={{color:"#64748b"}}>{l}</span>
+                  <span style={{fontWeight:500,color:"#0f172a"}}>{k==="total_contract_value"?`SAR ${Number(viewExpense[k]||0).toLocaleString()}`:viewExpense[k]||"—"}</span>
+                </div>
+              ))}
+            </div>
+            {/* Expense Details */}
+            <div style={{background:"#f8fafc",borderRadius:10,padding:16}}>
+              <p style={{margin:"0 0 10px",fontWeight:700,fontSize:12,color:"#0f172a",textTransform:"uppercase",letterSpacing:".05em"}}>Expense Details</p>
+              {[["Type","expense_type"],["Vendor","vendor_name"],["Department","department"],["Amount","amount"],["Previous Total","previous_requested_total_amount"],["Bill #","bill_number"],["Bill Date","bill_date"],["Item Details","item_details"],["Notes","notes"]].map(([l,k])=>(
+                <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #e2e8f0",fontSize:13}}>
+                  <span style={{color:"#64748b"}}>{l}</span>
+                  <span style={{fontWeight:500,color:"#0f172a"}}>{["amount","previous_requested_total_amount"].includes(k)?`SAR ${Number(viewExpense[k]||0).toLocaleString()}`:viewExpense[k]||"—"}</span>
+                </div>
+              ))}
+            </div>
+            {/* Profitability */}
+            {(()=>{
+              const isRet=(viewExpense.contract_category||"").toLowerCase().includes("retainer");
+              const profBase=isRet?(parseFloat(viewExpense.budget_third_party)||0):(parseFloat(viewExpense.total_contract_value)||0);
+              const total=parseFloat(viewExpense.total_contract_value)||0;
+              const prev=parseFloat(viewExpense.previous_requested_total_amount)||0;
+              const curr=parseFloat(viewExpense.amount)||0;
+              const profit=profBase-prev-curr;
+              const pct=parseFloat(viewExpense.project_profit_pct)||0;
+              const clr=pct>=30?"#059669":pct>=10?"#d97706":"#dc2626";
+              return(
+                <div style={{background:"#f0fdf4",borderRadius:10,padding:16}}>
+                  <p style={{margin:"0 0 10px",fontWeight:700,fontSize:12,color:"#0f172a",textTransform:"uppercase",letterSpacing:".05em"}}>Profitability</p>
+                  <div style={{display:"flex",gap:4,height:16,borderRadius:6,overflow:"hidden",marginBottom:12}}>
+                    {prev>0&&<div style={{flex:prev/profBase,background:"#f59e0b"}}/>}
+                    {curr>0&&<div style={{flex:curr/profBase,background:"#ef4444"}}/>}
+                    {profit>0&&<div style={{flex:profit/profBase,background:"#10b981"}}/>}
+                  </div>
+                  <p style={{margin:"0 0 8px",fontSize:11,color:"#64748b"}}>{isRet?"vs 3rd Party Budget":"vs Total Contract Value"}: SAR {profBase.toLocaleString()}</p>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:13}}>
+                    <div style={{textAlign:"center"}}><p style={{margin:0,fontSize:11,color:"#64748b"}}>Previous</p><p style={{margin:0,fontWeight:600,color:"#d97706"}}>SAR {prev.toLocaleString()}</p></div>
+                    <div style={{textAlign:"center"}}><p style={{margin:0,fontSize:11,color:"#64748b"}}>Current</p><p style={{margin:0,fontWeight:600,color:"#ef4444"}}>SAR {curr.toLocaleString()}</p></div>
+                    <div style={{textAlign:"center"}}><p style={{margin:0,fontSize:11,color:"#64748b"}}>Profit ({pct}%)</p><p style={{margin:0,fontWeight:600,color:clr}}>SAR {profit.toLocaleString()}</p></div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 }
@@ -3719,8 +4154,8 @@ function SystemUsersPage(){
 
       {/* Tab bar */}
       <div style={{display:"flex",gap:4,background:"#f1f5f9",borderRadius:10,padding:4,maxWidth:340}}>
-        {[["users","👥 Users"],["roles","🛡 Role Permissions"]].map(([v,l])=>(
-          <button key={v} onClick={()=>setTab(v)} style={{flex:1,padding:"8px 12px",borderRadius:8,border:"none",background:tab===v?"#fff":"transparent",fontWeight:tab===v?700:500,fontSize:13,color:tab===v?"#0f172a":"#64748b",cursor:"pointer",boxShadow:tab===v?"0 1px 3px rgba(0,0,0,.1)":"none"}}>{l}</button>
+        {[["users",Users,"Users"],["roles",ShieldCheck,"Role Permissions"]].map(([v,Ic,l])=>(
+          <button key={v} onClick={()=>setTab(v)} style={{flex:1,padding:"8px 12px",borderRadius:8,border:"none",background:tab===v?"#fff":"transparent",fontWeight:tab===v?700:500,fontSize:13,color:tab===v?"#0f172a":"#64748b",cursor:"pointer",boxShadow:tab===v?"0 1px 3px rgba(0,0,0,.1)":"none",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}><Ic size={14} strokeWidth={1.75}/>{l}</button>
         ))}
       </div>
 
@@ -3730,7 +4165,7 @@ function SystemUsersPage(){
 
           {/* Invite card */}
           <Card style={{padding:20}}>
-            <p style={{margin:"0 0 14px",fontWeight:700,fontSize:14,color:"#0f172a",display:"flex",alignItems:"center",gap:8}}>➕ Invite New User</p>
+            <p style={{margin:"0 0 14px",fontWeight:700,fontSize:14,color:"#0f172a",display:"flex",alignItems:"center",gap:8}}><UserPlus size={16} strokeWidth={1.75} style={{color:"#64748b"}}/>Invite New User</p>
             <form onSubmit={handleInvite} style={{display:"flex",gap:10,flexWrap:"wrap"}}>
               <input type="email" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)}
                 placeholder="Enter email address" required
@@ -3738,7 +4173,7 @@ function SystemUsersPage(){
               <Sel value={inviteRoleId} onChange={setInviteRoleId}
                 options={[{v:"",l:roles.length===0?"No roles — create one first":"Select role (required)"},...roles.map(r=>({v:r.id,l:r.role_name}))]}
                 style={{width:200,borderColor:!inviteRoleId?"#fca5a5":"#e2e8f0"}}/>
-              <Btn variant="primary" type="submit">✉️ Send Invite</Btn>
+              <Btn variant="primary" type="submit" style={{gap:6}}><Send size={13} strokeWidth={1.75}/>Send Invite</Btn>
             </form>
           </Card>
 
@@ -3775,7 +4210,7 @@ function SystemUsersPage(){
                       </TD>
                       <TD style={{color:"#64748b"}}>{u.email}</TD>
                       <TD><Bdg bg={statusBg} color={statusCol}>{statusLabel}</Bdg></TD>
-                      <TD><Bdg bg={u.role==="admin"?"#0d1f1a":"#f1f5f9"} color={u.role==="admin"?"#6366f1":"#475569"}>{u.role==="admin"?"Admin":"Manager"}</Bdg></TD>
+                      <TD><Bdg bg={u.role==="admin"?"#e6f7f0":"#f1f5f9"} color={u.role==="admin"?"#008A57":"#475569"}>{u.role==="admin"?"Admin":"Manager"}</Bdg></TD>
                       <TD>
                         {u.role!=="admin"?(
                           <select value={assignedRole?.id||"none"} onChange={e=>assignRole(u.email,e.target.value,assignedRole?.id)}
@@ -3792,10 +4227,10 @@ function SystemUsersPage(){
                       </TD>
                       <TD align="center">
                         <div style={{display:"flex",justifyContent:"center",gap:4}}>
-                          {!u.isPending&&u.email!==CURRENT_USER?.email&&<Btn variant="ghost" size="sm" title="Impersonate" style={{color:"#6366f1"}} onClick={()=>alert(`Now viewing as ${u.full_name||u.email}`)}>👁</Btn>}
-                          <Btn variant="ghost" size="sm" onClick={()=>openEditUser(u)} title="Edit">✏️</Btn>
-                          {u.status==="invited"&&<Btn variant="ghost" size="sm" style={{color:"#6366f1"}} onClick={()=>resendInvite(u.email)} title="Resend invite">✉️</Btn>}
-                          {u.role!=="admin"&&<Btn variant="danger" size="sm" onClick={()=>deleteUser(u)} title="Delete">🗑</Btn>}
+                          {!u.isPending&&u.email!==CURRENT_USER?.email&&<Btn variant="ghost" size="sm" title="Impersonate" style={{color:"#008A57"}} data-impersonate="1" onClick={()=>alert(`Now viewing as ${u.full_name||u.email}`)}><Eye size={14} strokeWidth={1.75}/></Btn>}
+                          <Btn variant="ghost" size="sm" onClick={()=>openEditUser(u)} title="Edit"><Pencil size={14} strokeWidth={1.75}/></Btn>
+                          {u.status==="invited"&&<Btn variant="ghost" size="sm" style={{color:"#008A57"}} onClick={()=>resendInvite(u.email)} title="Resend invite"><Mail size={14} strokeWidth={1.75}/></Btn>}
+                          {u.role!=="admin"&&<Btn variant="danger" size="sm" onClick={()=>deleteUser(u)} title="Delete"><Trash2 size={14} strokeWidth={1.75}/></Btn>}
                         </div>
                       </TD>
                     </tr>
@@ -3815,7 +4250,7 @@ function SystemUsersPage(){
               <div>
                 <p style={{margin:0,fontWeight:700,fontSize:16,color:"#0f172a"}}>{CURRENT_USER?.full_name||"Admin"}</p>
                 <p style={{margin:"2px 0 6px",fontSize:13,color:"#64748b"}}>{CURRENT_USER?.email||"admin@company.com"}</p>
-                <Bdg bg="#0d1f1a" color="#6366f1">Admin</Bdg>
+                <Bdg bg="#e6f7f0" color="#008A57">Admin</Bdg>
               </div>
             </div>
           </Card>
@@ -3827,12 +4262,12 @@ function SystemUsersPage(){
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div><p style={{margin:0,fontWeight:700,fontSize:15,color:"#0f172a"}}>Role Permissions</p><p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>Define what each role can access</p></div>
-            <Btn variant="primary" onClick={openCreateRole}>＋ Create Role</Btn>
+            <Btn variant="primary" onClick={openCreateRole} style={{gap:6}}><Plus size={14} strokeWidth={2}/>Create Role</Btn>
           </div>
 
           {roles.length===0?(
             <Card style={{padding:48,textAlign:"center",color:"#64748b"}}>
-              <div style={{fontSize:40,marginBottom:12}}>🛡</div>
+              <ShieldCheck size={40} strokeWidth={1.25} style={{margin:"0 auto 12px",display:"block",color:"#cbd5e1"}}/>
               <p style={{fontSize:14,fontWeight:600,color:"#64748b"}}>No roles created yet</p>
               <p style={{fontSize:12,marginTop:4}}>Create a role to define permissions for your team</p>
             </Card>
@@ -3842,15 +4277,15 @@ function SystemUsersPage(){
                 <Card key={role.id} style={{padding:18}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                     <div style={{display:"flex",alignItems:"center",gap:12}}>
-                      <div style={{width:40,height:40,borderRadius:10,background:"#f0fdf4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>🛡</div>
+                      <div style={{width:40,height:40,borderRadius:10,background:"#f0fdf4",display:"flex",alignItems:"center",justifyContent:"center",color:"#10b981"}}><ShieldCheck size={20} strokeWidth={1.75}/></div>
                       <div>
                         <p style={{margin:0,fontWeight:700,fontSize:15,color:"#0f172a"}}>{role.role_name}</p>
                         <p style={{margin:"1px 0 0",fontSize:12,color:"#64748b"}}>{role.assigned_users?.length||0} users assigned</p>
                       </div>
                     </div>
                     <div style={{display:"flex",gap:6}}>
-                      <Btn variant="ghost" size="sm" onClick={()=>openEditRole(role)}>✏️</Btn>
-                      <Btn variant="danger" size="sm" onClick={()=>deleteRole(role.id)}>🗑</Btn>
+                      <Btn variant="ghost" size="sm" onClick={()=>openEditRole(role)}><Pencil size={14} strokeWidth={1.75}/></Btn>
+                      <Btn variant="danger" size="sm" onClick={()=>deleteRole(role.id)}><Trash2 size={14} strokeWidth={1.75}/></Btn>
                     </div>
                   </div>
                   <div style={{overflowX:"auto"}}>
@@ -3866,7 +4301,7 @@ function SystemUsersPage(){
                             <td style={{padding:"7px 12px",fontWeight:600,fontSize:13,borderBottom:"1px solid #f1f5f9"}}>{ent.name}</td>
                             {["view","create","edit","delete"].map(perm=>(
                               <td key={perm} style={{padding:"7px 12px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
-                                {p[perm]?<span style={{color:"#10b981",fontSize:16}}>✓</span>:<span style={{color:"#e2e8f0"}}>—</span>}
+                                {p[perm]?<Check size={16} strokeWidth={2.5} style={{color:"#10b981"}}/>:<span style={{color:"#e2e8f0"}}>—</span>}
                               </td>
                             ))}
                           </tr>
@@ -3951,7 +4386,7 @@ function SystemUsersPage(){
 
           <div style={{display:"flex",justifyContent:"flex-end",gap:8}}>
             <Btn variant="outline" onClick={closeRoleModal}>Cancel</Btn>
-            <Btn variant="primary" onClick={handleSaveRole}>💾 {editingRole?"Update Role":"Create Role"}</Btn>
+            <Btn variant="primary" onClick={handleSaveRole} style={{gap:6}}><Save size={13} strokeWidth={1.75}/>{editingRole?"Update Role":"Create Role"}</Btn>
           </div>
         </div>
       </Modal>
@@ -3975,7 +4410,7 @@ function SystemUsersPage(){
           </div>
           <div style={{display:"flex",justifyContent:"flex-end",gap:8}}>
             <Btn variant="outline" onClick={()=>setEditUserModal(false)}>Cancel</Btn>
-            <Btn variant="primary" onClick={handleSaveUser}>💾 Save Changes</Btn>
+            <Btn variant="primary" onClick={handleSaveUser} style={{gap:6}}><Save size={13} strokeWidth={1.75}/>Save Changes</Btn>
           </div>
         </div>
       </Modal>
@@ -3990,7 +4425,7 @@ function SystemUsersPage(){
 function ComingSoon({page}){
   return(
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:400,color:"#64748b"}}>
-      <div style={{fontSize:56,marginBottom:16}}>🚧</div>
+      <Construction size={56} strokeWidth={1.25} style={{margin:"0 auto 16px",display:"block",color:"#cbd5e1"}}/>
       <h2 style={{fontSize:20,fontWeight:700,color:"#475569",margin:"0 0 8px"}}>{page}</h2>
       <p style={{fontSize:14,margin:0}}>This page will be built next</p>
     </div>
@@ -4005,7 +4440,7 @@ function ComingSoon({page}){
 function AccessDenied(){
   return(
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:400,gap:14}}>
-      <div style={{fontSize:48}}>🔒</div>
+      <Lock size={48} strokeWidth={1.25} style={{margin:"0 auto",display:"block",color:"#cbd5e1"}}/>
       <h2 style={{margin:0,fontSize:20,fontWeight:700,color:"#0f172a"}}>Access Denied</h2>
       <p style={{margin:0,fontSize:13,color:"#64748b"}}>You don't have permission to view this page.</p>
       <p style={{margin:0,fontSize:12,color:"#64748b"}}>Contact your administrator to request access.</p>
@@ -4015,14 +4450,14 @@ function AccessDenied(){
 
 function PlatformApp(){
   const {session,profile,signOut,sb,can} = useAuth();
-  const [activePage,setActivePage]=useState("Dashboard");
-  const [sidebarOpen,setSidebarOpen]=useState(false);
+  const [activePage,setActivePage]=useState(()=>localStorage.getItem("pp_activePage")||"Dashboard");
+  const [sidebarHovered,setSidebarHovered]=useState(false);
 
   // Find first accessible page on load
   useEffect(()=>{
     if(can) {
       const first = NAV.find(n=>can(PAGE_PERM_KEY[n.id],"view"));
-      if(first && !can(PAGE_PERM_KEY["Dashboard"],"view")) setActivePage(first.id);
+      if(first && !can(PAGE_PERM_KEY["Dashboard"],"view")){localStorage.setItem("pp_activePage",first.id);setActivePage(first.id);}
     }
   },[profile]);
 
@@ -4042,41 +4477,64 @@ function PlatformApp(){
   };
 
   return(
-    <div style={{display:"flex",height:"100vh",fontFamily:"'Inter',system-ui,sans-serif",background:"#f8fafc",overflow:"hidden"}}>
+    <div style={{display:"flex",height:"100vh",fontFamily:"'Inter',system-ui,sans-serif",background:"#f8fafc",overflow:"hidden",position:"relative"}}>
 
-      {/* Sidebar */}
-      <aside style={{width:240,background:"#fff",borderRight:"1px solid #e2e8f0",display:"flex",flexDirection:"column",flexShrink:0,overflowY:"auto"}}>
+      {/* Sidebar spacer (always 64px wide — reserves layout space) */}
+      <div style={{width:64,flexShrink:0}}/>
+
+      {/* Sidebar (absolute, expands on hover — overlays content without resizing it) */}
+      <aside
+        onMouseEnter={()=>setSidebarHovered(true)}
+        onMouseLeave={()=>setSidebarHovered(false)}
+        style={{
+          position:"absolute",top:0,left:0,bottom:0,
+          width:sidebarHovered?240:64,
+          background:"#fff",
+          borderRight:"1px solid #e2e8f0",
+          display:"flex",flexDirection:"column",
+          overflowY:"auto",overflowX:"hidden",
+          transition:"width .18s ease",
+          zIndex:50,
+          boxShadow:sidebarHovered?"4px 0 16px rgba(15,23,42,.06)":"none",
+        }}>
         {/* Logo */}
-        <div style={{padding:"18px 20px",borderBottom:"1px solid #f1f5f9"}}>
-          <p style={{margin:0,fontWeight:800,fontSize:15,color:"#0f172a"}}>Team Allocation</p>
-          <p style={{margin:"2px 0 0",fontSize:11,color:"#64748b"}}>Acquaint Communications</p>
+        <div style={{padding:sidebarHovered?"18px 20px":"18px 0",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:sidebarHovered?"flex-start":"center",minHeight:62,flexShrink:0}}>
+          {sidebarHovered?(
+            <div style={{whiteSpace:"nowrap"}}>
+              <p style={{margin:0,fontWeight:800,fontSize:15,color:"#0f172a"}}>Team Allocation</p>
+              <p style={{margin:"2px 0 0",fontSize:11,color:"#64748b"}}>Acquaint Communications</p>
+            </div>
+          ):(
+            <div style={{width:32,height:32,borderRadius:8,background:"linear-gradient(135deg,#008A57,#0EA5E9)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14,color:"#fff"}}>T</div>
+          )}
         </div>
         {/* Nav */}
-        <nav style={{flex:1,padding:"10px 12px",display:"flex",flexDirection:"column",gap:2}}>
+        <nav style={{flex:1,padding:sidebarHovered?"10px 12px":"10px 8px",display:"flex",flexDirection:"column",gap:2}}>
           {NAV.filter(item=>can(PAGE_PERM_KEY[item.id],"view")).map(item=>{
             const active=activePage===item.id;
             return(
-              <button key={item.id} onClick={()=>setActivePage(item.id)}
-                style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:10,border:"none",background:active?"#f1f5f9":"transparent",color:active?"#0f172a":"#64748b",cursor:"pointer",fontSize:13,fontWeight:active?600:500,textAlign:"left",transition:"background .15s",width:"100%"}}>
-                <span style={{fontSize:15,opacity:active?1:.7}}>{item.icon}</span>
-                <span style={{flex:1}}>{item.label}</span>
-                {active&&<span style={{fontSize:12,opacity:.7}}>›</span>}
+              <button key={item.id} onClick={()=>{localStorage.setItem("pp_activePage",item.id);setActivePage(item.id);}}
+                title={!sidebarHovered?item.label:undefined}
+                style={{display:"flex",alignItems:"center",gap:10,padding:sidebarHovered?"9px 12px":"9px 0",justifyContent:sidebarHovered?"flex-start":"center",borderRadius:10,border:"none",background:active?"#f1f5f9":"transparent",color:active?"#0f172a":"#64748b",cursor:"pointer",fontSize:13,fontWeight:active?600:500,textAlign:"left",transition:"background .15s",width:"100%",overflow:"hidden"}}>
+                <item.Icon size={18} strokeWidth={1.75} style={{opacity:active?1:.85,color:active?"#0f172a":"#64748b",flexShrink:0}}/>
+                {sidebarHovered&&<span style={{flex:1,whiteSpace:"nowrap"}}>{item.label}</span>}
+                {sidebarHovered&&active&&<ChevronRight size={14} strokeWidth={2} style={{opacity:.7,color:"#64748b",flexShrink:0}}/>}
               </button>
             );
           })}
         </nav>
         {/* User */}
-        <div style={{padding:"12px 14px",borderTop:"1px solid #f1f5f9"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-            <div style={{width:34,height:34,borderRadius:8,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:13,color:"#fff",flexShrink:0}}>
+        <div style={{padding:sidebarHovered?"12px 14px":"12px 8px",borderTop:"1px solid #f1f5f9",flexShrink:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:sidebarHovered?8:0,justifyContent:sidebarHovered?"flex-start":"center"}}>
+            <div style={{width:34,height:34,borderRadius:8,background:"linear-gradient(135deg,#008A57,#0EA5E9)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:13,color:"#fff",flexShrink:0}}>
               {(profile?.full_name||profile?.email||"U").charAt(0).toUpperCase()}
             </div>
-            <div style={{flex:1,overflow:"hidden"}}>
+            {sidebarHovered&&<div style={{flex:1,overflow:"hidden"}}>
               <p style={{margin:0,fontWeight:600,fontSize:12,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{profile?.full_name||"User"}</p>
               <p style={{margin:0,fontSize:11,color:"#64748b"}}>{profile?.role==="admin"?"Admin":"Manager"}</p>
-            </div>
+            </div>}
           </div>
-          <button onClick={signOut} style={{width:"100%",padding:"7px",borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#64748b",fontSize:12,cursor:"pointer",fontWeight:500}}>Sign Out</button>
+          {sidebarHovered&&<button onClick={signOut} style={{width:"100%",padding:"7px",borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#64748b",fontSize:12,cursor:"pointer",fontWeight:500}}>Sign Out</button>}
         </div>
       </aside>
 
@@ -4101,7 +4559,7 @@ function PlatformRoot(){
   // Show loading spinner until BOTH session AND permissions are resolved
   if(session===undefined || (session && !permsLoaded)) return(
     <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"#f8fafc",gap:16}}>
-      <div style={{width:40,height:40,border:"3px solid #e2e8f0",borderTopColor:"#6366f1",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
+      <div style={{width:40,height:40,border:"3px solid #e2e8f0",borderTopColor:"#008A57",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
       <p style={{fontSize:13,color:"#64748b",margin:0}}>Loading…</p>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
