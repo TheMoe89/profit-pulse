@@ -1347,6 +1347,10 @@ function ContractSearchSelect({contracts,value,onChange}){
 
 function ContractsPage(){
   const {sb}=useAuth();
+  const toast=useToast();
+  const confirm=useConfirm();
+  const [saving,setSaving]=useState(false);
+  const [hoveredRow,setHoveredRow]=useState(null);
   const [contracts,setContracts]=useState([]);
   const [clientList,setClientList]=useState([]); // real clients from Supabase
   const [loading,setLoading]=useState(true);
@@ -3605,7 +3609,8 @@ function ContractExpensesPage(){
   const {sb}=useAuth();
   const [expenses,setExpenses]=useState([]);
   const [realContracts,setRealContracts]=useState([]);
-  const [loading,setLoading]=useState(true);
+  const [loading,setLoading]=useState(true)
+  const [saving,setSaving]=useState(false);
   useEffect(()=>{
     Promise.all([
       sb.from('contract_expenses').select('*').order('created_at',{ascending:false}),
@@ -3644,7 +3649,7 @@ function ContractExpensesPage(){
       attachment_url:p.attachment_url||"",attachment_name:p.attachment_name||"",
       notes:p.notes||"",status:p.status||"Draft"
     }]).select().single();
-    if(error){toast('Error saving expense: '+error.message,'error');return;}
+    if(error){setSaving(false);toast('Error saving expense: '+error.message,'error');return;}
     if(data)setExpenses(x=>[data,...x]);
   };
   const dbUpdate=async(id,p)=>{
@@ -3665,7 +3670,7 @@ function ContractExpensesPage(){
       attachment_url:p.attachment_url||"",attachment_name:p.attachment_name||"",
       notes:p.notes||"",status:p.status||"Draft"
     }).eq('id',id).select().single();
-    if(error){toast('Error updating expense: '+error.message,'error');return;}
+    if(error){setSaving(false);toast('Error updating expense: '+error.message,'error');return;}
     if(data)setExpenses(x=>x.map(e=>e.id===id?data:e));};
   const dbDelete=async id=>{await sb.from('contract_expenses').delete().eq('id',id);setExpenses(x=>x.filter(e=>e.id!==id));};
   const [modalOpen,setModalOpen] = useState(false);
