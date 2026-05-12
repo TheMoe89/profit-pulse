@@ -642,6 +642,97 @@ function SortTh({k,sk,sd,onSort,children,align="left"}){
   </th>;
 }
 
+
+// ─── DEPT UTILIZATION CARDS (extracted to avoid IIFE hook violations) ─────────
+const DEPT_META={
+  "Creative Department":        {short:"Creative",        color:"#008A57",lightBg:"#e6f7f0"},
+  "Client Servicing Department":{short:"Client Servicing",color:"#7c3aed",lightBg:"#f3e8ff"},
+  "Production Department":      {short:"Production",      color:"#d97706",lightBg:"#fef9c3"},
+  "Planning Department":        {short:"Planning",        color:"#0ea5e9",lightBg:"#e0f2fe"},
+};
+function DeptUtilizationCards({eu,HPM,fmtH}){
+  const [expandedDept,setExpandedDept]=useState(null);
+  const depts=Object.entries(DEPT_META).map(([key,meta])=>{
+    const emps=eu.filter(e=>e.department===key);
+    if(!emps.length)return null;
+    const allocated=emps.reduce((s,e)=>s+e.h,0);
+    const capacity=emps.length*HPM;
+    const pct=capacity>0?Math.round((allocated/capacity)*100):0;
+    const over=emps.filter(e=>e.h>160).length;
+    const under=emps.filter(e=>e.u<70&&e.h>0).length;
+    const onTrack=emps.length-over-under;
+    const topEmps=[...emps].sort((a,b)=>b.u-a.u).slice(0,5);
+    return{key,meta,emps,allocated,capacity,pct,over,under,onTrack,topEmps};
+  }).filter(Boolean);
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {depts.map(d=>{
+        const isOver=d.over>0;
+        const isUnder=d.pct<70;
+        const statusColor=isOver?"#ef4444":isUnder?"#d97706":"#008A57";
+        const open=expandedDept===d.key;
+        return(
+          <div key={d.key} style={{border:`1px solid ${open?d.meta.color:"#e2e8f0"}`,borderRadius:10,overflow:"hidden",transition:"border-color .2s"}}>
+            <div style={{padding:"12px 14px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                <div style={{width:30,height:30,borderRadius:7,background:d.meta.lightBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <Users size={14} strokeWidth={1.75} color={d.meta.color}/>
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                    <p style={{margin:0,fontWeight:700,fontSize:12,color:"#0f172a",lineHeight:1.4}}>{d.meta.short}</p>
+                    <p style={{margin:0,fontSize:16,fontWeight:800,color:statusColor,lineHeight:1}}>{d.pct}%</p>
+                  </div>
+                  <p style={{margin:"1px 0 4px",fontSize:10,color:"#94a3b8",lineHeight:1.4}}>{d.emps.length} employees · {fmtH(d.allocated)}h / {fmtH(d.capacity)}h</p>
+                  <div style={{height:7,borderRadius:99,background:"#f1f5f9",overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${Math.min(d.pct,100)}%`,background:isOver?"#ef4444":d.meta.color,borderRadius:99,transition:"width .5s ease"}}/>
+                  </div>
+                </div>
+              </div>
+              <div style={{display:"flex",gap:5}}>
+                {[
+                  {count:d.over,    label:"over",     bg:"#fee2e2",color:"#ef4444"},
+                  {count:d.under,   label:"under",    bg:"#fef9c3",color:"#d97706"},
+                  {count:d.onTrack, label:"on track", bg:"#d1fae5",color:"#008A57"},
+                ].map(s=>(
+                  <div key={s.label} style={{flex:1,padding:"3px 6px",borderRadius:5,background:s.bg,display:"flex",alignItems:"center",gap:3}}>
+                    <span style={{fontSize:11,fontWeight:700,color:s.color}}>{s.count}</span>
+                    <span style={{fontSize:9,color:s.color,opacity:.85}}>{s.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <button onClick={()=>setExpandedDept(open?null:d.key)} style={{width:"100%",padding:"7px 14px",border:"none",borderTop:"1px solid #f1f5f9",background:"#fafafa",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:10,fontWeight:600,color:"#64748b"}}>
+              <span>Top employees</span>
+              <ChevronRight size={11} style={{transform:open?"rotate(90deg)":"none",transition:"transform .2s"}}/>
+            </button>
+            {open&&(
+              <div style={{padding:"6px 14px 10px"}}>
+                {d.topEmps.map(e=>{
+                  const ov=e.h>160,un=e.u<70&&e.h>0;
+                  return(
+                    <div key={e.id} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0",borderBottom:"1px solid #f8fafc"}}>
+                      <div style={{width:22,height:22,borderRadius:5,background:d.meta.lightBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:800,color:d.meta.color,flexShrink:0}}>{e.name.slice(0,2).toUpperCase()}</div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <p style={{margin:0,fontSize:10,fontWeight:600,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.4}}>{e.name}</p>
+                        <div style={{height:4,borderRadius:99,background:"#f1f5f9",marginTop:2,overflow:"hidden"}}>
+                          <div style={{height:"100%",width:`${Math.min(e.u,100)}%`,background:ov?"#ef4444":un?"#f59e0b":d.meta.color,borderRadius:99}}/>
+                        </div>
+                      </div>
+                      <span style={{fontSize:10,fontWeight:700,color:ov?"#ef4444":un?"#d97706":"#008A57",flexShrink:0}}>{Math.round(e.u)}%</span>
+                      <span style={{fontSize:9,color:"#94a3b8",flexShrink:0}}>{fmtH(e.h)}h</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function DashboardPage(){
   const {sb} = useAuth();
   const [month,setMonth]=usePersistState("pp_dash_month",currentMonth);
@@ -842,95 +933,7 @@ function DashboardPage(){
           <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:14}}>
             <Card style={{padding:18}}>
               <p style={{margin:"0 0 14px",fontWeight:700,fontSize:13,color:"#0f172a",lineHeight:1.5}}>Team Utilization by Department</p>
-              {(()=>{
-                // Build dept summary from eu (employee utilization array)
-                const DEPT_META={
-                  "Creative Department":        {short:"Creative",        color:"#008A57",lightBg:"#e6f7f0"},
-                  "Client Servicing Department":{short:"Client Servicing",color:"#7c3aed",lightBg:"#f3e8ff"},
-                  "Production Department":      {short:"Production",      color:"#d97706",lightBg:"#fef9c3"},
-                  "Planning Department":        {short:"Planning",        color:"#0ea5e9",lightBg:"#e0f2fe"},
-                };
-                const depts=Object.entries(DEPT_META).map(([key,meta])=>{
-                  const emps=C.eu.filter(e=>e.department===key);
-                  if(!emps.length)return null;
-                  const allocated=emps.reduce((s,e)=>s+e.h,0);
-                  const capacity=emps.length*HPM;
-                  const pct=capacity>0?Math.round((allocated/capacity)*100):0;
-                  const over=emps.filter(e=>e.h>160).length;
-                  const under=emps.filter(e=>e.u<70&&e.h>0).length;
-                  const onTrack=emps.length-over-under;
-                  const topEmps=[...emps].sort((a,b)=>b.u-a.u).slice(0,5);
-                  return{key,meta,emps,allocated,capacity,pct,over,under,onTrack,topEmps};
-                }).filter(Boolean);
-                const [expandedDept,setExpandedDept]=React.useState(null);
-                return(
-                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                    {depts.map(d=>{
-                      const isOver=d.over>0;
-                      const isUnder=d.pct<70;
-                      const statusColor=isOver?"#ef4444":isUnder?"#d97706":"#008A57";
-                      const open=expandedDept===d.key;
-                      return(
-                        <div key={d.key} style={{border:`1px solid ${open?d.meta.color:"#e2e8f0"}`,borderRadius:10,overflow:"hidden",transition:"border-color .2s"}}>
-                          <div style={{padding:"12px 14px"}}>
-                            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-                              <div style={{width:30,height:30,borderRadius:7,background:d.meta.lightBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                                <Users size={14} strokeWidth={1.75} color={d.meta.color}/>
-                              </div>
-                              <div style={{flex:1}}>
-                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
-                                  <p style={{margin:0,fontWeight:700,fontSize:12,color:"#0f172a",lineHeight:1.4}}>{d.meta.short}</p>
-                                  <p style={{margin:0,fontSize:16,fontWeight:800,color:statusColor,lineHeight:1}}>{d.pct}%</p>
-                                </div>
-                                <p style={{margin:"1px 0 4px",fontSize:10,color:"#94a3b8",lineHeight:1.4}}>{d.emps.length} employees · {fmtH(d.allocated)}h / {fmtH(d.capacity)}h</p>
-                                <div style={{height:7,borderRadius:99,background:"#f1f5f9",overflow:"hidden"}}>
-                                  <div style={{height:"100%",width:`${Math.min(d.pct,100)}%`,background:isOver?"#ef4444":d.meta.color,borderRadius:99,transition:"width .5s ease"}}/>
-                                </div>
-                              </div>
-                            </div>
-                            <div style={{display:"flex",gap:5}}>
-                              {[
-                                {count:d.over,     label:"over",     bg:"#fee2e2",color:"#ef4444"},
-                                {count:d.under,    label:"under",    bg:"#fef9c3",color:"#d97706"},
-                                {count:d.onTrack,  label:"on track", bg:"#d1fae5",color:"#008A57"},
-                              ].map(s=>(
-                                <div key={s.label} style={{flex:1,padding:"3px 6px",borderRadius:5,background:s.bg,display:"flex",alignItems:"center",gap:3}}>
-                                  <span style={{fontSize:11,fontWeight:700,color:s.color}}>{s.count}</span>
-                                  <span style={{fontSize:9,color:s.color,opacity:.85}}>{s.label}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          <button onClick={()=>setExpandedDept(open?null:d.key)} style={{width:"100%",padding:"7px 14px",border:"none",borderTop:"1px solid #f1f5f9",background:"#fafafa",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:10,fontWeight:600,color:"#64748b"}}>
-                            <span>Top employees</span>
-                            <ChevronRight size={11} style={{transform:open?"rotate(90deg)":"none",transition:"transform .2s"}}/>
-                          </button>
-                          {open&&(
-                            <div style={{padding:"6px 14px 10px"}}>
-                              {d.topEmps.map(e=>{
-                                const ov=e.h>160,un=e.u<70&&e.h>0;
-                                return(
-                                  <div key={e.id} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0",borderBottom:"1px solid #f8fafc"}}>
-                                    <div style={{width:22,height:22,borderRadius:5,background:d.meta.lightBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:800,color:d.meta.color,flexShrink:0}}>{e.name.slice(0,2).toUpperCase()}</div>
-                                    <div style={{flex:1,minWidth:0}}>
-                                      <p style={{margin:0,fontSize:10,fontWeight:600,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.4}}>{e.name}</p>
-                                      <div style={{height:4,borderRadius:99,background:"#f1f5f9",marginTop:2,overflow:"hidden"}}>
-                                        <div style={{height:"100%",width:`${Math.min(e.u,100)}%`,background:ov?"#ef4444":un?"#f59e0b":d.meta.color,borderRadius:99}}/>
-                                      </div>
-                                    </div>
-                                    <span style={{fontSize:10,fontWeight:700,color:ov?"#ef4444":un?"#d97706":"#008A57",flexShrink:0}}>{Math.round(e.u)}%</span>
-                                    <span style={{fontSize:9,color:"#94a3b8",flexShrink:0}}>{fmtH(e.h)}h</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
+              <DeptUtilizationCards eu={C.eu} HPM={HPM} fmtH={fmtH}/>
             </Card>
             <Card style={{padding:18}}>
               <p style={{margin:"0 0 10px",fontWeight:700,fontSize:13,color:"#0f172a",lineHeight:1.5}}>Contract Renewals</p>
