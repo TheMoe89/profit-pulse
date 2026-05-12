@@ -12,6 +12,22 @@ import {
   Upload, Download, Paperclip, FileSpreadsheet
 } from "lucide-react";
 
+// ─── PERSISTENT STATE HOOK ────────────────────────────────────────────────────
+function usePersistState(key, defaultVal){
+  const [val, setVal] = React.useState(()=>{
+    try{ const s=localStorage.getItem(key); return s!==null?JSON.parse(s):defaultVal; }
+    catch{ return defaultVal; }
+  });
+  const setPersist = React.useCallback((v)=>{
+    setVal(prev=>{
+      const next = typeof v==="function"?v(prev):v;
+      try{ localStorage.setItem(key, JSON.stringify(next)); }catch{}
+      return next;
+    });
+  },[key]);
+  return [val, setPersist];
+}
+
 // ─── SUPABASE CLIENT ──────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://hmvlgesnxaqebfdzizmy.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtdmxnZXNueGFxZWJmZHppem15Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5NjAwNzcsImV4cCI6MjA5MjUzNjA3N30.FXvGha4gIz9S0U2PzyZiHVeRLPIbgEJ_3z0xWinJROs";
@@ -541,8 +557,8 @@ function SortTh({k,sk,sd,onSort,children,align="left"}){
 
 function DashboardPage(){
   const {sb} = useAuth();
-  const [month,setMonth]=useState(currentMonth);
-  const [finTab,setFinTab]=useState("finance");
+  const [month,setMonth]=usePersistState("pp_dash_month",currentMonth);
+  const [finTab,setFinTab]=usePersistState("pp_dash_tab","finance");
   const [lc,setLc]=useState("all");
   const [rc,setRc]=useState("all");
   const [dc,setDc]=useState("all");
@@ -1516,7 +1532,7 @@ function AllocationsPage(){
   const [filterCli,setFilterCli] = useState("all");
   const [filterDept,setFilterDept]=useState("all");
   const [filterCat,setFilterCat] = useState("all");
-  const [chartMonth,setChartMonth]=useState("2026-04");
+  const [chartMonth,setChartMonth]=usePersistState("pp_alloc_month","2026-04");
   const [modalOpen,setModalOpen] = useState(false);
   const [editing,setEditing]     = useState(null);
   const [formStep,setFormStep]   = useState(1);
@@ -2071,10 +2087,10 @@ const exportPDFTable = (title, headers, rows, filename) => {
 
 function ReportsPage(){
   const {sb} = useAuth();
-  const [section,setSection]   = useState("charts");
-  const [chartTab,setChartTab] = useState("profit-by-client");
+  const [section,setSection]   = usePersistState("pp_reports_section","charts");
+  const [chartTab,setChartTab] = usePersistState("pp_reports_chart_tab","profit-by-client");
   const [customTab,setCustomTab]= useState("revenue-profit-contract");
-  const [selMonth,setSelMonth] = useState(currentMonth);
+  const [selMonth,setSelMonth] = usePersistState("pp_reports_month",currentMonth);
   const [selDept,setSelDept]   = useState("all");
   const [selClosedClient,setSelClosedClient] = useState("all");
   const [selRevMonth,setSelRevMonth]   = useState("all");
