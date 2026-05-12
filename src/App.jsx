@@ -705,8 +705,8 @@ function DashboardPage(){
     };
     const da=bld(ac,als);
     const dbc=id=>id==="all"?da:bld(ac.filter(c=>c.cid===id),als.filter(a=>a.cid===id));
-    const eu=dbEmployees.map(e=>{const h=als.filter(a=>a.eid===e.id).reduce((s,a)=>s+a.h,0);return{...e,h,u:(h/HPM)*100,av:Math.max(0,HPM-h)};});
-    const over=eu.filter(e=>e.u>100),under=eu.filter(e=>e.u<70);
+    const eu=dbEmployees.map(e=>{const h=als.filter(a=>(a.eid||a.employee_id)===e.id).reduce((s,a)=>s+(parseFloat(a.h||a.allocated_hours)||0),0);return{...e,h,u:(h/HPM)*100,av:Math.max(0,HPM-h)};});
+    const over=eu.filter(e=>e.h>160),under=eu.filter(e=>e.u<70&&e.h>0);
     const chart=eu.map(e=>({name:e.name.split(" ")[0],hours:e.h,available:e.av,u:e.u})).sort((a,b)=>b.u-a.u);
     const ren=allAc.filter(c=>{const d=diffDays(c.ed);return d>=0&&d<=60;}).sort((a,b)=>new Date(a.ed)-new Date(b.ed));
     const bm={};dbSnapshots.forEach(s=>{if(!bm[s.m])bm[s.m]={m:s.m,cl:{}};if(!bm[s.m].cl[s.cn])bm[s.m].cl[s.cn]={r:0,c:0};bm[s.m].cl[s.cn].r+=s.r;bm[s.m].cl[s.cn].c+=s.c;});
@@ -834,24 +834,103 @@ function DashboardPage(){
       {finTab==="team"&&(
         <div style={{display:"flex",flexDirection:"column",gap:18}}>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
-            <KPI dark label="Active Employees" value={dbEmployees.filter(e=>e.status==="Active").length} sub="Team members" Icon={Users}/>
+            <KPI label="Active Employees" value={dbEmployees.filter(e=>e.status==="Active").length} sub="Team members" Icon={Users} iBg="#e6f7f0" iC="#008A57"/>
             <KPI label="Over-utilized"  value={C.over.length} sub=">160 hrs/month" Icon={AlertTriangle} iBg={C.over.length>0?"#fee2e2":"#f1f5f9"} iC={C.over.length>0?"#EF4444":"#0f172a"} bg={C.over.length>0?"#fef2f2":"#fff"} bd={C.over.length>0?"#fecaca":"#e2e8f0"}/>
             <KPI label="Under-utilized" value={C.under.length} sub="<70% capacity"  Icon={TrendingDown} iBg={C.under.length>0?"#fef9c3":"#f1f5f9"} iC={C.under.length>0?"#d97706":"#0f172a"} bg={C.under.length>0?"#fffbeb":"#fff"} bd={C.under.length>0?"#fde68a":"#e2e8f0"}/>
             <KPI label="Renewals"        value={C.ren.length}   sub="Within 60 days" Icon={CalendarClock} iBg="#e6f7f0" iC="#008A57" bg={C.ren.length>0?"#f0fdf4":"#fff"} bd={C.ren.length>0?"#a7f3d0":"#e2e8f0"}/>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:14}}>
             <Card style={{padding:18}}>
-              <p style={{margin:"0 0 10px",fontWeight:700,fontSize:13,color:"#0f172a",lineHeight:1.5}}>Team Utilization</p>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={C.chart.slice(0,8)} layout="vertical" margin={{top:5,right:20,left:42,bottom:5}}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
-                  <XAxis type="number" domain={[0,HPM]} tick={{fontSize:10,fill:"#64748b"}} tickFormatter={v=>`${v}h`}/>
-                  <YAxis dataKey="name" type="category" tick={{fontSize:10,fill:"#64748b"}} width={42}/>
-                  <Tooltip formatter={(v,n)=>[`${v} hrs`,n==="hours"?"Allocated":"Available"]} contentStyle={{borderRadius:8,border:"none"}}/>
-                  <Bar dataKey="hours" stackId="a" name="Allocated">{C.chart.slice(0,8).map((e,i)=><Cell key={i} fill={e.u>100?"#ef4444":e.u>=70?"#008A57":"#f59e0b"}/>)}</Bar>
-                  <Bar dataKey="available" stackId="a" fill="#e2e8f0" name="Available"/>
-                </BarChart>
-              </ResponsiveContainer>
+              <p style={{margin:"0 0 14px",fontWeight:700,fontSize:13,color:"#0f172a",lineHeight:1.5}}>Team Utilization by Department</p>
+              {(()=>{
+                // Build dept summary from eu (employee utilization array)
+                const DEPT_META={
+                  "Creative Department":        {short:"Creative",        color:"#008A57",lightBg:"#e6f7f0"},
+                  "Client Servicing Department":{short:"Client Servicing",color:"#7c3aed",lightBg:"#f3e8ff"},
+                  "Production Department":      {short:"Production",      color:"#d97706",lightBg:"#fef9c3"},
+                  "Planning Department":        {short:"Planning",        color:"#0ea5e9",lightBg:"#e0f2fe"},
+                };
+                const depts=Object.entries(DEPT_META).map(([key,meta])=>{
+                  const emps=C.eu.filter(e=>e.department===key);
+                  if(!emps.length)return null;
+                  const allocated=emps.reduce((s,e)=>s+e.h,0);
+                  const capacity=emps.length*HPM;
+                  const pct=capacity>0?Math.round((allocated/capacity)*100):0;
+                  const over=emps.filter(e=>e.h>160).length;
+                  const under=emps.filter(e=>e.u<70&&e.h>0).length;
+                  const onTrack=emps.length-over-under;
+                  const topEmps=[...emps].sort((a,b)=>b.u-a.u).slice(0,5);
+                  return{key,meta,emps,allocated,capacity,pct,over,under,onTrack,topEmps};
+                }).filter(Boolean);
+                const [expandedDept,setExpandedDept]=React.useState(null);
+                return(
+                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                    {depts.map(d=>{
+                      const isOver=d.over>0;
+                      const isUnder=d.pct<70;
+                      const statusColor=isOver?"#ef4444":isUnder?"#d97706":"#008A57";
+                      const open=expandedDept===d.key;
+                      return(
+                        <div key={d.key} style={{border:`1px solid ${open?d.meta.color:"#e2e8f0"}`,borderRadius:10,overflow:"hidden",transition:"border-color .2s"}}>
+                          <div style={{padding:"12px 14px"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                              <div style={{width:30,height:30,borderRadius:7,background:d.meta.lightBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                                <Users size={14} strokeWidth={1.75} color={d.meta.color}/>
+                              </div>
+                              <div style={{flex:1}}>
+                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                                  <p style={{margin:0,fontWeight:700,fontSize:12,color:"#0f172a",lineHeight:1.4}}>{d.meta.short}</p>
+                                  <p style={{margin:0,fontSize:16,fontWeight:800,color:statusColor,lineHeight:1}}>{d.pct}%</p>
+                                </div>
+                                <p style={{margin:"1px 0 4px",fontSize:10,color:"#94a3b8",lineHeight:1.4}}>{d.emps.length} employees · {fmtH(d.allocated)}h / {fmtH(d.capacity)}h</p>
+                                <div style={{height:7,borderRadius:99,background:"#f1f5f9",overflow:"hidden"}}>
+                                  <div style={{height:"100%",width:`${Math.min(d.pct,100)}%`,background:isOver?"#ef4444":d.meta.color,borderRadius:99,transition:"width .5s ease"}}/>
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{display:"flex",gap:5}}>
+                              {[
+                                {count:d.over,     label:"over",     bg:"#fee2e2",color:"#ef4444"},
+                                {count:d.under,    label:"under",    bg:"#fef9c3",color:"#d97706"},
+                                {count:d.onTrack,  label:"on track", bg:"#d1fae5",color:"#008A57"},
+                              ].map(s=>(
+                                <div key={s.label} style={{flex:1,padding:"3px 6px",borderRadius:5,background:s.bg,display:"flex",alignItems:"center",gap:3}}>
+                                  <span style={{fontSize:11,fontWeight:700,color:s.color}}>{s.count}</span>
+                                  <span style={{fontSize:9,color:s.color,opacity:.85}}>{s.label}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <button onClick={()=>setExpandedDept(open?null:d.key)} style={{width:"100%",padding:"7px 14px",border:"none",borderTop:"1px solid #f1f5f9",background:"#fafafa",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:10,fontWeight:600,color:"#64748b"}}>
+                            <span>Top employees</span>
+                            <ChevronRight size={11} style={{transform:open?"rotate(90deg)":"none",transition:"transform .2s"}}/>
+                          </button>
+                          {open&&(
+                            <div style={{padding:"6px 14px 10px"}}>
+                              {d.topEmps.map(e=>{
+                                const ov=e.h>160,un=e.u<70&&e.h>0;
+                                return(
+                                  <div key={e.id} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0",borderBottom:"1px solid #f8fafc"}}>
+                                    <div style={{width:22,height:22,borderRadius:5,background:d.meta.lightBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:800,color:d.meta.color,flexShrink:0}}>{e.name.slice(0,2).toUpperCase()}</div>
+                                    <div style={{flex:1,minWidth:0}}>
+                                      <p style={{margin:0,fontSize:10,fontWeight:600,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.4}}>{e.name}</p>
+                                      <div style={{height:4,borderRadius:99,background:"#f1f5f9",marginTop:2,overflow:"hidden"}}>
+                                        <div style={{height:"100%",width:`${Math.min(e.u,100)}%`,background:ov?"#ef4444":un?"#f59e0b":d.meta.color,borderRadius:99}}/>
+                                      </div>
+                                    </div>
+                                    <span style={{fontSize:10,fontWeight:700,color:ov?"#ef4444":un?"#d97706":"#008A57",flexShrink:0}}>{Math.round(e.u)}%</span>
+                                    <span style={{fontSize:9,color:"#94a3b8",flexShrink:0}}>{fmtH(e.h)}h</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </Card>
             <Card style={{padding:18}}>
               <p style={{margin:"0 0 10px",fontWeight:700,fontSize:13,color:"#0f172a",lineHeight:1.5}}>Contract Renewals</p>
@@ -881,7 +960,7 @@ function DashboardPage(){
                   <PBar val={emp.u} color={ov?"#ef4444":un?"#f59e0b":"#008A57"}/>
                   <div style={{display:"flex",justifyContent:"space-between"}}>
                     <span style={{fontSize:10,fontWeight:700,color:ov?"#EF4444":un?"#d97706":"#10b981"}}>{Math.min(emp.u,999).toFixed(0)}%</span>
-                    <span style={{fontSize:9,color:"#64748b"}}>{emp.h}h</span>
+                    <span style={{fontSize:9,color:"#64748b"}}>{fmtH(emp.h)}h</span>
                   </div>
                 </div>
               );})}
@@ -2012,7 +2091,7 @@ function AllocationsPage(){
                 <div>
                   <Lbl>Hours/Month *</Lbl>
                   <Inp type="number" min="0" value={editForm.allocated_hours} onChange={e=>setEditForm(p=>({...p,allocated_hours:e.target.value}))} required/>
-                  <p style={{margin:"3px 0 0",fontSize:10,color:"#64748b",lineHeight:1.5}}>{getRemainingHours(editing.employee_id,editForm.month,editing.id)+editing.allocated_hours}h available</p>
+                  <p style={{margin:"3px 0 0",fontSize:10,color:"#64748b",lineHeight:1.5}}>{fmtH(getRemainingHours(editing.employee_id,editForm.month,editing.id)+editing.allocated_hours)}h available</p>
                 </div>
                 <div><Lbl>Month *</Lbl><Sel value={editForm.month} onChange={v=>setEditForm(p=>({...p,month:v}))} options={ALLOC_MONTHS}/></div>
               </div>
@@ -2065,7 +2144,7 @@ function AllocationsPage(){
                         <label key={emp.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",cursor:"pointer",background:isSel?"#e6f7f0":"#fff",borderBottom:"1px solid #e2e8f0"}}>
                           <input type="checkbox" checked={isSel} onChange={e=>handleEmpToggle(emp.id,e.target.checked)} style={{accentColor:"#0f172a",width:14,height:14,flexShrink:0}}/>
                           <div style={{flex:1}}><p style={{margin:0,fontWeight:600,fontSize:12,color:"#0f172a",lineHeight:1.5}}>{emp.name}</p><p style={{margin:0,fontSize:10,color:"#64748b",lineHeight:1.5}}>{emp.department?.replace(" Department","")}</p></div>
-                          <Bdg bg={bc} color={tc}>{avail}h free</Bdg>
+                          <Bdg bg={bc} color={tc}>{fmtH(avail)}h free</Bdg>
                         </label>
                       );
                     })}
@@ -2099,7 +2178,7 @@ function AllocationsPage(){
                           <div>
                             <Lbl>Hours/Month *</Lbl>
                             <Inp type="number" min="0" max={rem} value={ea.hours||""} onChange={e=>{const v=Math.min(parseFloat(e.target.value)||0,rem);updEmpAlloc(eid,"hours",v||"");}} style={{borderColor:!ea.hours||ea.hours<=0?"#fca5a5":"#e2e8f0"}}/>
-                            <p style={{margin:"2px 0 0",fontSize:10,color:"#64748b",lineHeight:1.5}}>{rem}h available</p>
+                            <p style={{margin:"2px 0 0",fontSize:10,color:"#64748b",lineHeight:1.5}}>{fmtH(rem)}h available</p>
                           </div>
                           <div><Lbl>Status</Lbl><Sel value={ea.status||"Assigned"} onChange={v=>updEmpAlloc(eid,"status",v)} options={[{v:"Assigned",l:"Assigned"}]}/></div>
                           <div><Lbl>Notes</Lbl><Inp value={ea.notes||""} onChange={e=>updEmpAlloc(eid,"notes",e.target.value)} placeholder="Notes..."/></div>
@@ -2555,7 +2634,7 @@ function ReportsPage(){
                     <thead><tr><TH>Client</TH><TH align="center">Hours</TH><TH align="right">Cost to Client</TH></tr></thead>
                     <tbody>
                       {dept.clientBreakdown.map((c,i)=>(
-                        <tr key={i}><TD><strong>{c.client}</strong></TD><TD align="center">{c.hours}h</TD><TD align="right" style={{color:"#10b981"}}>{SAR(c.cost)}</TD></tr>
+                        <tr key={i}><TD><strong>{c.client}</strong></TD><TD align="center">{fmtH(c.hours)}h</TD><TD align="right" style={{color:"#10b981"}}>{SAR(c.cost)}</TD></tr>
                       ))}
                       <tr style={{background:"#fff",fontWeight:700}}>
                         <TD>Total</TD><TD align="center">{fmtH(dept.totalHours)}h</TD><TD align="right">{SAR(Math.round(dept.totalCost))}</TD>
@@ -2741,7 +2820,7 @@ function ReportsPage(){
                               <td style={{padding:"7px 10px",fontSize:12,whiteSpace:"nowrap",borderBottom:"1px solid #f1f5f9"}}>{r.start_date}</td>
                               <td style={{padding:"7px 10px",fontSize:12,whiteSpace:"nowrap",borderBottom:"1px solid #f1f5f9"}}>{r.end_date}</td>
                               <td style={{padding:"7px 10px",textAlign:"right",fontSize:12,fontWeight:600,color:"#10b981",whiteSpace:"nowrap",borderBottom:"1px solid #f1f5f9"}}>{r.monthly_retainer.toLocaleString("en-US",{minimumFractionDigits:2})}</td>
-                              <td style={{padding:"7px 10px",textAlign:"center",fontSize:12,borderBottom:"1px solid #f1f5f9"}}>{r.allocated_hours}h</td>
+                              <td style={{padding:"7px 10px",textAlign:"center",fontSize:12,borderBottom:"1px solid #f1f5f9"}}>{fmtH(r.allocated_hours)}h</td>
                               <td style={{padding:"7px 10px",textAlign:"right",fontSize:12,color:"#d97706",whiteSpace:"nowrap",borderBottom:"1px solid #f1f5f9"}}>{r.resource_cost.toLocaleString("en-US",{minimumFractionDigits:2})}</td>
                               <td style={{padding:"7px 10px",textAlign:"right",fontSize:12,fontWeight:700,color:r.profit>=0?"#10b981":"#EF4444",whiteSpace:"nowrap",borderBottom:"1px solid #f1f5f9"}}>{r.profit.toLocaleString("en-US",{minimumFractionDigits:2})}</td>
                               <td style={{padding:"7px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{marginBadge(r.margin)}</td>
@@ -2754,7 +2833,7 @@ function ReportsPage(){
                           <td style={{padding:"8px 10px",textAlign:"right",fontSize:12}}>{rows.reduce((s,r)=>s+r.contract_value,0).toLocaleString("en-US",{minimumFractionDigits:2})}</td>
                           <td colSpan={2} style={{padding:"8px 10px"}}/>
                           <td style={{padding:"8px 10px",textAlign:"right",fontSize:12,color:"#10b981"}}>{totRev.toLocaleString("en-US",{minimumFractionDigits:2})}</td>
-                          <td style={{padding:"8px 10px",textAlign:"center",fontSize:12}}>{totHours}h</td>
+                          <td style={{padding:"8px 10px",textAlign:"center",fontSize:12}}>{fmtH(totHours)}h</td>
                           <td style={{padding:"8px 10px",textAlign:"right",fontSize:12,color:"#d97706"}}>{totCost.toLocaleString("en-US",{minimumFractionDigits:2})}</td>
                           <td style={{padding:"8px 10px",textAlign:"right",fontSize:12,fontWeight:700,color:totProfit>=0?"#10b981":"#EF4444"}}>{totProfit.toLocaleString("en-US",{minimumFractionDigits:2})}</td>
                           <td style={{padding:"8px 10px",textAlign:"center"}}><Bdg bg="#e2e8f0" color="#475569">{avgMargin}%</Bdg></td>
@@ -2808,8 +2887,8 @@ function ReportsPage(){
                             <tr key={r.id} style={{background:r.over?"#fff5f5":i%2===0?"#fff":"#f8fafc"}}>
                               <td style={{padding:"7px 10px",fontWeight:600,fontSize:12,whiteSpace:"nowrap",borderBottom:"1px solid #f1f5f9"}}>{r.name}</td>
                               <td style={{padding:"7px 10px",fontSize:12,whiteSpace:"nowrap",borderBottom:"1px solid #f1f5f9"}}>{r.department?.replace(" Department","")}</td>
-                              <td style={{padding:"7px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{r.ah}h</td>
-                              <td style={{padding:"7px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{r.avail}h</td>
+                              <td style={{padding:"7px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{fmtH(r.ah)}h</td>
+                              <td style={{padding:"7px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{fmtH(r.avail)}h</td>
                               <td style={{padding:"7px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}><Bdg bg={utilBg} color={utilCol}>{r.pct}%</Bdg></td>
                               <td style={{padding:"7px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{SAR(r.hr)}/h</td>
                               <td style={{padding:"7px 10px",textAlign:"center",color:"#d97706",borderBottom:"1px solid #f1f5f9"}}>{r.cost.toLocaleString("en-US",{minimumFractionDigits:2})}</td>
@@ -2821,8 +2900,8 @@ function ReportsPage(){
                         <tr style={{background:"#e2e8f0",fontWeight:700}}>
                           <td style={{padding:"8px 10px",fontSize:12}}>Totals</td>
                           <td style={{padding:"8px 10px"}}/>
-                          <td style={{padding:"8px 10px",textAlign:"center",fontSize:12}}>{rows.reduce((s,r)=>s+r.ah,0)}h</td>
-                          <td style={{padding:"8px 10px",textAlign:"center",fontSize:12}}>{rows.reduce((s,r)=>s+r.avail,0)}h</td>
+                          <td style={{padding:"8px 10px",textAlign:"center",fontSize:12}}>{fmtH(rows.reduce((s,r)=>s+r.ah,0))}h</td>
+                          <td style={{padding:"8px 10px",textAlign:"center",fontSize:12}}>{fmtH(rows.reduce((s,r)=>s+r.avail,0))}h</td>
                           <td style={{padding:"8px 10px",textAlign:"center"}}><Bdg bg="#e2e8f0" color="#475569">{rows.length>0?Math.round(rows.reduce((s,r)=>s+r.pct,0)/rows.length):0}% avg</Bdg></td>
                           <td style={{padding:"8px 10px"}}/>
                           <td style={{padding:"8px 10px",textAlign:"center",color:"#d97706",fontSize:12}}>{rows.reduce((s,r)=>s+r.cost,0).toLocaleString("en-US",{minimumFractionDigits:2})}</td>
@@ -2980,8 +3059,8 @@ function ReportsPage(){
                         <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
                           <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:700,background:coverBadge(r.budgetCoveragePct).bg,color:coverBadge(r.budgetCoveragePct).col}}>{r.budgetCoveragePct}%</span>
                         </td>
-                        <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{r.allocatedHours}h</td>
-                        <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{r.capacityHours}h</td>
+                        <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{fmtH(r.allocatedHours)}h</td>
+                        <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>{fmtH(r.capacityHours)}h</td>
                         <td style={{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
                           <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:700,background:utilBadge(r.utilizationPct).bg,color:utilBadge(r.utilizationPct).col}}>{r.utilizationPct}%</span>
                         </td>
@@ -2998,8 +3077,8 @@ function ReportsPage(){
                           {(()=>{const tc=rows.reduce((s,r)=>s+r.totalMonthlyCost,0);const tb=rows.reduce((s,r)=>s+r.totalClientBudget,0);return tc>0?Math.round((tb/tc)*100):0;})()}%
                         </span>
                       </td>
-                      <td style={{padding:"8px 10px",textAlign:"center"}}>{rows.reduce((s,r)=>s+r.allocatedHours,0)}h</td>
-                      <td style={{padding:"8px 10px",textAlign:"center"}}>{rows.reduce((s,r)=>s+r.capacityHours,0)}h</td>
+                      <td style={{padding:"8px 10px",textAlign:"center"}}>{fmtH(rows.reduce((s,r)=>s+r.allocatedHours,0))}h</td>
+                      <td style={{padding:"8px 10px",textAlign:"center"}}>{fmtH(rows.reduce((s,r)=>s+r.capacityHours,0))}h</td>
                       <td style={{padding:"8px 10px",textAlign:"center"}}>
                         <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:700,background:"#e2e8f0",color:"#475569"}}>
                           {(()=>{const tc=rows.reduce((s,r)=>s+r.capacityHours,0);const ta=rows.reduce((s,r)=>s+r.allocatedHours,0);return tc>0?Math.round((ta/tc)*100):0;})()}%
@@ -3419,7 +3498,7 @@ function MonthlyClosePage(){
                 <tr key={i}>
                   <td style={{padding:"7px 13px",fontFamily:"monospace",fontSize:11,borderBottom:"1px solid #f1f5f9"}}>{item.contract_number}</td>
                   <TD>{item.client_name}</TD>
-                  <TD align="right">{item.allocated_hours}h</TD>
+                  <TD align="right">{fmtH(item.allocated_hours)}h</TD>
                   <TD align="right" style={{color:"#d97706"}}>{SAR(item.resource_cost)}</TD>
                   <TD align="right" style={{color:"#10b981"}}>{SAR(item.monthly_retainer)}</TD>
                   <TD align="right" style={{fontWeight:700,color:item.profit>=0?"#10b981":"#EF4444"}}>{SAR(item.profit)}</TD>
@@ -3456,7 +3535,7 @@ function MonthlyClosePage(){
                 <tr key={i}>
                   <td style={{padding:"8px 13px",fontFamily:"monospace",fontSize:11,borderBottom:"1px solid #f1f5f9"}}>{s.contract_number}</td>
                   <TD><strong>{s.client_name}</strong></TD>
-                  <TD align="right">{s.allocated_hours}h</TD>
+                  <TD align="right">{fmtH(s.allocated_hours)}h</TD>
                   <TD align="right" style={{color:"#d97706"}}>{SAR(s.resource_cost)}</TD>
                   <TD align="right" style={{color:"#10b981"}}>{SAR(s.monthly_retainer)}</TD>
                   <TD align="right" style={{fontWeight:700,color:s.profit>=0?"#10b981":"#EF4444"}}>{SAR(s.profit)}</TD>
@@ -3488,7 +3567,7 @@ function MonthlyClosePage(){
                       <TD><strong>{e.name}</strong></TD>
                       <TD><Bdg bg="#f1f5f9" color="#475569">{e.department}</Bdg></TD>
                       <TD style={{fontSize:12,color:"#64748b",lineHeight:1.5}}>{[...new Set(e.clients)].join(", ")||"—"}</TD>
-                      <TD align="right">{e.totalHours}h</TD>
+                      <TD align="right">{fmtH(e.totalHours)}h</TD>
                       <TD align="right" style={{color:"#d97706"}}>{SAR(Math.round(e.totalCost))}</TD>
                       <TD align="right"><Bdg bg={ub} color={uc}>{util.toFixed(0)}%</Bdg></TD>
                     </tr>
