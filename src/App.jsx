@@ -2399,7 +2399,7 @@ function ReportsPage(){
 
   // ── Table header style ───────────────────────────────────────────────────────
   const TH=({children,align="left"})=><th style={{padding:"8px 12px",textAlign:align,fontSize:11,fontWeight:600,color:"#64748b",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",whiteSpace:"nowrap"}}>{children}</th>;
-  const TDark=({children,align="left"})=><th style={{padding:"8px 12px",textAlign:align,fontSize:11,fontWeight:600,color:"#fff",background:"#fff",borderBottom:"1px solid #334155",whiteSpace:"nowrap"}}>{children}</th>;
+  const TDark=({children,align="left"})=><th style={{padding:"8px 12px",textAlign:align,fontSize:11,fontWeight:600,color:"#64748b",background:"#f8fafc",borderBottom:"1px solid #334155",whiteSpace:"nowrap"}}>{children}</th>;
   const TD=({children,align="left",style={}})=><td style={{padding:"8px 12px",textAlign:align,fontSize:13,borderBottom:"1px solid #f1f5f9",...style}}>{children}</td>;
 
   // ── Sub-tab bar ──────────────────────────────────────────────────────────────
@@ -2726,7 +2726,7 @@ function ReportsPage(){
                     <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                       <thead><tr>
                         {["Month","Client Name","Contract #","Contract Value","Start Date","End Date","Monthly Revenue","Hours","Resource Cost","Profit","Margin %","Status"].map((h,i)=>(
-                          <th key={h} style={{padding:"8px 10px",textAlign:i>=3&&i<=9?"right":i>=10?"center":"left",fontSize:11,fontWeight:600,color:"#fff",background:"#fff",borderBottom:"1px solid #334155",whiteSpace:"nowrap"}}>{h}</th>
+                          <th key={h} style={{padding:"8px 10px",textAlign:i>=3&&i<=9?"right":i>=10?"center":"left",fontSize:11,fontWeight:600,color:"#64748b",background:"#f8fafc",borderBottom:"1px solid #334155",whiteSpace:"nowrap"}}>{h}</th>
                         ))}
                       </tr></thead>
                       <tbody>
@@ -2797,7 +2797,7 @@ function ReportsPage(){
                     <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                       <thead><tr>
                         {["Employee Name","Department","Allocated Hrs","Available Hrs","Utilization %","Hourly Cost","Resource Cost","Contracts Worked On","Overallocated"].map((h,i)=>(
-                          <th key={h} style={{padding:"8px 10px",textAlign:i>=2&&i<=6?"center":i===7?"left":"center",fontSize:11,fontWeight:600,color:"#fff",background:"#fff",borderBottom:"1px solid #334155",whiteSpace:"nowrap"}}>{h}</th>
+                          <th key={h} style={{padding:"8px 10px",textAlign:i>=2&&i<=6?"center":i===7?"left":"center",fontSize:11,fontWeight:600,color:"#64748b",background:"#f8fafc",borderBottom:"1px solid #334155",whiteSpace:"nowrap"}}>{h}</th>
                         ))}
                       </tr></thead>
                       <tbody>
@@ -2881,9 +2881,9 @@ function ReportsPage(){
                   <div style={{overflowX:"auto",marginTop:16}}>
                     <table style={{width:"100%",borderCollapse:"collapse"}}>
                       <thead><tr>
-                        <th style={{padding:"8px 10px",textAlign:"left",fontSize:11,fontWeight:600,color:"#fff",background:"#fff",borderBottom:"1px solid #334155"}}>Department</th>
+                        <th style={{padding:"8px 10px",textAlign:"left",fontSize:11,fontWeight:600,color:"#64748b",background:"#f8fafc",borderBottom:"1px solid #334155"}}>Department</th>
                         {["Employees","Total Hours","Utilization %","Budget (SAR)","Actual Cost","Profit","Margin %"].map(h=>(
-                          <th key={h} style={{padding:"8px 10px",textAlign:"center",fontSize:11,fontWeight:600,color:"#fff",background:"#fff",borderBottom:"1px solid #334155",whiteSpace:"nowrap"}}>{h}</th>
+                          <th key={h} style={{padding:"8px 10px",textAlign:"center",fontSize:11,fontWeight:600,color:"#64748b",background:"#f8fafc",borderBottom:"1px solid #334155",whiteSpace:"nowrap"}}>{h}</th>
                         ))}
                       </tr></thead>
                       <tbody>{rows.map((r,i)=>(
