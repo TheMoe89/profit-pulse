@@ -128,6 +128,7 @@ function AuthProvider({children}){
   const [session,setSession]       = useState(undefined);
   const [profile,setProfile]       = useState(null);
   const [userPerms,setUserPerms]   = useState(null);
+  const [allowedDepts,setAllowedDepts] = useState(null); // null = all depts
   const [permsLoaded,setPermsLoaded] = useState(false); // blocks UI until perms are ready
 
   useEffect(()=>{
@@ -150,6 +151,7 @@ function AuthProvider({children}){
     setProfile(prof);
     if(prof.role==='admin'){
       setUserPerms(null); // null = full access
+      setAllowedDepts(null); // admin sees all depts
       setPermsLoaded(true);
       return;
     }
@@ -157,8 +159,14 @@ function AuthProvider({children}){
     const {data:roles} = await sb.from('role_permissions').select('*');
     if(roles){
       const assigned = roles.find(r=>(r.assigned_users||[]).includes(prof.email));
-      if(assigned) setUserPerms(assigned.permissions||{});
-      else setUserPerms({}); // no role = no access
+      if(assigned){
+        setUserPerms(assigned.permissions||{});
+        const depts = assigned.allowed_departments||[];
+        setAllowedDepts(depts.length>0 ? depts : null);
+      } else {
+        setUserPerms({});
+        setAllowedDepts(null);
+      }
     }
     setPermsLoaded(true); // only NOW show the platform
   };
@@ -172,7 +180,7 @@ function AuthProvider({children}){
   const signIn = (email,password) => sb.auth.signInWithPassword({email,password});
   const signOut = () => sb.auth.signOut();
 
-  return <AuthCtx.Provider value={{session,profile,userPerms,can,permsLoaded,signIn,signOut,sb,loadProfile}}>{children}</AuthCtx.Provider>;
+  return <AuthCtx.Provider value={{session,profile,userPerms,allowedDepts,can,permsLoaded,signIn,signOut,sb,loadProfile}}>{children}</AuthCtx.Provider>;
 }
 
 // ─── LOGIN PAGE ───────────────────────────────────────────────────────────────
