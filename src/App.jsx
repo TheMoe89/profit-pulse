@@ -2394,17 +2394,21 @@ function AllocationsPage(){
 
       {/* Filters */}
       {/* ── Search / Filter bar ─────────────────────────────────── */}
-      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <div style={{position:"relative",flex:1,minWidth:200}}>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {/* Search row */}
+        <div style={{position:"relative",width:"100%"}}>
           <Search size={14} strokeWidth={1.75} style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#94a3b8"}}/>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search allocations..."
-            style={{width:"100%",padding:"8px 10px 8px 32px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,outline:"none"}}/>
+            style={{width:"100%",padding:"8px 10px 8px 32px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,outline:"none",boxSizing:"border-box"}}/>
         </div>
-        <Sel value={filterEmp} onChange={setFilterEmp} options={[{v:"all",l:"All Employees"},...[...new Set((realEmps).map(e=>e.id))].map(id=>{const e=(realEmps).find(x=>x.id===id);return{v:id,l:e?.name||id};})]} style={{width:180}}/>
-        <Sel value={filterCli} onChange={setFilterCli} options={[{v:"all",l:"All Clients"},...[...new Set(allocs.map(a=>a.client_name))].filter(Boolean).map(c=>({v:c,l:c}))]} style={{width:160}}/>
-        <Sel value={filterDept} onChange={setFilterDept} options={[{v:"all",l:"All Departments"},...DEPTS.map(d=>({v:d,l:d.replace(" Department","")}))]  } style={{width:180}}/>
-        <Sel value={filterCat} onChange={setFilterCat} options={[{v:"all",l:"All Categories"},{v:"Retainer",l:"Retainer"},{v:"Project",l:"Project"},{v:"Adhoc",l:"Adhoc"}]} style={{width:160}}/>
-        <Btn variant="outline" size="sm" onClick={()=>{const rows=sorted.map(a=>[a.employee_name,a.client_name,a.allocated_hours,a.month,a.status]);exportXLSX([["Employee","Client","Hours","Month","Status"],...rows],"Allocations","allocations.xlsx");}} style={{gap:6}}><Download size={13} strokeWidth={1.75}/>Export</Btn>
+        {/* Filters row */}
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          <Sel value={filterEmp} onChange={setFilterEmp} options={[{v:"all",l:"All Employees"},...[...new Set((realEmps).map(e=>e.id))].map(id=>{const e=(realEmps).find(x=>x.id===id);return{v:id,l:e?.name||id};})]} style={{flex:1,minWidth:150}}/>
+          <Sel value={filterCli} onChange={setFilterCli} options={[{v:"all",l:"All Clients"},...[...new Set(allocs.map(a=>a.client_name))].filter(Boolean).map(c=>({v:c,l:c}))]} style={{flex:1,minWidth:140}}/>
+          <Sel value={filterDept} onChange={setFilterDept} options={[{v:"all",l:"All Departments"},...(allowedDepts||DEPTS).map(d=>({v:d,l:d.replace(" Department","")}))]  } style={{flex:1,minWidth:150}}/>
+          <Sel value={filterCat} onChange={setFilterCat} options={[{v:"all",l:"All Categories"},{v:"Retainer",l:"Retainer"},{v:"Project",l:"Project"},{v:"Adhoc",l:"Adhoc"}]} style={{flex:1,minWidth:130}}/>
+          <Btn variant="outline" size="sm" onClick={()=>{const rows=sorted.map(a=>[a.employee_name,a.client_name,a.allocated_hours,a.month,a.status]);exportXLSX([["Employee","Client","Hours","Month","Status"],...rows],"Allocations","allocations.xlsx");}} style={{gap:6,flexShrink:0}}><Download size={13} strokeWidth={1.75}/>Export</Btn>
+        </div>
       </div>
 
       {/* ── Grouped by Month ─────────────────────────────────────── */}
