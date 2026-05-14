@@ -10,7 +10,7 @@ import {
   Clock, Building, Plus, Save, ShieldCheck, AlertCircle, Send,
   ShieldAlert, ShieldOff, Construction, FileWarning, User,
   Upload, Download, Paperclip, FileSpreadsheet,
-  CheckCircle, Info, Loader
+  CheckCircle, Info, Loader, Copy, KeyRound, RefreshCw, EyeOff
 } from "lucide-react";
 
 // ─── TOAST SYSTEM ─────────────────────────────────────────────────────────────
@@ -4617,13 +4617,43 @@ function SystemUsersPage(){
     }
   };
   const dbDeleteRole=async id=>{await sb.from('role_permissions').delete().eq('id',id);setRoles(p=>p.filter(r=>r.id!==id));};
+  // Admin Supabase client using service role key
+  const SUPA_URL_PP="https://hmvlgesnxaqebfdzizmy.supabase.co";
+  const SUPA_SERVICE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtdmxnZXNueGFxZWJmZHppem15Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Njk2MDA3NywiZXhwIjoyMDkyNTM2MDc3fQ.1ldvme_JhuF2i55Lt3GgEzj_fcUW6YKfREbrKZc6MKA";
+  const sbAdmin=React.useMemo(()=>createClient(SUPA_URL_PP,SUPA_SERVICE_KEY,{auth:{autoRefreshToken:false,persistSession:false}}),[]);
+
+  const generatePassword=()=>{
+    const upper="ABCDEFGHJKLMNPQRSTUVWXYZ",lower="abcdefghjkmnpqrstuvwxyz",digits="23456789",special="@#$%&*!";
+    const all=upper+lower+digits+special;
+    let pwd=[upper[Math.floor(Math.random()*upper.length)],lower[Math.floor(Math.random()*lower.length)],digits[Math.floor(Math.random()*digits.length)],special[Math.floor(Math.random()*special.length)]];
+    for(let i=0;i<8;i++) pwd.push(all[Math.floor(Math.random()*all.length)]);
+    return pwd.sort(()=>Math.random()-.5).join("");
+  };
+
   const dbInviteUser=async(email,roleId)=>{
-    const{error}=await sb.auth.admin.inviteUserByEmail(email);
+    const{error}=await sbAdmin.auth.admin.inviteUserByEmail(email);
     if(!error&&roleId){
       const role=roles.find(r=>r.id===roleId);
       if(role)await sb.from('role_permissions').update({assigned_users:[...(role.assigned_users||[]),email]}).eq('id',roleId);
     }
     return{error};
+  };
+
+  const dbCreateUserWithPassword=async(email,password,roleId)=>{
+    const{data,error}=await sbAdmin.auth.admin.createUser({email,password,email_confirm:true});
+    if(error) throw new Error(error.message);
+    // Create profile
+    await sb.from('profiles').upsert({id:data.user.id,email,full_name:email.split('@')[0],role:'manager',status:'active'});
+    // Assign role
+    if(roleId){
+      const role=roles.find(r=>r.id===roleId);
+      if(role)await sb.from('role_permissions').update({assigned_users:[...(role.assigned_users||[]),email]}).eq('id',roleId);
+    }
+  };
+
+  const dbChangePassword=async(userId,newPassword)=>{
+    const{error}=await sbAdmin.auth.admin.updateUserById(userId,{password:newPassword});
+    if(error) throw new Error(error.message);
   };
   const dbUpdateUser=async(id,payload)=>{const{data}=await sb.from('profiles').update(payload).eq('id',id).select().single();if(data)setUsers(p=>p.map(u=>u.id===id?{...u,...data}:u));};
   const dbDeleteUser=async id=>{
@@ -4635,6 +4665,18 @@ function SystemUsersPage(){
   };
   const [inviteEmail,setInviteEmail]   = useState("");
   const [inviteRoleId,setInviteRoleId] = useState("");
+  const [inviteTab,setInviteTab]       = useState("invite"); // "invite" | "create"
+  const [createEmail,setCreateEmail]   = useState("");
+  const [createPassword,setCreatePassword] = useState("");
+  const [createRoleId,setCreateRoleId] = useState("");
+  const [createSaving,setCreateSaving] = useState(false);
+  const [showCreatePw,setShowCreatePw] = useState(false);
+  const [copiedCreatePw,setCopiedCreatePw] = useState(false);
+  const [changePwUser,setChangePwUser] = useState(null);
+  const [changePwVal,setChangePwVal]   = useState("");
+  const [showChangePw,setShowChangePw] = useState(false);
+  const [copiedChangePw,setCopiedChangePw] = useState(false);
+  const [changePwSaving,setChangePwSaving] = useState(false);
   const [roleModal,setRoleModal]       = useState(false);
   const [editingRole,setEditingRole]   = useState(null);
   const [roleForm,setRoleForm]         = useState({role_name:"",permissions:{...DEFAULT_PERMS},allowed_departments:[],assigned_users:[]});
@@ -4714,7 +4756,34 @@ function SystemUsersPage(){
     const _uok=await confirm({title:'Remove user?',message:`${u.full_name||u.email} will lose access to Profit Pulse.`,danger:true,confirmLabel:'Remove'});
       if(_uok){await dbDeleteUser(u.id);toast('User removed','success');}
   };
-  const resendInvite=email=>toast(`Activation email resent to ${email}`,'success');
+  const resendInvite=async(email)=>{
+    const{error}=await sbAdmin.auth.admin.inviteUserByEmail(email);
+    if(error){toast(`Failed: ${error.message}`,'error');return;}
+    toast(`Activation email resent to ${email}`,'success');
+  };
+  const handleCreateUser=async()=>{
+    if(!createEmail||!createPassword||createPassword.length<8) return;
+    if(users.find(u=>u.email===createEmail)){toast('User already exists','warning');return;}
+    setCreateSaving(true);
+    try{
+      await dbCreateUserWithPassword(createEmail,createPassword,createRoleId||null);
+      toast(`User ${createEmail} created successfully`,'success');
+      setCreateEmail("");setCreatePassword("");setCreateRoleId("");setShowCreatePw(false);
+      const{data}=await sb.from('profiles').select('*');
+      if(data)setUsers(data);
+    }catch(err){toast(err.message||'Failed to create user','error');}
+    finally{setCreateSaving(false);}
+  };
+  const handleChangePassword=async()=>{
+    if(!changePwUser||changePwVal.length<8) return;
+    setChangePwSaving(true);
+    try{
+      await dbChangePassword(changePwUser.id,changePwVal);
+      toast(`Password updated for ${changePwUser.full_name||changePwUser.email}`,'success');
+      setChangePwUser(null);setChangePwVal("");setShowChangePw(false);
+    }catch(err){toast(err.message||'Failed to update password','error');}
+    finally{setChangePwSaving(false);}
+  };
   const assignRole=async(userEmail,newRoleId,curRoleId)=>{
     // Remove from old role
     if(curRoleId){
@@ -4763,19 +4832,125 @@ function SystemUsersPage(){
       {tab==="users"&&(
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
 
-          {/* Invite card */}
-          <Card style={{padding:20}}>
-            <p style={{margin:"0 0 14px",fontWeight:700,fontSize:14,color:"#0f172a",lineHeight:1.5,display:"flex",alignItems:"center",gap:8}}><UserPlus size={16} strokeWidth={1.75} style={{color:"#64748b"}}/>Invite New User</p>
-            <form onSubmit={handleInvite} style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-              <input type="email" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)}
-                placeholder="Enter email address" required
-                style={{flex:1,minWidth:200,padding:"9px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,outline:"none",background:"#f1f5f9",color:"#0f172a"}}/>
-              <Sel value={inviteRoleId} onChange={setInviteRoleId}
-                options={[{v:"",l:roles.length===0?"No roles — create one first":"Select role (required)"},...roles.map(r=>({v:r.id,l:r.role_name}))]}
-                style={{width:200,borderColor:!inviteRoleId?"#fca5a5":"#e2e8f0"}}/>
-              <Btn variant="primary" type="submit" style={{gap:6}}><Send size={13} strokeWidth={1.75}/>Send Invite</Btn>
-            </form>
+          {/* ── Add New User card — tabbed ─────────────────────── */}
+          <Card style={{overflow:"hidden",padding:0}}>
+            <div style={{padding:"14px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:8}}>
+              <UserPlus size={15} strokeWidth={1.75} color="#008A57"/>
+              <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>Add New User</p>
+            </div>
+            {/* Tabs */}
+            <div style={{display:"flex",borderBottom:"1px solid #f1f5f9"}}>
+              {[{id:"invite",icon:<Mail size={12} strokeWidth={1.75}/>,label:"Send Invite Email"},{id:"create",icon:<KeyRound size={12} strokeWidth={1.75}/>,label:"Set Password Manually"}].map(t=>(
+                <button key={t.id} onClick={()=>setInviteTab(t.id)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"10px 14px",border:"none",borderBottom:`2px solid ${inviteTab===t.id?"#008A57":"transparent"}`,background:"#fff",cursor:"pointer",fontSize:12,fontWeight:600,color:inviteTab===t.id?"#008A57":"#64748b",transition:"all .15s"}}>
+                  {t.icon}{t.label}
+                </button>
+              ))}
+            </div>
+            <div style={{padding:"16px 20px"}}>
+              {inviteTab==="invite"?(
+                <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                  <div style={{padding:"9px 12px",background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:7,display:"flex",gap:9,alignItems:"center"}}>
+                    <Mail size={13} strokeWidth={1.75} color="#0ea5e9" style={{flexShrink:0}}/>
+                    <p style={{margin:0,fontSize:12,color:"#0369a1",lineHeight:1.5}}>User receives a secure email link to set their own password. Link expires in 24 hours.</p>
+                  </div>
+                  <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                    <input type="email" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} placeholder="Email address"
+                      style={{flex:1,minWidth:200,padding:"9px 12px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,outline:"none",color:"#0f172a"}}/>
+                    <Sel value={inviteRoleId} onChange={setInviteRoleId}
+                      options={[{v:"",l:roles.length===0?"No roles — create one first":"Select role (required)"},...roles.map(r=>({v:r.id,l:r.role_name}))]}
+                      style={{width:200,borderColor:!inviteRoleId?"#fca5a5":"#e2e8f0"}}/>
+                    <Btn variant="primary" onClick={handleInvite} style={{gap:6}}><Send size={13} strokeWidth={1.75}/>Send Invite</Btn>
+                  </div>
+                </div>
+              ):(
+                <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                  <div style={{padding:"9px 12px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:7,display:"flex",gap:9,alignItems:"center"}}>
+                    <KeyRound size={13} strokeWidth={1.75} color="#d97706" style={{flexShrink:0}}/>
+                    <p style={{margin:0,fontSize:12,color:"#92400e",lineHeight:1.5}}>Set the password and share credentials with the user manually. Ask them to change it after first login.</p>
+                  </div>
+                  <input type="email" value={createEmail} onChange={e=>setCreateEmail(e.target.value)} placeholder="Email address"
+                    style={{padding:"9px 12px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,outline:"none",color:"#0f172a",width:"100%",boxSizing:"border-box"}}/>
+                  {/* Password field with generate */}
+                  <div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                      <label style={{fontSize:12,fontWeight:600,color:"#374151"}}>Password</label>
+                      <button type="button" onClick={()=>{setCreatePassword(generatePassword());setShowCreatePw(true);}}
+                        style={{display:"flex",alignItems:"center",gap:5,padding:"3px 10px",borderRadius:6,border:"1px solid #e2e8f0",background:"#fff",cursor:"pointer",fontSize:11,fontWeight:600,color:"#008A57"}}
+                        onMouseEnter={e=>{e.currentTarget.style.background="#e6f7f0";e.currentTarget.style.borderColor="#008A57"}}
+                        onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0"}}>
+                        <RefreshCw size={11} strokeWidth={2}/>Generate Password
+                      </button>
+                    </div>
+                    <div style={{position:"relative"}}>
+                      <input type={showCreatePw?"text":"password"} value={createPassword} onChange={e=>setCreatePassword(e.target.value)} placeholder="Generate or type a password"
+                        style={{width:"100%",padding:"9px 64px 9px 12px",border:`1px solid ${createPassword&&createPassword.length<8?"#fca5a5":"#e2e8f0"}`,borderRadius:8,fontSize:13,color:"#0f172a",outline:"none",boxSizing:"border-box"}}/>
+                      <div style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",display:"flex",gap:4}}>
+                        {createPassword&&<button type="button" onClick={()=>{navigator.clipboard.writeText(createPassword);setCopiedCreatePw(true);setTimeout(()=>setCopiedCreatePw(false),2000);}} style={{background:"none",border:"none",cursor:"pointer",padding:"2px",color:copiedCreatePw?"#008A57":"#94a3b8"}}>{copiedCreatePw?<CheckCircle size={13}/>:<Copy size={13}/>}</button>}
+                        <button type="button" onClick={()=>setShowCreatePw(s=>!s)} style={{background:"none",border:"none",cursor:"pointer",padding:"2px",color:"#94a3b8"}}>{showCreatePw?<EyeOff size={13}/>:<Eye size={13}/>}</button>
+                      </div>
+                    </div>
+                    {createPassword.length>0&&(()=>{const s=createPassword.length<8?1:createPassword.length<12?2:3;const sc=["","#ef4444","#f59e0b","#008A57"][s];return(<div style={{display:"flex",alignItems:"center",gap:8,marginTop:5}}><div style={{flex:1,height:4,borderRadius:99,background:"#f1f5f9",overflow:"hidden"}}><div style={{height:"100%",width:`${(s/3)*100}%`,background:sc,borderRadius:99}}/></div><span style={{fontSize:11,fontWeight:600,color:sc}}>{"Weak Fair Strong".split(" ")[s-1]}</span></div>);})()}
+                  </div>
+                  <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+                    <Sel value={createRoleId} onChange={setCreateRoleId}
+                      options={[{v:"",l:roles.length===0?"No roles — create one first":"Select role (optional)"},...roles.map(r=>({v:r.id,l:r.role_name}))]}
+                      style={{flex:1,minWidth:180}}/>
+                    <Btn variant="primary" onClick={handleCreateUser} disabled={!createEmail||createPassword.length<8||createSaving} style={{gap:6,minWidth:130,justifyContent:"center"}}>
+                      {createSaving?<><Loader size={13} style={{animation:"spin .8s linear infinite"}}/>Creating…</>:<><UserPlus size={13} strokeWidth={1.75}/>Create User</>}
+                    </Btn>
+                  </div>
+                </div>
+              )}
+            </div>
           </Card>
+
+          {/* ── Change Password Modal ──────────────────────────────── */}
+          {changePwUser&&(
+            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:24}}>
+              <div style={{background:"#fff",borderRadius:14,width:"100%",maxWidth:420,boxShadow:"0 20px 60px rgba(0,0,0,.2)",overflow:"hidden"}}>
+                <div style={{padding:"16px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>Change Password</p>
+                    <p style={{margin:"2px 0 0",fontSize:11,color:"#94a3b8"}}>{changePwUser.full_name||changePwUser.email} · {changePwUser.email}</p>
+                  </div>
+                  <button onClick={()=>{setChangePwUser(null);setChangePwVal("");setShowChangePw(false);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:20,color:"#94a3b8",lineHeight:1}}>×</button>
+                </div>
+                <div style={{padding:"18px 20px",display:"flex",flexDirection:"column",gap:14}}>
+                  <div style={{padding:"9px 12px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:7,display:"flex",gap:9,alignItems:"flex-start"}}>
+                    <Lock size={13} strokeWidth={1.75} color="#d97706" style={{flexShrink:0,marginTop:1}}/>
+                    <p style={{margin:0,fontSize:12,color:"#92400e",lineHeight:1.6}}>Set a new password for <strong>{changePwUser.full_name||changePwUser.email}</strong>. Share it securely and ask them to change it after login.</p>
+                  </div>
+                  <div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                      <label style={{fontSize:12,fontWeight:600,color:"#374151"}}>New Password</label>
+                      <button type="button" onClick={()=>{setChangePwVal(generatePassword());setShowChangePw(true);}}
+                        style={{display:"flex",alignItems:"center",gap:5,padding:"3px 10px",borderRadius:6,border:"1px solid #e2e8f0",background:"#fff",cursor:"pointer",fontSize:11,fontWeight:600,color:"#008A57"}}
+                        onMouseEnter={e=>{e.currentTarget.style.background="#e6f7f0";e.currentTarget.style.borderColor="#008A57"}}
+                        onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0"}}>
+                        <RefreshCw size={11} strokeWidth={2}/>Generate Password
+                      </button>
+                    </div>
+                    <div style={{position:"relative"}}>
+                      <input type={showChangePw?"text":"password"} value={changePwVal} onChange={e=>setChangePwVal(e.target.value)} placeholder="Generate or enter new password"
+                        style={{width:"100%",padding:"9px 64px 9px 12px",border:`1px solid ${changePwVal&&changePwVal.length<8?"#fca5a5":"#e2e8f0"}`,borderRadius:8,fontSize:13,color:"#0f172a",outline:"none",boxSizing:"border-box"}}/>
+                      <div style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",display:"flex",gap:4}}>
+                        {changePwVal&&<button type="button" onClick={()=>{navigator.clipboard.writeText(changePwVal);setCopiedChangePw(true);setTimeout(()=>setCopiedChangePw(false),2000);}} style={{background:"none",border:"none",cursor:"pointer",padding:"2px",color:copiedChangePw?"#008A57":"#94a3b8"}}>{copiedChangePw?<CheckCircle size={13}/>:<Copy size={13}/>}</button>}
+                        <button type="button" onClick={()=>setShowChangePw(s=>!s)} style={{background:"none",border:"none",cursor:"pointer",padding:"2px",color:"#94a3b8"}}>{showChangePw?<EyeOff size={13}/>:<Eye size={13}/>}</button>
+                      </div>
+                    </div>
+                    {changePwVal.length>0&&(()=>{const s=changePwVal.length<8?1:changePwVal.length<12?2:3;const sc=["","#ef4444","#f59e0b","#008A57"][s];return(<div style={{display:"flex",alignItems:"center",gap:8,marginTop:5}}><div style={{flex:1,height:4,borderRadius:99,background:"#f1f5f9",overflow:"hidden"}}><div style={{height:"100%",width:`${(s/3)*100}%`,background:sc,borderRadius:99}}/></div><span style={{fontSize:11,fontWeight:600,color:sc}}>{"Weak Fair Strong".split(" ")[s-1]}</span></div>);})()}
+                    {copiedChangePw&&<p style={{margin:"3px 0 0",fontSize:11,color:"#008A57",fontWeight:600}}>✓ Copied to clipboard</p>}
+                  </div>
+                  <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                    <Btn variant="outline" onClick={()=>{setChangePwUser(null);setChangePwVal("");setShowChangePw(false);}}>Cancel</Btn>
+                    <Btn variant="primary" onClick={handleChangePassword} disabled={changePwVal.length<8||changePwSaving} style={{gap:6,minWidth:140,justifyContent:"center"}}>
+                      {changePwSaving?<><Loader size={13} style={{animation:"spin .8s linear infinite"}}/>Updating…</>:<><Lock size={13} strokeWidth={1.75}/>Update Password</>}
+                    </Btn>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* User list */}
           <Card style={{overflow:"hidden"}}>
@@ -4829,6 +5004,7 @@ function SystemUsersPage(){
                         <div style={{display:"flex",justifyContent:"center",gap:4}}>
                           {!u.isPending&&u.email!==CURRENT_USER?.email&&<Btn variant="ghost" size="sm" title="Impersonate" style={{color:"#008A57"}} data-impersonate="1" onClick={()=>toast(`Impersonating ${u.full_name||u.email} (not yet implemented)`,'info')}><Eye size={14} strokeWidth={1.75}/></Btn>}
                           <Btn variant="ghost" size="sm" onClick={()=>openEditUser(u)} title="Edit"><Pencil size={14} strokeWidth={1.75}/></Btn>
+                          {u.role!=="admin"&&<Btn variant="ghost" size="sm" title="Change password" style={{color:"#0ea5e9"}} onClick={()=>{setChangePwUser(u);setChangePwVal("");setShowChangePw(false);}}><Lock size={14} strokeWidth={1.75}/></Btn>}
                           {u.status==="invited"&&<Btn variant="ghost" size="sm" style={{color:"#008A57"}} onClick={()=>resendInvite(u.email)} title="Resend invite"><Mail size={14} strokeWidth={1.75}/></Btn>}
                           {u.role!=="admin"&&<Btn variant="danger" size="sm" onClick={()=>deleteUser(u)} title="Delete"><Trash2 size={14} strokeWidth={1.75}/></Btn>}
                         </div>
