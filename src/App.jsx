@@ -119,6 +119,10 @@ function usePersistState(key, defaultVal){
 const SUPABASE_URL = "https://hmvlgesnxaqebfdzizmy.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtdmxnZXNueGFxZWJmZHppem15Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5NjAwNzcsImV4cCI6MjA5MjUzNjA3N30.FXvGha4gIz9S0U2PzyZiHVeRLPIbgEJ_3z0xWinJROs";
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+const SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtdmxnZXNueGFxZWJmZHppem15Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Njk2MDA3NywiZXhwIjoyMDkyNTM2MDc3fQ.1ldvme_JhuF2i55Lt3GgEzj_fcUW6YKfREbrKZc6MKA";
+const sbAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+  auth: { autoRefreshToken: false, persistSession: false, storageKey: 'sb-admin-session' }
+});
 
 // ─── AUTH CONTEXT ─────────────────────────────────────────────────────────────
 const AuthCtx = createContext(null);
@@ -4617,11 +4621,6 @@ function SystemUsersPage(){
     }
   };
   const dbDeleteRole=async id=>{await sb.from('role_permissions').delete().eq('id',id);setRoles(p=>p.filter(r=>r.id!==id));};
-  // Admin Supabase client using service role key
-  const SUPA_URL_PP="https://hmvlgesnxaqebfdzizmy.supabase.co";
-  const SUPA_SERVICE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtdmxnZXNueGFxZWJmZHppem15Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Njk2MDA3NywiZXhwIjoyMDkyNTM2MDc3fQ.1ldvme_JhuF2i55Lt3GgEzj_fcUW6YKfREbrKZc6MKA";
-  const sbAdmin=React.useMemo(()=>createClient(SUPA_URL_PP,SUPA_SERVICE_KEY,{auth:{autoRefreshToken:false,persistSession:false}}),[]);
-
   const generatePassword=()=>{
     const upper="ABCDEFGHJKLMNPQRSTUVWXYZ",lower="abcdefghjkmnpqrstuvwxyz",digits="23456789",special="@#$%&*!";
     const all=upper+lower+digits+special;
@@ -4731,17 +4730,31 @@ function SystemUsersPage(){
   const deleteRole=async id=>{const ok=await confirm({title:'Delete role?',message:'This role will be permanently deleted. Users with this role will lose their permissions.',danger:true,confirmLabel:'Delete'});if(ok){await dbDeleteRole(id);toast('Role deleted','success');}};
 
   // Invite user
-  const handleInvite=async e=>{
-    e.preventDefault();
+  const [inviteSaving,setInviteSaving]=useState(false);
+  const handleInvite=async()=>{
     if(!inviteEmail){toast('Enter an email address','warning');return;}
     if(!inviteRoleId){toast('Select a role before inviting','warning');return;}
     if(users.find(u=>u.email===inviteEmail)){toast('A user with this email already exists','warning');return;}
-    const{error}=await dbInviteUser(inviteEmail,inviteRoleId);
-    if(error){toast(`Failed: ${error.message}`,'error');return;}
-    toast(`Invitation sent to ${inviteEmail}`,'success');
-    setInviteEmail(""); setInviteRoleId("");
-    const{data}=await sb.from('role_permissions').select('*');
-    if(data)setRoles(data);
+    if(inviteSaving)return;
+    setInviteSaving(true);
+    try{
+      const{error}=await sbAdmin.auth.admin.inviteUserByEmail(inviteEmail);
+      if(error) throw new Error(error.message);
+      if(inviteRoleId){
+        const role=roles.find(r=>r.id===inviteRoleId);
+        if(role){
+          const{error:re}=await sb.from('role_permissions').update({assigned_users:[...(role.assigned_users||[]),inviteEmail]}).eq('id',inviteRoleId);
+          if(re) console.warn('Role assign warning:',re.message);
+        }
+      }
+      toast(`Invitation sent to ${inviteEmail}`,'success');
+      setInviteEmail(""); setInviteRoleId("");
+      const{data}=await sb.from('role_permissions').select('*');
+      if(data)setRoles(data);
+    }catch(err){
+      console.error('Invite error:',err);
+      toast(err.message||'Failed to send invitation. Check console for details.','error');
+    }finally{setInviteSaving(false);}
   };
 
   // Edit user
@@ -4762,27 +4775,50 @@ function SystemUsersPage(){
     toast(`Activation email resent to ${email}`,'success');
   };
   const handleCreateUser=async()=>{
-    if(!createEmail||!createPassword||createPassword.length<8) return;
-    if(users.find(u=>u.email===createEmail)){toast('User already exists','warning');return;}
+    if(!createEmail){toast('Enter an email address','warning');return;}
+    if(!createPassword||createPassword.length<8){toast('Password must be at least 8 characters','warning');return;}
+    if(users.find(u=>u.email===createEmail)){toast('A user with this email already exists','warning');return;}
+    if(createSaving)return;
     setCreateSaving(true);
     try{
-      await dbCreateUserWithPassword(createEmail,createPassword,createRoleId||null);
-      toast(`User ${createEmail} created successfully`,'success');
+      const{data:ud,error:ue}=await sbAdmin.auth.admin.createUser({email:createEmail,password:createPassword,email_confirm:true});
+      if(ue) throw new Error(ue.message);
+      // Create profile row
+      const{error:pe}=await sb.from('profiles').upsert({id:ud.user.id,email:createEmail,full_name:createEmail.split('@')[0],role:'manager',status:'active'});
+      if(pe) console.warn('Profile create warning:',pe.message);
+      // Assign role
+      if(createRoleId){
+        const role=roles.find(r=>r.id===createRoleId);
+        if(role){
+          const{error:re}=await sb.from('role_permissions').update({assigned_users:[...(role.assigned_users||[]),createEmail]}).eq('id',createRoleId);
+          if(re) console.warn('Role assign warning:',re.message);
+        }
+      }
+      toast(`✓ User ${createEmail} created successfully`,'success');
       setCreateEmail("");setCreatePassword("");setCreateRoleId("");setShowCreatePw(false);
-      const{data}=await sb.from('profiles').select('*');
-      if(data)setUsers(data);
-    }catch(err){toast(err.message||'Failed to create user','error');}
-    finally{setCreateSaving(false);}
+      const{data:pdata}=await sb.from('profiles').select('*');
+      if(pdata)setUsers(pdata);
+      const{data:rdata}=await sb.from('role_permissions').select('*');
+      if(rdata)setRoles(rdata);
+    }catch(err){
+      console.error('Create user error:',err);
+      toast(err.message||'Failed to create user. Check console for details.','error');
+    }finally{setCreateSaving(false);}
   };
   const handleChangePassword=async()=>{
-    if(!changePwUser||changePwVal.length<8) return;
+    if(!changePwUser){toast('No user selected','error');return;}
+    if(changePwVal.length<8){toast('Password must be at least 8 characters','warning');return;}
+    if(changePwSaving)return;
     setChangePwSaving(true);
     try{
-      await dbChangePassword(changePwUser.id,changePwVal);
-      toast(`Password updated for ${changePwUser.full_name||changePwUser.email}`,'success');
+      const{error}=await sbAdmin.auth.admin.updateUserById(changePwUser.id,{password:changePwVal});
+      if(error) throw new Error(error.message);
+      toast(`✓ Password updated for ${changePwUser.full_name||changePwUser.email}`,'success');
       setChangePwUser(null);setChangePwVal("");setShowChangePw(false);
-    }catch(err){toast(err.message||'Failed to update password','error');}
-    finally{setChangePwSaving(false);}
+    }catch(err){
+      console.error('Change password error:',err);
+      toast(err.message||'Failed to update password. Check console for details.','error');
+    }finally{setChangePwSaving(false);}
   };
   const assignRole=async(userEmail,newRoleId,curRoleId)=>{
     // Remove from old role
@@ -4859,7 +4895,7 @@ function SystemUsersPage(){
                     <Sel value={inviteRoleId} onChange={setInviteRoleId}
                       options={[{v:"",l:roles.length===0?"No roles — create one first":"Select role (required)"},...roles.map(r=>({v:r.id,l:r.role_name}))]}
                       style={{width:200,borderColor:!inviteRoleId?"#fca5a5":"#e2e8f0"}}/>
-                    <Btn variant="primary" onClick={handleInvite} style={{gap:6}}><Send size={13} strokeWidth={1.75}/>Send Invite</Btn>
+                    <Btn variant="primary" onClick={handleInvite} disabled={inviteSaving||!inviteEmail||!inviteRoleId} style={{gap:6,minWidth:120,justifyContent:"center"}}>{inviteSaving?<><Loader size={13} style={{animation:"spin .8s linear infinite"}}/>Sending…</>:<><Send size={13} strokeWidth={1.75}/>Send Invite</>}</Btn>
                   </div>
                 </div>
               ):(
