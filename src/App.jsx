@@ -121,6 +121,25 @@ const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 const SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtdmxnZXNueGFxZWJmZHppem15Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Njk2MDA3NywiZXhwIjoyMDkyNTM2MDc3fQ.1ldvme_JhuF2i55Lt3GgEzj_fcUW6YKfREbrKZc6MKA";
 
+// Direct REST API — no second Supabase client, avoids GoTrueClient conflict
+const adminFetch = async (path, method='GET', body=null) => {
+  const url = path.startsWith('invite')
+    ? `${SUPABASE_URL}/auth/v1/invite`
+    : `${SUPABASE_URL}/auth/v1/admin/${path}`;
+  const res = await fetch(url, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_SERVICE_KEY,
+      'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.msg || data.error_description || JSON.stringify(data));
+  return data;
+};
+
 
 // ─── AUTH CONTEXT ─────────────────────────────────────────────────────────────
 const AuthCtx = createContext(null);
@@ -4638,7 +4657,7 @@ function SystemUsersPage(){
 
   const dbCreateUserWithPassword=async(email,password,roleId)=>{
     const ud2=await adminFetch('users','POST',{email,password,email_confirm:true});
-    await sb.from('profiles').upsert({id:ud2.id,email,full_name:email.split('@')[0],role:'manager',status:'active'});
+    await sb.from('profiles').upsert({id:(ud2.id||ud2.user?.id),email,full_name:email.split('@')[0],role:'manager',status:'active'});
     // Assign role
     if(roleId){
       const role=roles.find(r=>r.id===roleId);
@@ -4777,7 +4796,7 @@ function SystemUsersPage(){
     try{
       const ud=await adminFetch('users','POST',{email:createEmail,password:createPassword,email_confirm:true});
       // Create profile row
-      const{error:pe}=await sb.from('profiles').upsert({id:ud.id,email:createEmail,full_name:createEmail.split('@')[0],role:'manager',status:'active'});
+      const{error:pe}=await sb.from('profiles').upsert({id:(ud.id||ud.user?.id),email:createEmail,full_name:createEmail.split('@')[0],role:'manager',status:'active'});
       if(pe) console.warn('Profile create warning:',pe.message);
       // Assign role
       if(createRoleId){
