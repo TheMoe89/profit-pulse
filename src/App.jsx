@@ -1725,8 +1725,8 @@ function ContractsPage(){
       setLoading(false);
     });
   },[sb]);
-  const dbAdd=async p=>{const{data,error}=await sb.from('contracts').insert([{contract_number:p.contract_number,client_id:p.client_id||null,client_name:p.client_name,contract_value:parseFloat(p.contract_value)||0,tenure_months:parseFloat(p.tenure_months)||0,project_name:p.project_name||"",start_date:p.start_date,end_date:p.end_date,status:p.status,contract_category:p.contract_category,budget_client_servicing:parseFloat(p.budget_client_servicing)||0,budget_production:parseFloat(p.budget_production)||0,budget_creative:parseFloat(p.budget_creative)||0,budget_planning:parseFloat(p.budget_planning)||0,budget_third_party:parseFloat(p.budget_third_party)||0,notes:p.notes||"",contract_pdf_url:p.contract_pdf_url||""}]).select().single();if(error){toast('Error saving: '+error.message,'error');return;}if(data){setContracts(x=>[...x,mapC(data)]);toast('Contract created','success');}};
-  const dbUpdate=async(id,p)=>{const{data,error}=await sb.from('contracts').update({contract_number:p.contract_number,client_id:p.client_id||null,client_name:p.client_name,contract_value:parseFloat(p.contract_value)||0,tenure_months:parseFloat(p.tenure_months)||0,project_name:p.project_name||"",start_date:p.start_date,end_date:p.end_date,status:p.status,contract_category:p.contract_category,budget_client_servicing:parseFloat(p.budget_client_servicing)||0,budget_production:parseFloat(p.budget_production)||0,budget_creative:parseFloat(p.budget_creative)||0,budget_planning:parseFloat(p.budget_planning)||0,budget_third_party:parseFloat(p.budget_third_party)||0,notes:p.notes||"",contract_pdf_url:p.contract_pdf_url||""}).eq('id',id).select().single();if(error){toast('Error updating: '+error.message,'error');return;}if(data){setContracts(x=>x.map(c=>c.id===id?mapC(data):c));toast('Contract updated','success');}};
+  const dbAdd=async p=>{const{data,error}=await sb.from('contracts').insert([{contract_number:p.contract_number,client_id:p.client_id||null,client_name:p.client_name,contract_value:parseFloat(p.contract_value)||0,tenure_months:parseFloat(p.tenure_months)||0,project_name:p.project_name||"",start_date:p.start_date,end_date:p.end_date,status:p.status,contract_category:p.contract_category,budget_client_servicing:parseFloat(p.budget_client_servicing)||0,budget_production:parseFloat(p.budget_production)||0,budget_creative:parseFloat(p.budget_creative)||0,budget_planning:parseFloat(p.budget_planning)||0,budget_third_party:parseFloat(p.budget_third_party)||0,notes:p.notes||"",contract_pdf_url:p.contract_pdf_url||"",third_party_contract_url:p.third_party_contract_url||""}]).select().single();if(error){toast('Error saving: '+error.message,'error');return;}if(data){setContracts(x=>[...x,mapC(data)]);toast('Contract created','success');}};
+  const dbUpdate=async(id,p)=>{const{data,error}=await sb.from('contracts').update({contract_number:p.contract_number,client_id:p.client_id||null,client_name:p.client_name,contract_value:parseFloat(p.contract_value)||0,tenure_months:parseFloat(p.tenure_months)||0,project_name:p.project_name||"",start_date:p.start_date,end_date:p.end_date,status:p.status,contract_category:p.contract_category,budget_client_servicing:parseFloat(p.budget_client_servicing)||0,budget_production:parseFloat(p.budget_production)||0,budget_creative:parseFloat(p.budget_creative)||0,budget_planning:parseFloat(p.budget_planning)||0,budget_third_party:parseFloat(p.budget_third_party)||0,notes:p.notes||"",contract_pdf_url:p.contract_pdf_url||"",third_party_contract_url:p.third_party_contract_url||""}).eq('id',id).select().single();if(error){toast('Error updating: '+error.message,'error');return;}if(data){setContracts(x=>x.map(c=>c.id===id?mapC(data):c));toast('Contract updated','success');}};
   const dbDelete=async id=>{await sb.from('contracts').delete().eq('id',id);setContracts(x=>x.filter(c=>c.id!==id));};
   const [search,setSearch]       = useState("");
   const [statusF,setStatusF]     = useState("all");
@@ -1761,7 +1761,7 @@ function ContractsPage(){
 
   const [pdfFile,setPdfFile]=useState(null);
   const openAdd =()=>{setEditing(null);setForm(EMPTY_CONTRACT);setPdfFile(null);setModalOpen(true);};
-  const openEdit=c=>{setEditing(c);setForm({client_id:c.client_id,client_name:c.client_name,project_name:c.project_name||"",contract_value:c.contract_value,tenure_months:c.tenure_months,start_date:c.start_date,end_date:c.end_date,status:c.status,contract_category:c.contract_category,budget_client_servicing:c.budget_client_servicing||"",budget_production:c.budget_production||"",budget_creative:c.budget_creative||"",budget_planning:c.budget_planning||"",budget_third_party:c.budget_third_party||"",contract_pdf_url:c.contract_pdf_url||"",notes:c.notes||"",contract_number:c.contract_number});setPdfFile(null);setModalOpen(true);};
+  const openEdit=c=>{setEditing(c);setForm({client_id:c.client_id,client_name:c.client_name,project_name:c.project_name||"",contract_value:c.contract_value,tenure_months:c.tenure_months,start_date:c.start_date,end_date:c.end_date,status:c.status,contract_category:c.contract_category,budget_client_servicing:c.budget_client_servicing||"",budget_production:c.budget_production||"",budget_creative:c.budget_creative||"",budget_planning:c.budget_planning||"",budget_third_party:c.budget_third_party||"",contract_pdf_url:c.contract_pdf_url||"",third_party_contract_url:c.third_party_contract_url||"",notes:c.notes||"",contract_number:c.contract_number});setPdfFile(null);setThirdPartyFile(null);setModalOpen(true);};
   const close=()=>{setModalOpen(false);setEditing(null);setPdfFile(null);};
 
   const handleSubmit=async e=>{
@@ -1900,8 +1900,17 @@ function ContractsPage(){
                       <Bdg bg={expired?"#fee2e2":"#d1fae5"} color={expired?"#EF4444":"#10b981"}>{expired?"Expired":"Active"}</Bdg>
                     </td>
                     <td style={{padding:"11px 13px",textAlign:"right"}}>
-                      <div style={{display:"flex",justifyContent:"flex-end",gap:4}}>
-                        {c.contract_pdf_url&&<Btn variant="ghost" size="sm" title="View contract PDF" style={{color:"#0ea5e9"}} onClick={()=>window.open(c.contract_pdf_url,'_blank')}><Eye size={14} strokeWidth={1.75}/></Btn>}
+                      <div style={{display:"flex",justifyContent:"flex-end",gap:2}}>
+                        {c.contract_pdf_url&&(
+                          <AttachTooltip label="View Contract">
+                            <Btn variant="ghost" size="sm" style={{color:"#0891b2"}} onClick={()=>window.open(c.contract_pdf_url,'_blank')}><FileText size={14} strokeWidth={1.75}/></Btn>
+                          </AttachTooltip>
+                        )}
+                        {c.third_party_contract_url&&(
+                          <AttachTooltip label="View 3rd Party Contract">
+                            <Btn variant="ghost" size="sm" style={{color:"#7c3aed"}} onClick={()=>window.open(c.third_party_contract_url,'_blank')}><Handshake size={14} strokeWidth={1.75}/></Btn>
+                          </AttachTooltip>
+                        )}
                         <Btn variant="ghost" size="sm" onClick={()=>openEdit(c)}><Pencil size={14} strokeWidth={1.75}/></Btn>
                         <Btn variant="danger" size="sm" onClick={()=>del(c.id)}><Trash2 size={14} strokeWidth={1.75}/></Btn>
                       </div>
@@ -1978,18 +1987,34 @@ function ContractsPage(){
               <div><Lbl>Start Date *</Lbl><Inp type="date" value={form.start_date} onChange={e=>handleStartDate(e.target.value)} required/></div>
               <div><Lbl>End Date *</Lbl><Inp type="date" value={form.end_date} onChange={e=>upd("end_date",e.target.value)} required/></div>
             </div>
-            <div><Lbl>Contract PDF</Lbl>
-              <div>
-                <input type="file" accept="application/pdf" onChange={e=>setPdfFile(e.target.files[0]||null)}
-                  style={{fontSize:13,color:"#0f172a",width:"100%"}}/>
-                {form.contract_pdf_url&&!pdfFile&&(
-                  <div style={{display:"flex",alignItems:"center",gap:6,marginTop:5,padding:"5px 10px",background:"#f0f9ff",borderRadius:6,border:"1px solid #bae6fd"}}>
-                    <Paperclip size={12} color="#0ea5e9"/>
-                    <span style={{fontSize:11,color:"#0369a1",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Current: {form.contract_pdf_url.split('/').pop()}</span>
-                    <a href={form.contract_pdf_url} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#0ea5e9",fontWeight:600,textDecoration:"none"}}>View</a>
-                  </div>
-                )}
-                {pdfFile&&<p style={{margin:"4px 0 0",fontSize:11,color:"#008A57",fontWeight:600}}>✓ {pdfFile.name} selected</p>}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <div><Lbl>Upload Contract</Lbl>
+                <div>
+                  <input type="file" onChange={e=>setPdfFile(e.target.files[0]||null)} style={{fontSize:13,color:"#0f172a",width:"100%"}}/>
+                  {form.contract_pdf_url&&!pdfFile&&(
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginTop:5,padding:"5px 10px",background:"#e0f7fa",borderRadius:6,border:"1px solid #bae6fd"}}>
+                      <FileText size={12} color="#0891b2"/>
+                      <span style={{fontSize:11,color:"#0369a1",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{form.contract_pdf_url.split('/').pop()}</span>
+                      <a href={form.contract_pdf_url} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#0891b2",fontWeight:600,textDecoration:"none",marginRight:4}}>View</a>
+                      <button type="button" onClick={()=>upd("contract_pdf_url","")} style={{background:"none",border:"none",cursor:"pointer",color:"#ef4444",padding:0,display:"flex",alignItems:"center"}}><X size={13} strokeWidth={2}/></button>
+                    </div>
+                  )}
+                  {pdfFile&&<p style={{margin:"4px 0 0",fontSize:11,color:"#008A57",fontWeight:600}}>✓ {pdfFile.name}</p>}
+                </div>
+              </div>
+              <div><Lbl>Upload 3rd Party Contract</Lbl>
+                <div>
+                  <input type="file" onChange={e=>setThirdPartyFile(e.target.files[0]||null)} style={{fontSize:13,color:"#0f172a",width:"100%"}}/>
+                  {form.third_party_contract_url&&!thirdPartyFile&&(
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginTop:5,padding:"5px 10px",background:"#f3e8ff",borderRadius:6,border:"1px solid #d8b4fe"}}>
+                      <Handshake size={12} color="#7c3aed"/>
+                      <span style={{fontSize:11,color:"#6d28d9",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{form.third_party_contract_url.split('/').pop()}</span>
+                      <a href={form.third_party_contract_url} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#7c3aed",fontWeight:600,textDecoration:"none",marginRight:4}}>View</a>
+                      <button type="button" onClick={()=>upd("third_party_contract_url","")} style={{background:"none",border:"none",cursor:"pointer",color:"#ef4444",padding:0,display:"flex",alignItems:"center"}}><X size={13} strokeWidth={2}/></button>
+                    </div>
+                  )}
+                  {thirdPartyFile&&<p style={{margin:"4px 0 0",fontSize:11,color:"#008A57",fontWeight:600}}>✓ {thirdPartyFile.name}</p>}
+                </div>
               </div>
             </div>
             <div><Lbl>Notes</Lbl>
@@ -4569,8 +4594,12 @@ function ContractExpensesPage(){
                 {form.attachment_url&&!attachFile&&(
                   <div style={{display:"flex",alignItems:"center",gap:6,marginTop:6,padding:"5px 10px",background:"#f0f9ff",borderRadius:6,border:"1px solid #bae6fd"}}>
                     <Paperclip size={12} color="#0ea5e9"/>
-                    <span style={{fontSize:11,color:"#0369a1",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Current: {form.attachment_name||form.attachment_url.split('/').pop()}</span>
-                    <a href={form.attachment_url} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#0ea5e9",fontWeight:600,textDecoration:"none"}}>View</a>
+                    <span style={{fontSize:11,color:"#0369a1",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{form.attachment_name||form.attachment_url.split('/').pop()}</span>
+                    <a href={form.attachment_url} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#0ea5e9",fontWeight:600,textDecoration:"none",marginRight:4}}>View</a>
+                    <button type="button" onClick={()=>setForm(p=>({...p,attachment_url:"",attachment_name:""}))} title="Remove attachment"
+                      style={{background:"none",border:"none",cursor:"pointer",color:"#ef4444",padding:0,display:"flex",alignItems:"center",lineHeight:1}}>
+                      <X size={13} strokeWidth={2}/>
+                    </button>
                   </div>
                 )}
                 {attachFile&&<p style={{margin:"6px 0 0",fontSize:11,color:"#008A57",fontWeight:600}}>✓ {attachFile.name} selected</p>}
