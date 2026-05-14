@@ -211,6 +211,22 @@ function AuthProvider({children}){
   const signIn = (email,password) => sb.auth.signInWithPassword({email,password});
   const signOut = () => sb.auth.signOut();
 
+  // ── Impersonation ──────────────────────────────────────────────
+  const [impersonating,setImpersonating] = useState(null);
+
+  const startImpersonate = (targetUser, roles) => {
+    const assigned = roles.find(r=>(r.assigned_users||[]).includes(targetUser.email));
+    const perms = assigned ? (assigned.permissions||{}) : {};
+    const depts = assigned ? (assigned.allowed_departments||[]) : [];
+    setImpersonating({
+      profile: targetUser,
+      userPerms: perms,
+      allowedDepts: depts.length>0 ? depts : null,
+    });
+  };
+
+  const stopImpersonate = () => setImpersonating(null);
+
   return <AuthCtx.Provider value={{session,profile,userPerms,allowedDepts,can,permsLoaded,signIn,signOut,sb,loadProfile,impersonating,startImpersonate,stopImpersonate}}>{children}</AuthCtx.Provider>;
 }
 
