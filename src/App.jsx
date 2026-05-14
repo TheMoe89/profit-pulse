@@ -141,6 +141,16 @@ const adminFetch = async (path, method='GET', body=null) => {
 };
 
 
+// Upload file to Supabase Storage, returns public URL
+const uploadToStorage = async (sb, file, folder='attachments') => {
+  const ext = file.name.split('.').pop();
+  const path = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+  const { data, error } = await sb.storage.from('attachments').upload(path, file, { upsert: true });
+  if (error) throw new Error(error.message);
+  const { data: { publicUrl } } = sb.storage.from('attachments').getPublicUrl(path);
+  return publicUrl;
+};
+
 // ─── AUTH CONTEXT ─────────────────────────────────────────────────────────────
 const AuthCtx = createContext(null);
 function useAuth(){ return useContext(AuthCtx); }
@@ -1454,7 +1464,7 @@ function ClientsPage(){
       toast('Failed to save client: '+error.message,'error');
       return;
     }
-    if(data) setClients(x=>[...x,data]);
+    if(data){setClients(x=>[...x,data]);toast('Client created successfully','success');}
     else toast('Client was not saved — check your permissions','error');
   };
   const dbUpdate=async(id,p)=>{
@@ -1465,7 +1475,7 @@ function ClientsPage(){
       contact_email:p.contact_email||"",contact_phone:p.contact_phone||"",notes:p.notes||""
     }).eq('id',id).select().single();
     if(error){console.error('Client update error:',error);toast('Failed to update: '+error.message,'error');return;}
-    if(data) setClients(x=>x.map(c=>c.id===id?data:c));
+    if(data){setClients(x=>x.map(c=>c.id===id?data:c));toast('Client updated successfully','success');}
   };
   const dbDelete=async id=>{await sb.from('clients').delete().eq('id',id);setClients(x=>x.filter(c=>c.id!==id));};
   const [search,setSearch]       = useState("");
@@ -1634,7 +1644,7 @@ function ClientsPage(){
             </div>
             <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:4}}>
               <Btn variant="outline" onClick={close}>Cancel</Btn>
-              <Btn variant="primary" type="submit" disabled={saving} style={{gap:6,minWidth:90,justifyContent:"center"}}>{saving?<><Loader size={13} style={{animation:"spin .8s linear infinite"}}/>{editing?"Saving…":"Creating…"}</>:(editing?"Update Employee":"Create Employee")}</Btn>
+              <Btn variant="primary" type="submit" disabled={saving} style={{gap:6,minWidth:90,justifyContent:"center"}}>{saving?<><Loader size={13} style={{animation:"spin .8s linear infinite"}}/>{editing?"Saving…":"Creating…"}</>:(editing?"Update Client":"Create Client")}</Btn>
             </div>
           </div>
         </form>
@@ -1715,8 +1725,8 @@ function ContractsPage(){
       setLoading(false);
     });
   },[sb]);
-  const dbAdd=async p=>{const{data,error}=await sb.from('contracts').insert([{contract_number:p.contract_number,client_id:p.client_id||null,client_name:p.client_name,contract_value:parseFloat(p.contract_value)||0,tenure_months:parseFloat(p.tenure_months)||0,project_name:p.project_name||"",start_date:p.start_date,end_date:p.end_date,status:p.status,contract_category:p.contract_category,budget_client_servicing:parseFloat(p.budget_client_servicing)||0,budget_production:parseFloat(p.budget_production)||0,budget_creative:parseFloat(p.budget_creative)||0,budget_planning:parseFloat(p.budget_planning)||0,budget_third_party:parseFloat(p.budget_third_party)||0,notes:p.notes||""}]).select().single();if(error){toast('Error saving: '+error.message,'error');return;}if(data){setContracts(x=>[...x,mapC(data)]);toast('Contract created','success');}};
-  const dbUpdate=async(id,p)=>{const{data,error}=await sb.from('contracts').update({contract_number:p.contract_number,client_id:p.client_id||null,client_name:p.client_name,contract_value:parseFloat(p.contract_value)||0,tenure_months:parseFloat(p.tenure_months)||0,project_name:p.project_name||"",start_date:p.start_date,end_date:p.end_date,status:p.status,contract_category:p.contract_category,budget_client_servicing:parseFloat(p.budget_client_servicing)||0,budget_production:parseFloat(p.budget_production)||0,budget_creative:parseFloat(p.budget_creative)||0,budget_planning:parseFloat(p.budget_planning)||0,budget_third_party:parseFloat(p.budget_third_party)||0,notes:p.notes||""}).eq('id',id).select().single();if(error){toast('Error updating: '+error.message,'error');return;}if(data){setContracts(x=>x.map(c=>c.id===id?mapC(data):c));toast('Contract updated','success');}};
+  const dbAdd=async p=>{const{data,error}=await sb.from('contracts').insert([{contract_number:p.contract_number,client_id:p.client_id||null,client_name:p.client_name,contract_value:parseFloat(p.contract_value)||0,tenure_months:parseFloat(p.tenure_months)||0,project_name:p.project_name||"",start_date:p.start_date,end_date:p.end_date,status:p.status,contract_category:p.contract_category,budget_client_servicing:parseFloat(p.budget_client_servicing)||0,budget_production:parseFloat(p.budget_production)||0,budget_creative:parseFloat(p.budget_creative)||0,budget_planning:parseFloat(p.budget_planning)||0,budget_third_party:parseFloat(p.budget_third_party)||0,notes:p.notes||"",contract_pdf_url:p.contract_pdf_url||""}]).select().single();if(error){toast('Error saving: '+error.message,'error');return;}if(data){setContracts(x=>[...x,mapC(data)]);toast('Contract created','success');}};
+  const dbUpdate=async(id,p)=>{const{data,error}=await sb.from('contracts').update({contract_number:p.contract_number,client_id:p.client_id||null,client_name:p.client_name,contract_value:parseFloat(p.contract_value)||0,tenure_months:parseFloat(p.tenure_months)||0,project_name:p.project_name||"",start_date:p.start_date,end_date:p.end_date,status:p.status,contract_category:p.contract_category,budget_client_servicing:parseFloat(p.budget_client_servicing)||0,budget_production:parseFloat(p.budget_production)||0,budget_creative:parseFloat(p.budget_creative)||0,budget_planning:parseFloat(p.budget_planning)||0,budget_third_party:parseFloat(p.budget_third_party)||0,notes:p.notes||"",contract_pdf_url:p.contract_pdf_url||""}).eq('id',id).select().single();if(error){toast('Error updating: '+error.message,'error');return;}if(data){setContracts(x=>x.map(c=>c.id===id?mapC(data):c));toast('Contract updated','success');}};
   const dbDelete=async id=>{await sb.from('contracts').delete().eq('id',id);setContracts(x=>x.filter(c=>c.id!==id));};
   const [search,setSearch]       = useState("");
   const [statusF,setStatusF]     = useState("all");
@@ -1749,9 +1759,10 @@ function ContractsPage(){
     return `${pre}${String((Math.max(0,...nums)+1)).padStart(3,"0")}`;
   };
 
-  const openAdd =()=>{setEditing(null);setForm(EMPTY_CONTRACT);setModalOpen(true);};
-  const openEdit=c=>{setEditing(c);setForm({client_id:c.client_id,client_name:c.client_name,project_name:c.project_name||"",contract_value:c.contract_value,tenure_months:c.tenure_months,start_date:c.start_date,end_date:c.end_date,status:c.status,contract_category:c.contract_category,budget_client_servicing:c.budget_client_servicing||"",budget_production:c.budget_production||"",budget_creative:c.budget_creative||"",budget_planning:c.budget_planning||"",budget_third_party:c.budget_third_party||"",contract_pdf_url:c.contract_pdf_url||"",notes:c.notes||"",contract_number:c.contract_number});setModalOpen(true);};
-  const close=()=>{setModalOpen(false);setEditing(null);};
+  const [pdfFile,setPdfFile]=useState(null);
+  const openAdd =()=>{setEditing(null);setForm(EMPTY_CONTRACT);setPdfFile(null);setModalOpen(true);};
+  const openEdit=c=>{setEditing(c);setForm({client_id:c.client_id,client_name:c.client_name,project_name:c.project_name||"",contract_value:c.contract_value,tenure_months:c.tenure_months,start_date:c.start_date,end_date:c.end_date,status:c.status,contract_category:c.contract_category,budget_client_servicing:c.budget_client_servicing||"",budget_production:c.budget_production||"",budget_creative:c.budget_creative||"",budget_planning:c.budget_planning||"",budget_third_party:c.budget_third_party||"",contract_pdf_url:c.contract_pdf_url||"",notes:c.notes||"",contract_number:c.contract_number});setPdfFile(null);setModalOpen(true);};
+  const close=()=>{setModalOpen(false);setEditing(null);setPdfFile(null);};
 
   const handleSubmit=async e=>{
     e.preventDefault();
@@ -1764,14 +1775,22 @@ function ContractsPage(){
     const autoCat=getCatFromTenure(form.tenure_months);
     const payload={...form,status:autoStatus,contract_category:autoCat};
     setSaving(true);
-    if(editing){
-      await dbUpdate(editing.id,payload);
-    } else {
-      const num=genContractNum(form.tenure_months,contracts);
-      await dbAdd({...payload,contract_number:num});
-    }
+    try{
+      let pdfUrl=form.contract_pdf_url||"";
+      if(pdfFile){
+        try{ pdfUrl=await uploadToStorage(sb,pdfFile,'contracts'); }
+        catch(ue){ toast('File upload failed: '+ue.message,'error'); setSaving(false); return; }
+      }
+      const finalPayload={...payload,contract_pdf_url:pdfUrl};
+      if(editing){
+        await dbUpdate(editing.id,finalPayload);
+      } else {
+        const num=genContractNum(form.tenure_months,contracts);
+        await dbAdd({...finalPayload,contract_number:num});
+      }
+      close();
+    }catch(err){ toast(err.message||'Failed to save contract','error'); }
     setSaving(false);
-    close();
   };
 
   const del=async id=>{const ok=await confirm({title:'Delete contract?',message:'This contract will be permanently deleted. Existing allocations linked to it will lose their contract reference.',danger:true,confirmLabel:'Delete'});if(ok){dbDelete(id);toast('Contract deleted','success');}};
@@ -1882,6 +1901,7 @@ function ContractsPage(){
                     </td>
                     <td style={{padding:"11px 13px",textAlign:"right"}}>
                       <div style={{display:"flex",justifyContent:"flex-end",gap:4}}>
+                        {c.contract_pdf_url&&<Btn variant="ghost" size="sm" title="View contract PDF" style={{color:"#0ea5e9"}} onClick={()=>window.open(c.contract_pdf_url,'_blank')}><Eye size={14} strokeWidth={1.75}/></Btn>}
                         <Btn variant="ghost" size="sm" onClick={()=>openEdit(c)}><Pencil size={14} strokeWidth={1.75}/></Btn>
                         <Btn variant="danger" size="sm" onClick={()=>del(c.id)}><Trash2 size={14} strokeWidth={1.75}/></Btn>
                       </div>
@@ -1958,13 +1978,26 @@ function ContractsPage(){
               <div><Lbl>Start Date *</Lbl><Inp type="date" value={form.start_date} onChange={e=>handleStartDate(e.target.value)} required/></div>
               <div><Lbl>End Date *</Lbl><Inp type="date" value={form.end_date} onChange={e=>upd("end_date",e.target.value)} required/></div>
             </div>
-            <div><Lbl>Contract PDF</Lbl><Inp type="file" accept="application/pdf" disabled style={{color:"#64748b"}}/></div>
+            <div><Lbl>Contract PDF</Lbl>
+              <div>
+                <input type="file" accept="application/pdf" onChange={e=>setPdfFile(e.target.files[0]||null)}
+                  style={{fontSize:13,color:"#0f172a",width:"100%"}}/>
+                {form.contract_pdf_url&&!pdfFile&&(
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginTop:5,padding:"5px 10px",background:"#f0f9ff",borderRadius:6,border:"1px solid #bae6fd"}}>
+                    <Paperclip size={12} color="#0ea5e9"/>
+                    <span style={{fontSize:11,color:"#0369a1",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Current: {form.contract_pdf_url.split('/').pop()}</span>
+                    <a href={form.contract_pdf_url} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#0ea5e9",fontWeight:600,textDecoration:"none"}}>View</a>
+                  </div>
+                )}
+                {pdfFile&&<p style={{margin:"4px 0 0",fontSize:11,color:"#008A57",fontWeight:600}}>✓ {pdfFile.name} selected</p>}
+              </div>
+            </div>
             <div><Lbl>Notes</Lbl>
               <textarea value={form.notes} onChange={e=>upd("notes",e.target.value)} placeholder="Contract notes..." rows={2} style={{width:"100%",padding:"8px 11px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,color:"#0f172a",lineHeight:1.5,outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
             </div>
             <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:4}}>
               <Btn variant="outline" onClick={close}>Cancel</Btn>
-              <Btn variant="primary" type="submit" disabled={saving} style={{gap:6,minWidth:90,justifyContent:"center"}}>{saving?<><Loader size={13} style={{animation:"spin .8s linear infinite"}}/>{editing?"Saving…":"Creating…"}</>:(editing?"Update Employee":"Create Employee")}</Btn>
+              <Btn variant="primary" type="submit" disabled={saving} style={{gap:6,minWidth:90,justifyContent:"center"}}>{saving?<><Loader size={13} style={{animation:"spin .8s linear infinite"}}/>{editing?"Saving…":"Creating…"}</>:(editing?"Update Contract":"Create Contract")}</Btn>
             </div>
           </div>
         </form>
@@ -4323,12 +4356,26 @@ function ContractExpensesPage(){
   const handleSubmit=async e=>{
     e.preventDefault();
     const payload={...form,amount:parseFloat(form.amount)||0,previous_requested_total_amount:parseFloat(form.previous_requested_total_amount)||0,total_contract_value:parseFloat(form.total_contract_value)||0,project_profit_pct:parseFloat(form.project_profit_pct)||0};
-    if(editing){
-      await dbUpdate(editing.id,payload);
-    } else {
-      await dbAdd({...payload,expense_number:genExpNum()});
-    }
-    close();
+    setSaving(true);
+    try{
+      let attUrl=form.attachment_url||"";
+      let attName=form.attachment_name||"";
+      if(attachFile){
+        try{
+          attUrl=await uploadToStorage(sb,attachFile,'expenses');
+          attName=attachFile.name;
+        }catch(ue){ toast('File upload failed: '+ue.message,'error'); setSaving(false); return; }
+      }
+      const finalPayload={...payload,attachment_url:attUrl,attachment_name:attName};
+      if(editing){
+        await dbUpdate(editing.id,finalPayload);
+      } else {
+        await dbAdd({...finalPayload,expense_number:genExpNum()});
+      }
+      setAttachFile(null);
+      close();
+    }catch(err){ toast(err.message||'Failed to save expense','error'); }
+    setSaving(false);
   };
 
   const del=async id=>{const ok=await confirm({title:'Delete expense?',message:'This expense record will be permanently deleted.',danger:true,confirmLabel:'Delete'});if(ok){dbDelete(id);toast('Expense deleted','success');}};
@@ -4449,6 +4496,7 @@ function ContractExpensesPage(){
                     <TD align="right">
                       <div style={{display:"flex",justifyContent:"flex-end",gap:4}}>
                         <Btn variant="ghost" size="sm" onClick={()=>openEdit(e)} title="Edit"><Pencil size={14} strokeWidth={1.75}/></Btn>
+                        {e.attachment_url&&<Btn variant="ghost" size="sm" title="View attachment" style={{color:"#0ea5e9"}} onClick={()=>window.open(e.attachment_url,'_blank')}><Paperclip size={14} strokeWidth={1.75}/></Btn>}
                         <Btn variant="ghost" size="sm" onClick={()=>handleDownloadPDF(e)} title="Download PDF" style={{color:"#3b82f6"}}><Download size={14} strokeWidth={1.75}/></Btn>
                         <Btn variant="ghost" size="sm" onClick={()=>setViewExpense(e)} title="View Details" style={{color:"#008A57"}}><Eye size={14} strokeWidth={1.75}/></Btn>
                         <Btn variant="danger" size="sm" onClick={()=>del(e.id)} title="Delete"><Trash2 size={14} strokeWidth={1.75}/></Btn>
@@ -4514,11 +4562,18 @@ function ContractExpensesPage(){
                 </div>
               </div>
             )}
-            {/* Attachment placeholder */}
             <div><Lbl>Attachment</Lbl>
-              <div style={{border:"2px dashed #e2e8f0",borderRadius:10,padding:"16px 20px",textAlign:"center",color:"#64748b",cursor:"not-allowed"}}>
-                <p style={{margin:0,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Paperclip size={14} strokeWidth={1.75}/>Click to upload PDF attachment</p>
-                <p style={{margin:"4px 0 0",fontSize:11}}>(File upload available in deployed version)</p>
+              <div style={{border:"2px dashed #e2e8f0",borderRadius:10,padding:"12px 16px",cursor:"pointer",background:"#fafafa"}}>
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e=>setAttachFile(e.target.files[0]||null)}
+                  style={{fontSize:13,color:"#0f172a",width:"100%"}}/>
+                {form.attachment_url&&!attachFile&&(
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginTop:6,padding:"5px 10px",background:"#f0f9ff",borderRadius:6,border:"1px solid #bae6fd"}}>
+                    <Paperclip size={12} color="#0ea5e9"/>
+                    <span style={{fontSize:11,color:"#0369a1",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Current: {form.attachment_name||form.attachment_url.split('/').pop()}</span>
+                    <a href={form.attachment_url} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#0ea5e9",fontWeight:600,textDecoration:"none"}}>View</a>
+                  </div>
+                )}
+                {attachFile&&<p style={{margin:"6px 0 0",fontSize:11,color:"#008A57",fontWeight:600}}>✓ {attachFile.name} selected</p>}
               </div>
             </div>
             <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:4}}>
@@ -4792,20 +4847,43 @@ function SystemUsersPage(){
   const handleCreateUser=async()=>{
     if(!createEmail){toast('Enter an email address','warning');return;}
     if(!createPassword||createPassword.length<8){toast('Password must be at least 8 characters','warning');return;}
-    if(users.find(u=>u.email===createEmail)){toast('A user with this email already exists','warning');return;}
     if(createSaving)return;
     setCreateSaving(true);
     try{
-      const ud=await adminFetch('users','POST',{email:createEmail,password:createPassword,email_confirm:true});
-      // Create profile row
-      const{error:pe}=await sb.from('profiles').upsert({id:(ud.id||ud.user?.id),email:createEmail,full_name:createEmail.split('@')[0],role:'manager',status:'active'});
-      if(pe) console.warn('Profile create warning:',pe.message);
+      let userId=null;
+      // Try to create user in Auth
+      try{
+        const ud=await adminFetch('users','POST',{email:createEmail,password:createPassword,email_confirm:true});
+        userId=ud.id||ud.user?.id;
+      }catch(authErr){
+        // If already exists in Auth, try to get their ID via admin users list
+        if(authErr.message&&(authErr.message.includes('already')||authErr.message.includes('registered'))){
+          // Update password for existing user instead
+          const listRes=await adminFetch('users?email='+encodeURIComponent(createEmail),'GET');
+          const existingId=listRes?.users?.[0]?.id;
+          if(existingId){
+            await adminFetch(`users/${existingId}`,'PUT',{password:createPassword,email_confirm:true});
+            userId=existingId;
+            toast('User already existed in auth — password updated and profile synced','warning');
+          } else {
+            throw new Error('User exists in auth but could not retrieve their ID. Delete them from Supabase Auth and try again.');
+          }
+        } else {
+          throw authErr;
+        }
+      }
+      if(!userId) throw new Error('Could not get user ID from Supabase');
+      // Upsert profile
+      const{error:pe}=await sb.from('profiles').upsert({id:userId,email:createEmail,full_name:createEmail.split('@')[0],role:'manager',status:'active'});
+      if(pe) console.warn('Profile upsert warning:',pe.message);
       // Assign role
       if(createRoleId){
         const role=roles.find(r=>r.id===createRoleId);
         if(role){
-          const{error:re}=await sb.from('role_permissions').update({assigned_users:[...(role.assigned_users||[]),createEmail]}).eq('id',createRoleId);
-          if(re) console.warn('Role assign warning:',re.message);
+          const existing=role.assigned_users||[];
+          if(!existing.includes(createEmail)){
+            await sb.from('role_permissions').update({assigned_users:[...existing,createEmail]}).eq('id',createRoleId);
+          }
         }
       }
       toast(`✓ User ${createEmail} created successfully`,'success');
@@ -4816,7 +4894,7 @@ function SystemUsersPage(){
       if(rdata)setRoles(rdata);
     }catch(err){
       console.error('Create user error:',err);
-      toast(err.message||'Failed to create user. Check console for details.','error');
+      toast(err.message||'Failed to create user','error');
     }finally{setCreateSaving(false);}
   };
   const handleChangePassword=async()=>{
