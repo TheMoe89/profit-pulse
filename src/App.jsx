@@ -1926,7 +1926,7 @@ function ContractsPage(){
                         )}
                         {c.third_party_contract_url&&(
                           <AttachTooltip label="View 3rd Party Contract">
-                            <Btn variant="ghost" size="sm" style={{color:"#7c3aed"}} onClick={()=>window.open(c.third_party_contract_url,'_blank')}><Users2 size={14} strokeWidth={1.75}/></Btn>
+                            <Btn variant="ghost" size="sm" style={{color:"#7c3aed"}} onClick={()=>window.open(c.third_party_contract_url,'_blank')}><Link2 size={14} strokeWidth={1.75}/></Btn>
                           </AttachTooltip>
                         )}
                         <Btn variant="ghost" size="sm" onClick={()=>openEdit(c)}><Pencil size={14} strokeWidth={1.75}/></Btn>
@@ -2025,7 +2025,7 @@ function ContractsPage(){
                   <input type="file" onChange={e=>setThirdPartyFile(e.target.files[0]||null)} style={{fontSize:13,color:"#0f172a",width:"100%"}}/>
                   {form.third_party_contract_url&&!thirdPartyFile&&(
                     <div style={{display:"flex",alignItems:"center",gap:6,marginTop:5,padding:"5px 10px",background:"#f3e8ff",borderRadius:6,border:"1px solid #d8b4fe"}}>
-                      <Users2 size={12} color="#7c3aed"/>
+                      <Link2 size={12} color="#7c3aed"/>
                       <span style={{fontSize:11,color:"#6d28d9",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{form.third_party_contract_url.split('/').pop()}</span>
                       <a href={form.third_party_contract_url} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#7c3aed",fontWeight:600,textDecoration:"none",marginRight:4}}>View</a>
                       <button type="button" onClick={()=>upd("third_party_contract_url","")} style={{background:"none",border:"none",cursor:"pointer",color:"#ef4444",padding:0,display:"flex",alignItems:"center"}}><X size={13} strokeWidth={2}/></button>
