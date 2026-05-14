@@ -4713,7 +4713,7 @@ function ContractExpensesPage(){
 
 
 function SystemUsersPage(){
-  const {sb,profile:currentProfile}=useAuth();
+  const {sb,profile:currentProfile,startImpersonate}=useAuth();
   const toast=useToast();
   const confirm=useConfirm();
   const [tab,setTab]=useState("users");
@@ -5176,7 +5176,7 @@ function SystemUsersPage(){
                       </TD>
                       <TD align="center">
                         <div style={{display:"flex",justifyContent:"center",gap:4}}>
-                          {!u.isPending&&u.email!==CURRENT_USER?.email&&<Btn variant="ghost" size="sm" title="Impersonate" style={{color:"#008A57"}} data-impersonate="1" onClick={()=>toast(`Impersonating ${u.full_name||u.email} (not yet implemented)`,'info')}><Eye size={14} strokeWidth={1.75}/></Btn>}
+                          {u.role!=="admin"&&<Btn variant="ghost" size="sm" title={`View as ${u.full_name||u.email}`} style={{color:"#008A57"}} onClick={()=>{startImpersonate(u,roles);toast(`Now viewing as ${u.full_name||u.email}`,'success');}}><Eye size={14} strokeWidth={1.75}/></Btn>}
                           <Btn variant="ghost" size="sm" onClick={()=>openEditUser(u)} title="Edit"><Pencil size={14} strokeWidth={1.75}/></Btn>
                           {u.role!=="admin"&&<Btn variant="ghost" size="sm" title="Change password" style={{color:"#0ea5e9"}} onClick={()=>{setChangePwUser(u);setChangePwVal("");setShowChangePw(false);}}><Lock size={14} strokeWidth={1.75}/></Btn>}
                           {u.status==="invited"&&<Btn variant="ghost" size="sm" style={{color:"#008A57"}} onClick={()=>resendInvite(u.email)} title="Resend invite"><Mail size={14} strokeWidth={1.75}/></Btn>}
@@ -5401,7 +5401,7 @@ function AccessDenied(){
 }
 
 function PlatformApp(){
-  const {session,profile,signOut,sb,can} = useAuth();
+  const {session,profile,signOut,sb,can,impersonating,stopImpersonate} = useAuth();
   const [activePage,setActivePage]=useState(()=>localStorage.getItem("pp_activePage")||"Dashboard");
   const [sidebarHovered,setSidebarHovered]=useState(false);
 
@@ -5429,7 +5429,20 @@ function PlatformApp(){
   };
 
   return(
-    <div style={{display:"flex",height:"100vh",fontFamily:"'Inter',system-ui,sans-serif",background:"#f8fafc",overflow:"hidden",position:"relative"}}>
+    <div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"'Inter',system-ui,sans-serif",background:"#f8fafc",overflow:"hidden"}}>
+      {impersonating&&(
+        <div style={{background:"linear-gradient(135deg,#d97706,#b45309)",color:"#fff",padding:"8px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",zIndex:9999,flexShrink:0,boxShadow:"0 2px 8px rgba(0,0,0,.2)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <Eye size={15} strokeWidth={2}/>
+            <span style={{fontSize:13,fontWeight:700}}>Viewing as {impersonating.profile.full_name||impersonating.profile.email}</span>
+            <span style={{fontSize:11,opacity:.8}}>{impersonating.allowedDepts?impersonating.allowedDepts.map(d=>d.replace(" Department","")).join(", "):"All departments"}</span>
+          </div>
+          <button onClick={stopImpersonate} style={{background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.4)",color:"#fff",padding:"4px 14px",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
+            <X size={12} strokeWidth={2}/>Exit View
+          </button>
+        </div>
+      )}
+      <div style={{display:"flex",flex:1,overflow:"hidden",position:"relative"}}>
 
       {/* Sidebar spacer (always 64px wide — reserves layout space) */}
       <div style={{width:64,flexShrink:0}}/>
@@ -5494,6 +5507,7 @@ function PlatformApp(){
       <main style={{flex:1,overflowY:"auto",padding:24}}>
         {renderPage()}
       </main>
+      </div>
     </div>
   );
 }
