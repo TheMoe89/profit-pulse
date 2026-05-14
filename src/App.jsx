@@ -1775,7 +1775,7 @@ function ContractsPage(){
   const [thirdPartyFile,setThirdPartyFile]=useState(null);
   const openAdd =()=>{setEditing(null);setForm(EMPTY_CONTRACT);setPdfFile(null);setModalOpen(true);};
   const openEdit=c=>{setEditing(c);setForm({client_id:c.client_id,client_name:c.client_name,project_name:c.project_name||"",contract_value:c.contract_value,tenure_months:c.tenure_months,start_date:c.start_date,end_date:c.end_date,status:c.status,contract_category:c.contract_category,budget_client_servicing:c.budget_client_servicing||"",budget_production:c.budget_production||"",budget_creative:c.budget_creative||"",budget_planning:c.budget_planning||"",budget_third_party:c.budget_third_party||"",contract_pdf_url:c.contract_pdf_url||"",third_party_contract_url:c.third_party_contract_url||"",notes:c.notes||"",contract_number:c.contract_number});setPdfFile(null);setThirdPartyFile(null);setModalOpen(true);};
-  const close=()=>{setModalOpen(false);setEditing(null);setPdfFile(null);};
+  const close=()=>{setModalOpen(false);setEditing(null);setPdfFile(null);setThirdPartyFile(null);};
 
   const handleSubmit=async e=>{
     e.preventDefault();
@@ -1794,7 +1794,12 @@ function ContractsPage(){
         try{ pdfUrl=await uploadToStorage(sb,pdfFile,'contracts'); }
         catch(ue){ toast('File upload failed: '+ue.message,'error'); setSaving(false); return; }
       }
-      const finalPayload={...payload,contract_pdf_url:pdfUrl};
+      let tpUrl=form.third_party_contract_url||"";
+      if(thirdPartyFile){
+        try{ tpUrl=await uploadToStorage(sb,thirdPartyFile,'contracts/third-party'); }
+        catch(ue){ toast('3rd party file upload failed: '+ue.message,'error'); setSaving(false); return; }
+      }
+      const finalPayload={...payload,contract_pdf_url:pdfUrl,third_party_contract_url:tpUrl};
       if(editing){
         await dbUpdate(editing.id,finalPayload);
       } else {
