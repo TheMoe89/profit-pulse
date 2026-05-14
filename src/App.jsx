@@ -211,7 +211,7 @@ function AuthProvider({children}){
   const signIn = (email,password) => sb.auth.signInWithPassword({email,password});
   const signOut = () => sb.auth.signOut();
 
-  return <AuthCtx.Provider value={{session,profile,userPerms,allowedDepts,can,permsLoaded,signIn,signOut,sb,loadProfile}}>{children}</AuthCtx.Provider>;
+  return <AuthCtx.Provider value={{session,profile,userPerms,allowedDepts,can,permsLoaded,signIn,signOut,sb,loadProfile,impersonating,startImpersonate,stopImpersonate}}>{children}</AuthCtx.Provider>;
 }
 
 // ─── LOGIN PAGE ───────────────────────────────────────────────────────────────
