@@ -120,9 +120,7 @@ const SUPABASE_URL = "https://hmvlgesnxaqebfdzizmy.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtdmxnZXNueGFxZWJmZHppem15Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5NjAwNzcsImV4cCI6MjA5MjUzNjA3N30.FXvGha4gIz9S0U2PzyZiHVeRLPIbgEJ_3z0xWinJROs";
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 const SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtdmxnZXNueGFxZWJmZHppem15Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Njk2MDA3NywiZXhwIjoyMDkyNTM2MDc3fQ.1ldvme_JhuF2i55Lt3GgEzj_fcUW6YKfREbrKZc6MKA";
-const sbAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false, storageKey: 'sb-admin-session' }
-});
+
 
 // ─── AUTH CONTEXT ─────────────────────────────────────────────────────────────
 const AuthCtx = createContext(null);
@@ -4630,7 +4628,7 @@ function SystemUsersPage(){
   };
 
   const dbInviteUser=async(email,roleId)=>{
-    const{error}=await sbAdmin.auth.admin.inviteUserByEmail(email);
+    await adminFetch('invite','POST',{email});
     if(!error&&roleId){
       const role=roles.find(r=>r.id===roleId);
       if(role)await sb.from('role_permissions').update({assigned_users:[...(role.assigned_users||[]),email]}).eq('id',roleId);
@@ -4639,10 +4637,8 @@ function SystemUsersPage(){
   };
 
   const dbCreateUserWithPassword=async(email,password,roleId)=>{
-    const{data,error}=await sbAdmin.auth.admin.createUser({email,password,email_confirm:true});
-    if(error) throw new Error(error.message);
-    // Create profile
-    await sb.from('profiles').upsert({id:data.user.id,email,full_name:email.split('@')[0],role:'manager',status:'active'});
+    const ud2=await adminFetch('users','POST',{email,password,email_confirm:true});
+    await sb.from('profiles').upsert({id:ud2.id,email,full_name:email.split('@')[0],role:'manager',status:'active'});
     // Assign role
     if(roleId){
       const role=roles.find(r=>r.id===roleId);
@@ -4651,8 +4647,7 @@ function SystemUsersPage(){
   };
 
   const dbChangePassword=async(userId,newPassword)=>{
-    const{error}=await sbAdmin.auth.admin.updateUserById(userId,{password:newPassword});
-    if(error) throw new Error(error.message);
+    await adminFetch(`users/${userId}`,'PUT',{password:newPassword});
   };
   const dbUpdateUser=async(id,payload)=>{const{data}=await sb.from('profiles').update(payload).eq('id',id).select().single();if(data)setUsers(p=>p.map(u=>u.id===id?{...u,...data}:u));};
   const dbDeleteUser=async id=>{
@@ -4738,8 +4733,7 @@ function SystemUsersPage(){
     if(inviteSaving)return;
     setInviteSaving(true);
     try{
-      const{error}=await sbAdmin.auth.admin.inviteUserByEmail(inviteEmail);
-      if(error) throw new Error(error.message);
+      await adminFetch('invite','POST',{email:inviteEmail});
       if(inviteRoleId){
         const role=roles.find(r=>r.id===inviteRoleId);
         if(role){
@@ -4770,7 +4764,7 @@ function SystemUsersPage(){
       if(_uok){await dbDeleteUser(u.id);toast('User removed','success');}
   };
   const resendInvite=async(email)=>{
-    const{error}=await sbAdmin.auth.admin.inviteUserByEmail(email);
+    await adminFetch('invite','POST',{email});
     if(error){toast(`Failed: ${error.message}`,'error');return;}
     toast(`Activation email resent to ${email}`,'success');
   };
@@ -4781,10 +4775,9 @@ function SystemUsersPage(){
     if(createSaving)return;
     setCreateSaving(true);
     try{
-      const{data:ud,error:ue}=await sbAdmin.auth.admin.createUser({email:createEmail,password:createPassword,email_confirm:true});
-      if(ue) throw new Error(ue.message);
+      const ud=await adminFetch('users','POST',{email:createEmail,password:createPassword,email_confirm:true});
       // Create profile row
-      const{error:pe}=await sb.from('profiles').upsert({id:ud.user.id,email:createEmail,full_name:createEmail.split('@')[0],role:'manager',status:'active'});
+      const{error:pe}=await sb.from('profiles').upsert({id:ud.id,email:createEmail,full_name:createEmail.split('@')[0],role:'manager',status:'active'});
       if(pe) console.warn('Profile create warning:',pe.message);
       // Assign role
       if(createRoleId){
@@ -4811,8 +4804,7 @@ function SystemUsersPage(){
     if(changePwSaving)return;
     setChangePwSaving(true);
     try{
-      const{error}=await sbAdmin.auth.admin.updateUserById(changePwUser.id,{password:changePwVal});
-      if(error) throw new Error(error.message);
+      await adminFetch(`users/${changePwUser.id}`,'PUT',{password:changePwVal});
       toast(`✓ Password updated for ${changePwUser.full_name||changePwUser.email}`,'success');
       setChangePwUser(null);setChangePwVal("");setShowChangePw(false);
     }catch(err){
