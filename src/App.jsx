@@ -1704,6 +1704,18 @@ function ContractSearchSelect({contracts,value,onChange}){
 // ═══════════════════════════════════════════════════════════════════════════════
 
 
+function AttachTooltip({label,children}){
+  const [show,setShow]=React.useState(false);
+  return(
+    <div style={{position:"relative",display:"inline-flex"}} onMouseEnter={()=>setShow(true)} onMouseLeave={()=>setShow(false)}>
+      {children}
+      {show&&<div style={{position:"absolute",bottom:"calc(100% + 6px)",left:"50%",transform:"translateX(-50%)",background:"#0f172a",color:"#fff",fontSize:10,fontWeight:600,whiteSpace:"nowrap",padding:"4px 8px",borderRadius:5,pointerEvents:"none",zIndex:999,boxShadow:"0 2px 8px rgba(0,0,0,.2)"}}>
+        {label}
+        <div style={{position:"absolute",top:"100%",left:"50%",transform:"translateX(-50%)",width:0,height:0,borderLeft:"4px solid transparent",borderRight:"4px solid transparent",borderTop:"4px solid #0f172a"}}/>
+      </div>}
+    </div>
+  );
+}
 function ContractsPage(){
   const {sb}=useAuth();
   const toast=useToast();
