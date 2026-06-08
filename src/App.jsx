@@ -1107,7 +1107,7 @@ function DashboardPage(){
     };
     const da=bld(ac,als);
     const dbc=id=>id==="all"?da:bld(ac.filter(c=>c.cid===id),als.filter(a=>a.cid===id));
-    const eu=dbEmployees.filter(e=>!allowedDepts||allowedDepts.includes(e.department)).map(e=>{const empAls=als.filter(a=>(a.eid||a.employee_id)===e.id);const h=empAls.reduce((s,a)=>s+(parseFloat(a.h||a.allocated_hours)||0),0);const clients=empAls.filter(a=>a.status!=='On Leave'&&parseFloat(a.h||a.allocated_hours)>0).map(a=>({name:a.client_name||a.cn||'',hours:parseFloat(a.h||a.allocated_hours)||0}));return{...e,h,u:(h/HPM)*100,av:Math.max(0,HPM-h),clients};});
+    const eu=dbEmployees.filter(e=>(!allowedDepts||allowedDepts.includes(e.department))&&(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=month))).map(e=>{const empAls=als.filter(a=>(a.eid||a.employee_id)===e.id);const h=empAls.reduce((s,a)=>s+(parseFloat(a.h||a.allocated_hours)||0),0);const clients=empAls.filter(a=>a.status!=='On Leave'&&parseFloat(a.h||a.allocated_hours)>0).map(a=>({name:a.client_name||a.cn||'',hours:parseFloat(a.h||a.allocated_hours)||0}));return{...e,h,u:(h/HPM)*100,av:Math.max(0,HPM-h),clients};});
     const fullyUtil=eu.filter(e=>!e.onLeave&&e.h>158);
     const optimal=eu.filter(e=>!e.onLeave&&e.h>=123&&e.h<=158);
     const underUtil=eu.filter(e=>!e.onLeave&&e.h>0&&e.h<123);
