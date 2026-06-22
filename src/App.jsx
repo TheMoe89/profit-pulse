@@ -247,7 +247,8 @@ function LoginPage(){
   };
 
   return(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Inter',system-ui,sans-serif",background:"#0f172a",position:"relative",overflow:"hidden"}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Inter',system-ui,sans-serif",background:"#0f172a",position:"fixed",inset:0,overflow:"hidden"}}>
+      <style>{`*{margin:0;padding:0;box-sizing:border-box;}body{background:#0f172a;}`}</style>
       <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&display=swap" rel="stylesheet"/>
       {/* Grid */}
       <div style={{position:"absolute",inset:0,backgroundImage:"linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px)",backgroundSize:"40px 40px"}}/>
