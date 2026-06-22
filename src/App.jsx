@@ -678,7 +678,7 @@ function Sel({value,onChange,options,style={}}){
   return(
     <select value={value} onChange={e=>onChange(e.target.value)}
       style={{width:"100%",padding:"8px 11px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,color:"#0f172a",lineHeight:1.5,background:"#fff",outline:"none",...style}}>
-      {options.map(o=><option key={o.v} value={o.v}>{o.l}</option>)}
+      {options.map(o=><option key={o.v} value={o.v} disabled={o.disabled} style={{color:o.disabled?'#94a3b8':'#0f172a'}}>{o.l}</option>)}
     </select>
   );
 }
@@ -2075,7 +2075,7 @@ function ContractsPage(){
 
 
 // ─── ADD ALLOCATION FORM (extracted component to respect React hook rules) ────
-function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM,getRemainingHours,ALLOC_MONTHS,isActive,onClose,onSubmit,saving=false}){
+function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM,getRemainingHours,ALLOC_MONTHS,isActive,onClose,onSubmit,saving=false,snapshots=[]}){
   const{month,empStatus,clientId,clientCat,notes,rows}=newForm;
   const upd=(k,v)=>setNewForm(p=>({...p,[k]:v}));
   const onLeave=empStatus==="on_leave";
@@ -2104,7 +2104,14 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
         <div>
           <Lbl>Month *</Lbl>
-          <Sel value={month} onChange={v=>upd("month",v)} options={[{v:"",l:"Select month"},...ALLOC_MONTHS]}/>
+          <Sel value={month} onChange={v=>{
+            const closed=snapshots.some(s=>s.month===v&&s.is_closed);
+            if(closed)return; // prevent selecting closed month
+            upd("month",v);
+          }} options={[{v:"",l:"Select month"},...ALLOC_MONTHS.map(m=>{
+            const closed=snapshots.some(s=>s.month===m.v&&s.is_closed);
+            return closed?{...m,l:`${m.l} (Closed)`,disabled:true}:m;
+          })]}/>
         </div>
         <div>
           <Lbl>Employee Status *</Lbl>
@@ -2691,7 +2698,7 @@ function AllocationsPage(){
           realEmps={realEmps} realContracts={realContracts}
           allocs={allocs} month={newForm.month}
           HPM={HPM} getRemainingHours={getRemainingHours}
-          ALLOC_MONTHS={ALLOC_MONTHS} isActive={isActive}
+          ALLOC_MONTHS={ALLOC_MONTHS} isActive={isActive} snapshots={snapshots}
           onClose={closeModal} onSubmit={handleNewSubmit}
           saving={newFormSaving}
         />}
