@@ -2411,7 +2411,7 @@ function AllocationsPage(){
   const pieData=[{name:"Utilized",hours:utilizedHours},{name:"Available",hours:availHours}];
   const clientChartData=useMemo(()=>{
     const map={};
-    chartAllocs.forEach(a=>{map[a.client_name]=(map[a.client_name]||0)+(a.allocated_hours||0);});
+    filteredChartAllocs.forEach(a=>{map[a.client_name]=(map[a.client_name]||0)+(a.allocated_hours||0);});
     return Object.entries(map).map(([name,hours])=>({name,hours})).sort((a,b)=>b.hours-a.hours).slice(0,6);
   },[chartAllocs]);
 
