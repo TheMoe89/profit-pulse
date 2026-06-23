@@ -2400,9 +2400,13 @@ function AllocationsPage(){
   const chartAllocs=useMemo(()=>allocs.filter(a=>a.month===chartMonth),[allocs,chartMonth]);
   // Mirror Base44: inactive employees whose inactive_effective_month >= chartMonth still count
   const isEmpActiveForMonth=(e,month)=>e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=month);
-  const activeEmps=(realEmps).filter(e=>isEmpActiveForMonth(e,chartMonth));
+  // Filter active employees by allowed departments
+  const activeEmps=(realEmps).filter(e=>isEmpActiveForMonth(e,chartMonth)&&(!allowedDepts||allowedDepts.includes(e.department)));
+  // Filter chart allocs to only allowed dept employees
+  const allowedEmpIds=new Set(activeEmps.map(e=>e.id));
+  const filteredChartAllocs=chartAllocs.filter(a=>allowedEmpIds.has(a.employee_id));
   const totalCap=activeEmps.length*HPM;
-  const utilizedHours=chartAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
+  const utilizedHours=filteredChartAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
   const availHours=Math.max(0,totalCap-utilizedHours);
   const pieData=[{name:"Utilized",hours:utilizedHours},{name:"Available",hours:availHours}];
   const clientChartData=useMemo(()=>{
