@@ -141,6 +141,22 @@ const adminFetch = async (path, method='GET', body=null) => {
 };
 
 
+// Count working days between two dates (excl Fri=5, Sat=6 for KSA)
+const countWorkingDays = (fromStr, toStr) => {
+  if(!fromStr||!toStr) return 0;
+  const from = new Date(fromStr);
+  const to   = new Date(toStr);
+  if(from>to) return 0;
+  let count = 0;
+  const cur = new Date(from);
+  while(cur<=to){
+    const day = cur.getDay();
+    if(day!==5&&day!==6) count++;
+    cur.setDate(cur.getDate()+1);
+  }
+  return count;
+};
+
 // Upload file to Supabase Storage, returns public URL
 const uploadToStorage = async (sb, file, folder='attachments') => {
   const ext = file.name.split('.').pop();
@@ -1115,7 +1131,7 @@ function DashboardPage(){
     };
     const da=bld(ac,als);
     const dbc=id=>id==="all"?da:bld(ac.filter(c=>c.cid===id),als.filter(a=>a.cid===id));
-    const eu=dbEmployees.filter(e=>(!allowedDepts||allowedDepts.includes(e.department))&&(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=month))).map(e=>{const empAls=als.filter(a=>(a.eid||a.employee_id)===e.id);const h=empAls.reduce((s,a)=>s+(parseFloat(a.h||a.allocated_hours)||0),0);const clients=empAls.filter(a=>a.status!=='On Leave'&&parseFloat(a.h||a.allocated_hours)>0).map(a=>({name:a.client_name||a.cn||'',hours:parseFloat(a.h||a.allocated_hours)||0}));return{...e,h,u:(h/HPM)*100,av:Math.max(0,HPM-h),clients};});
+    const eu=dbEmployees.filter(e=>(!allowedDepts||allowedDepts.includes(e.department))&&(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=month))).map(e=>{const empAls=als.filter(a=>(a.eid||a.employee_id)===e.id);const h=empAls.reduce((s,a)=>s+(parseFloat(a.h||a.allocated_hours)||0),0);const leaveDeduction=empAls.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);const effectiveHPM=Math.max(0,HPM-leaveDeduction);const clients=empAls.filter(a=>a.status!=='On Leave'&&parseFloat(a.h||a.allocated_hours)>0).map(a=>({name:a.client_name||a.cn||'',hours:parseFloat(a.h||a.allocated_hours)||0}));return{...e,h,u:effectiveHPM>0?(h/effectiveHPM)*100:0,av:Math.max(0,effectiveHPM-h),effectiveHPM,clients};});
     const fullyUtil=eu.filter(e=>!e.onLeave&&e.h>158);
     const optimal=eu.filter(e=>!e.onLeave&&e.h>=123&&e.h<=158);
     const underUtil=eu.filter(e=>!e.onLeave&&e.h>0&&e.h<123);
@@ -2076,9 +2092,12 @@ function ContractsPage(){
 
 // ─── ADD ALLOCATION FORM (extracted component to respect React hook rules) ────
 function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM,getRemainingHours,ALLOC_MONTHS,isActive,onClose,onSubmit,saving=false,snapshots=[]}){
-  const{month,empStatus,clientId,clientCat,notes,rows}=newForm;
+  const{month,empStatus,clientId,clientCat,notes,rows,leaveFrom,leaveTo}=newForm;
   const upd=(k,v)=>setNewForm(p=>({...p,[k]:v}));
   const onLeave=empStatus==="on_leave";
+  const leaveDays=onLeave?countWorkingDays(leaveFrom,leaveTo):0;
+  const leaveDeduction=Math.round(leaveDays*(176/22));
+  const adjustedCapacity=176-leaveDeduction;
 
   const monthContracts=month?realContracts.filter(c=>isActive(c,month)):realContracts;
   const catContracts=clientCat==="all"?monthContracts:monthContracts.filter(c=>(c.contract_category||"Retainer")===clientCat);
@@ -2095,7 +2114,7 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
   const removeRow=id=>setNewForm(p=>({...p,rows:p.rows.filter(r=>r.id!==id)}));
   const updRow=(id,k,v)=>setNewForm(p=>({...p,rows:p.rows.map(r=>r.id===id?{...r,[k]:v}:r)}));
 
-  const canSubmit=month&&(onLeave?rows.some(r=>r.empId):clientId&&rows.some(r=>r.empId&&parseFloat(r.hours)>0));
+  const canSubmit=month&&(onLeave?(rows.some(r=>r.empId)&&leaveFrom&&leaveTo&&leaveDays>0):clientId&&rows.some(r=>r.empId&&parseFloat(r.hours)>0));
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
@@ -2127,11 +2146,37 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
         </div>
       </div>
 
-      {/* On Leave notice */}
+      {/* On Leave — date range + summary */}
       {onLeave&&(
-        <div style={{padding:"8px 12px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
-          <AlertTriangle size={13} strokeWidth={2} color="#d97706"/>
-          <p style={{margin:0,fontSize:12,color:"#92400e",lineHeight:1.5}}>All other fields are disabled. Select employee(s) below and click Save — allocation saved with 0 hours and marked On Leave.</p>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div>
+              <Lbl>Leave From *</Lbl>
+              <input type="date" value={leaveFrom} onChange={e=>upd("leaveFrom",e.target.value)}
+                style={{width:"100%",padding:"8px 11px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,outline:"none",color:"#0f172a",boxSizing:"border-box"}}/>
+            </div>
+            <div>
+              <Lbl>Leave To *</Lbl>
+              <input type="date" value={leaveTo} min={leaveFrom} onChange={e=>upd("leaveTo",e.target.value)}
+                style={{width:"100%",padding:"8px 11px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,outline:"none",color:"#0f172a",boxSizing:"border-box"}}/>
+            </div>
+          </div>
+          {leaveDays>0&&(
+            <div style={{padding:"10px 14px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                <AlertTriangle size={13} strokeWidth={2} color="#d97706"/>
+                <span style={{fontSize:12,fontWeight:700,color:"#92400e"}}>{leaveDays} working day{leaveDays!==1?"s":""} of leave</span>
+              </div>
+              <p style={{margin:0,fontSize:12,color:"#92400e",lineHeight:1.5}}>
+                Deduction: <strong>{leaveDeduction}h</strong> ({leaveDays} days x 8h) - Adjusted capacity: <strong>{adjustedCapacity}h</strong> instead of 176h
+              </p>
+            </div>
+          )}
+          {leaveDays===0&&leaveFrom&&leaveTo&&(
+            <div style={{padding:"8px 12px",background:"#fee2e2",border:"1px solid #fca5a5",borderRadius:8}}>
+              <p style={{margin:0,fontSize:12,color:"#991b1b"}}>No working days in selected range (weekends only). Please adjust dates.</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -2360,8 +2405,8 @@ function AllocationsPage(){
     return Object.entries(map).map(([name,hours])=>({name,hours})).sort((a,b)=>b.hours-a.hours).slice(0,6);
   },[chartAllocs]);
 
-  const closeModal=()=>{setModalOpen(false);setEditing(null);setFormStep(1);setSelMonth("");setSelEmpIds([]);setEmpAllocs({});setEmpSearch("");setConfirmOpen(false);setNewForm({month:"",empStatus:"in_duty",clientId:"",clientCat:"all",notes:"",rows:[{id:1,empId:"",hours:""}]});};
-  const openAdd=()=>{setEditing(null);setFormStep(1);setSelMonth("");setSelEmpIds([]);setEmpAllocs({});setNewForm({month:"",empStatus:"in_duty",clientId:"",clientCat:"all",notes:"",rows:[{id:1,empId:"",hours:""}]});setModalOpen(true);};
+  const closeModal=()=>{setModalOpen(false);setEditing(null);setFormStep(1);setSelMonth("");setSelEmpIds([]);setEmpAllocs({});setEmpSearch("");setConfirmOpen(false);setNewForm({month:"",empStatus:"in_duty",clientId:"",clientCat:"all",notes:"",rows:[{id:1,empId:"",hours:""}],leaveFrom:"",leaveTo:""});};
+  const openAdd=()=>{setEditing(null);setFormStep(1);setSelMonth("");setSelEmpIds([]);setEmpAllocs({});setNewForm({month:"",empStatus:"in_duty",clientId:"",clientCat:"all",notes:"",rows:[{id:1,empId:"",hours:""}],leaveFrom:"",leaveTo:""});setModalOpen(true);};
   const openEdit=a=>{setEditing(a);setEditForm({allocated_hours:a.allocated_hours,month:a.month,notes:a.notes||""});setModalOpen(true);};
 
   const handleEmpToggle=(id,checked)=>{
@@ -2378,14 +2423,18 @@ function AllocationsPage(){
     setNewFormSaving(true);
     try{
       if(empStatus==="on_leave"){
+        const{leaveFrom,leaveTo}=newForm;
+        const lDays=countWorkingDays(leaveFrom,leaveTo);
+        const capDed=Math.round(lDays*(176/22));
         const onLeaveRows=rows.filter(r=>r.empId).map(r=>{
           const emp=realEmps.find(e=>e.id===r.empId);
           return{employee_id:r.empId,employee_name:emp?.name||"",employee_monthly_cost:emp?.mc||0,
                  client_id:null,client_name:"",contract_id:null,
-                 allocated_hours:0,month,status:"On Leave",notes:notes||""};
+                 allocated_hours:0,month,status:"On Leave",notes:notes||"",
+                 leave_from:leaveFrom,leave_to:leaveTo,leave_days:lDays,capacity_deduction:capDed};
         });
         if(onLeaveRows.length) await dbBulkAdd(onLeaveRows);
-        toast(`${onLeaveRows.length} On Leave allocation(s) saved`,"success");
+        toast(`${onLeaveRows.length} On Leave allocation(s) saved - ${lDays} day(s), ${capDed}h deducted`,"success");
       } else {
         const ct=realContracts.find(c=>c.id===clientId);
         const toCreate=rows.filter(r=>r.empId&&parseFloat(r.hours)>0).map(r=>{
