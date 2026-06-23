@@ -2301,7 +2301,7 @@ function AllocationsPage(){
   useEffect(()=>{
     sb.from('allocations').select('*').order('month',{ascending:false}).then(({data})=>{if(data)setAllocs(data.map(mapA));setLoading(false);});
   },[sb]);
-  const dbBulkAdd=async items=>{const rows=items.map(a=>({employee_id:a.employee_id,employee_name:a.employee_name,employee_monthly_cost:a.employee_monthly_cost||0,client_id:a.client_id||null,client_name:a.client_name||'',contract_id:a.contract_id||null,allocated_hours:a.allocated_hours||0,month:a.month,status:a.status||'Assigned',notes:a.notes||''}));const{data,error}=await sb.from('allocations').insert(rows).select();if(error)throw new Error(error.message);if(data)setAllocs(p=>[...p,...data.map(mapA)]);};
+  const dbBulkAdd=async items=>{const rows=items.map(a=>({employee_id:a.employee_id,employee_name:a.employee_name,employee_monthly_cost:a.employee_monthly_cost||0,client_id:a.client_id||null,client_name:a.client_name||'',contract_id:a.contract_id||null,allocated_hours:a.allocated_hours||0,month:a.month,status:a.status||'Assigned',notes:a.notes||'',leave_from:a.leave_from||null,leave_to:a.leave_to||null,leave_days:a.leave_days||0,capacity_deduction:a.capacity_deduction||0}));const{data,error}=await sb.from('allocations').insert(rows).select();if(error)throw new Error(error.message);if(data)setAllocs(p=>[...p,...data.map(mapA)]);};
   const dbUpdate=async(id,p)=>{const{data}=await sb.from('allocations').update({allocated_hours:p.allocated_hours,month:p.month,notes:p.notes}).eq('id',id).select().single();if(data)setAllocs(x=>x.map(a=>a.id===id?mapA(data):a));};
   const dbDelete=async id=>{await sb.from('allocations').delete().eq('id',id);setAllocs(x=>x.filter(a=>a.id!==id));};
   const [search,setSearch]       = useState("");
