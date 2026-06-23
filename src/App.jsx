@@ -2347,8 +2347,11 @@ function AllocationsPage(){
   const utilForMonth=useCallback((month)=>{
     const map={};
     (realEmps).forEach(emp=>{
-      const h=allocs.filter(a=>a.employee_id===emp.id&&a.month===month).reduce((s,a)=>s+(a.allocated_hours||0),0);
-      map[emp.id]={totalHours:h,availableHours:Math.max(0,HPM-h),percentage:(h/HPM)*100};
+      const empAllocs=allocs.filter(a=>a.employee_id===emp.id&&a.month===month);
+      const h=empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
+      const leaveDeduction=empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
+      const effectiveHPM=Math.max(0,HPM-leaveDeduction);
+      map[emp.id]={totalHours:h,availableHours:Math.max(0,effectiveHPM-h),percentage:effectiveHPM>0?(h/effectiveHPM)*100:0,effectiveHPM};
     });
     return map;
   },[allocs]);
@@ -2361,8 +2364,11 @@ function AllocationsPage(){
   },[selMonth]);
 
   const getRemainingHours=(empId,month,excludeId=null)=>{
-    const used=allocs.filter(a=>a.employee_id===empId&&a.month===month&&a.id!==excludeId).reduce((s,a)=>s+(a.allocated_hours||0),0);
-    return Math.max(0,HPM-used);
+    const empAllocs=allocs.filter(a=>a.employee_id===empId&&a.month===month&&a.id!==excludeId);
+    const used=empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
+    const leaveDeduction=empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
+    const effectiveHPM=Math.max(0,HPM-leaveDeduction);
+    return Math.max(0,effectiveHPM-used);
   };
 
   const filtered=useMemo(()=>allocs.filter(a=>{
