@@ -2799,10 +2799,19 @@ const getUtilStatus = (allocated, capacity, onLeave) => {
 };
 
 const loadXlsxStyle = (cb) => {
-  if(window.XLSX){ cb(); return; }
+  // xlsx-js-style registers as window.XLSX with styling support
+  // Use a flag to avoid reloading
+  if(window._xlsxStyleLoaded){ cb(); return; }
   const s = document.createElement('script');
-  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-  s.onload = cb;
+  s.src = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
+  s.onload = () => { window._xlsxStyleLoaded = true; cb(); };
+  s.onerror = () => {
+    // fallback to unpkg
+    const s2 = document.createElement('script');
+    s2.src = 'https://unpkg.com/xlsx-js-style/dist/xlsx.bundle.js';
+    s2.onload = () => { window._xlsxStyleLoaded = true; cb(); };
+    document.head.appendChild(s2);
+  };
   document.head.appendChild(s);
 };
 
