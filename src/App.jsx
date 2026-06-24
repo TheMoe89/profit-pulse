@@ -730,10 +730,11 @@ const DEPT_META={
   "Planning Department":        {short:"PL",color:"#475569",lightBg:"#f1f5f9",name:"Planning"},
 };
 function getDeptStatus(pct){
-  if(pct>=90) return{label:"Fully Utilized",  color:"#059669",bg:"#d1fae5",border:"#6ee7b7"};
-  if(pct>=70) return{label:"Optimal",          color:"#0891b2",bg:"#e0f7fa",border:"#67e8f9"};
-  if(pct>=1)  return{label:"Under Util.",       color:"#ef4444",bg:"#fee2e2",border:"#fca5a5"};
-  return       {label:"Unallocated",            color:"#94a3b8",bg:"#f1f5f9",border:"#cbd5e1"};
+  const rpct=Math.round(pct);
+  if(rpct>=90) return{label:"Fully Utilized",  color:"#059669",bg:"#d1fae5",border:"#6ee7b7"};
+  if(rpct>=70) return{label:"Optimal",          color:"#0891b2",bg:"#e0f7fa",border:"#67e8f9"};
+  if(rpct>=1)  return{label:"Under Util.",       color:"#ef4444",bg:"#fee2e2",border:"#fca5a5"};
+  return        {label:"Unallocated",            color:"#94a3b8",bg:"#f1f5f9",border:"#cbd5e1"};
 }
 function getEmpStatus(h){
   if(h>158)  return{label:"Fully Util.",color:"#059669"};
@@ -850,10 +851,11 @@ const DEPT_COLORS={
   "Planning Department":        {color:"#475569",bg:"#f1f5f9"},
 };
 function getCapTheme(pct,hours,cap,onLeave){
+  const rpct=Math.round(pct);
   if(onLeave)    return{border:"#fde68a",cardBg:"#fffbeb",barColor:"#f59e0b",badgeBg:"#fef9c3",badgeColor:"#d97706",label:"On Leave"};
   if(hours===0)  return{border:"#e2e8f0",cardBg:"#fafafa",barColor:"#cbd5e1",badgeBg:"#f1f5f9",badgeColor:"#94a3b8",label:"Unallocated"};
-  if(hours>158)  return{border:"#a7f3d0",cardBg:"#f0fdf4",barColor:"#008A57",badgeBg:"#d1fae5",badgeColor:"#059669",label:"Fully Utilized"};
-  if(hours>=123) return{border:"#bae6fd",cardBg:"#f0f9ff",barColor:"#0891b2",badgeBg:"#e0f7fa",badgeColor:"#0891b2",label:"Optimal"};
+  if(rpct>=90)   return{border:"#a7f3d0",cardBg:"#f0fdf4",barColor:"#008A57",badgeBg:"#d1fae5",badgeColor:"#059669",label:"Fully Utilized"};
+  if(rpct>=70)   return{border:"#bae6fd",cardBg:"#f0f9ff",barColor:"#0891b2",badgeBg:"#e0f7fa",badgeColor:"#0891b2",label:"Optimal"};
   return          {border:"#fca5a5",cardBg:"#fef2f2",barColor:"#ef4444",badgeBg:"#fee2e2",badgeColor:"#ef4444",label:"Under Util."};
 }
 function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
@@ -1131,7 +1133,7 @@ function DashboardPage(){
     };
     const da=bld(ac,als);
     const dbc=id=>id==="all"?da:bld(ac.filter(c=>c.cid===id),als.filter(a=>a.cid===id));
-    const eu=dbEmployees.filter(e=>(!allowedDepts||allowedDepts.includes(e.department))&&(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=month))).map(e=>{const empAls=als.filter(a=>(a.eid||a.employee_id)===e.id);const h=empAls.reduce((s,a)=>s+(parseFloat(a.h||a.allocated_hours)||0),0);const leaveDeduction=empAls.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);const effectiveHPM=Math.max(0,HPM-leaveDeduction);const clients=empAls.filter(a=>a.status!=='On Leave'&&parseFloat(a.h||a.allocated_hours)>0).map(a=>({name:a.client_name||a.cn||'',hours:parseFloat(a.h||a.allocated_hours)||0}));return{...e,h,u:effectiveHPM>0?(h/effectiveHPM)*100:0,av:Math.max(0,effectiveHPM-h),effectiveHPM,clients};});
+    const eu=dbEmployees.filter(e=>(!allowedDepts||allowedDepts.includes(e.department))&&(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=month))).map(e=>{const empAls=als.filter(a=>(a.eid||a.employee_id)===e.id);const h=empAls.reduce((s,a)=>s+(parseFloat(a.h||a.allocated_hours)||0),0);const leaveDeduction=empAls.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);const effectiveHPM=Math.max(0,HPM-leaveDeduction);const clients=empAls.filter(a=>a.status!=='On Leave'&&parseFloat(a.h||a.allocated_hours)>0).map(a=>({name:a.client_name||a.cn||'',hours:parseFloat(a.h||a.allocated_hours)||0}));const rawPct=effectiveHPM>0?(h/effectiveHPM)*100:0;return{...e,h,u:Math.round(rawPct),av:Math.max(0,effectiveHPM-h),effectiveHPM,clients};});
     const fullyUtil=eu.filter(e=>!e.onLeave&&e.h>158);
     const optimal=eu.filter(e=>!e.onLeave&&e.h>=123&&e.h<=158);
     const underUtil=eu.filter(e=>!e.onLeave&&e.h>0&&e.h<123);
@@ -2784,6 +2786,202 @@ const REPORT_COLORS = ['#008A57','#475569','#10b981','#f59e0b','#ef4444','#94a3b
 // Shared mock snapshots for custom reports tab (extends the existing SNAPSHOTS)
 
 // ── Excel export helper (uses SheetJS loaded from CDN) ──────────────────────
+// ── Formatted Excel export using xlsx-style ──────────────────────────────────
+const STATUS_ORDER_MAP = {"Fully Utilized":0,"Optimal":1,"Under Util.":2,"Unallocated":3,"On Leave":4};
+
+const getUtilStatus = (allocated, capacity, onLeave) => {
+  if(onLeave) return {label:"On Leave",      fgRGB:"92400E", bgRGB:"FEF9C3"};
+  const pct = capacity > 0 ? Math.round((allocated/capacity)*100) : 0;
+  if(pct===0)  return {label:"Unallocated",    fgRGB:"475569", bgRGB:"F1F5F9"};
+  if(pct>=90)  return {label:"Fully Utilized", fgRGB:"065F46", bgRGB:"D1FAE5"};
+  if(pct>=70)  return {label:"Optimal",        fgRGB:"0E7490", bgRGB:"E0F7FA"};
+  return        {label:"Under Util.",           fgRGB:"991B1B", bgRGB:"FEE2E2"};
+};
+
+const loadXlsxStyle = (cb) => {
+  if(window.XLSXStyle){ cb(); return; }
+  const s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
+  s.onload = cb;
+  document.head.appendChild(s);
+};
+
+const BORDER = {
+  top:{style:"thin",color:{rgb:"E2E8F0"}},
+  bottom:{style:"thin",color:{rgb:"E2E8F0"}},
+  left:{style:"thin",color:{rgb:"E2E8F0"}},
+  right:{style:"thin",color:{rgb:"E2E8F0"}},
+};
+
+const cell = (v, opts={}) => ({
+  v, t: typeof v==='number'?'n':'s',
+  s:{
+    font:{name:"Calibri",sz:opts.sz||10,bold:opts.bold||false,color:{rgb:opts.fg||"0F172A"},italic:opts.italic||false},
+    alignment:{horizontal:opts.align||"left",vertical:"center",wrapText:opts.wrap||false},
+    fill:{fgColor:{rgb:opts.bg||"FFFFFF"},patternType:"solid"},
+    border:opts.noBorder?{}:BORDER,
+    numFmt:opts.numFmt||"",
+  }
+});
+
+const exportMonthlyUtilization = (employees, allocs, month, dept, HPM) => {
+  loadXlsxStyle(()=>{
+    const XS = window.XLSXStyle;
+    const rows = employees
+      .map(e=>{
+        const empAllocs = allocs.filter(a=>a.employee_id===e.id&&a.month===month);
+        const allocated = empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
+        const leaveDeduction = empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
+        const effectiveHPM = Math.max(0,HPM-leaveDeduction);
+        const free = Math.max(0,effectiveHPM-allocated);
+        const pct = effectiveHPM>0?Math.round((allocated/effectiveHPM)*100):0;
+        const onLeave = empAllocs.some(a=>a.status==='On Leave');
+        const leavedays = empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(a.leave_days||0),0);
+        const status = getUtilStatus(allocated,effectiveHPM,onLeave);
+        return {e,allocated,effectiveHPM,free,pct,onLeave,leavedays,leaveDeduction,status};
+      })
+      .sort((a,b)=>(STATUS_ORDER_MAP[a.status.label]??5)-(STATUS_ORDER_MAP[b.status.label]??5));
+
+    const totalAlloc = rows.reduce((s,r)=>s+r.allocated,0);
+    const onLeaveCount = rows.filter(r=>r.onLeave).length;
+    const nonLeave = rows.filter(r=>!r.onLeave&&r.effectiveHPM>0);
+    const avgUtil = Math.round(nonLeave.reduce((s,r)=>s+r.pct,0)/Math.max(1,nonLeave.length));
+
+    const ws = {};
+    const cols = 10;
+    let rowNum = 0;
+
+    const setRow = (rowData) => {
+      rowData.forEach((c,ci)=>{ ws[XS.utils.encode_cell({r:rowNum,c:ci})] = c; });
+      rowNum++;
+    };
+    const mergeRow = (v, opts) => {
+      const r = Array(cols).fill(cell("",{bg:opts.bg||"FFFFFF",noBorder:true}));
+      r[0] = cell(v,opts);
+      setRow(r);
+    };
+    const spacer = () => { setRow(Array(cols).fill(cell("",{noBorder:true}))); };
+
+    // Title row
+    mergeRow("MONTHLY UTILIZATION REPORT",{sz:16,bold:true,fg:"FFFFFF",bg:"008A57",align:"center"});
+
+    // Meta row
+    const dateStr = new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
+    mergeRow(`Period: ${month}   |   ${dept}   |   Generated: ${dateStr}`,{sz:10,fg:"64748B",bg:"F0FDF4",align:"center",italic:true});
+
+    spacer();
+
+    // KPI row — 4 boxes across cols 0-7
+    const kpiRow = Array(cols).fill(cell("",{noBorder:true}));
+    [[0,"Total Employees",rows.length],[2,"Total Allocated",totalAlloc+"h"],[4,"On Leave",onLeaveCount],[6,"Avg Utilization",avgUtil+"%"]].forEach(([ci,lbl,val])=>{
+      kpiRow[ci]=cell(`${lbl}
+${val}`,{bold:true,sz:11,bg:"F8FAFC",align:"center",wrap:true});
+    });
+    setRow(kpiRow);
+
+    spacer();
+
+    // Headers
+    setRow([
+      cell("Employee",   {bold:true,fg:"FFFFFF",bg:"0F172A",align:"left",sz:10}),
+      cell("Department", {bold:true,fg:"FFFFFF",bg:"0F172A",align:"left",sz:10}),
+      cell("Position",   {bold:true,fg:"FFFFFF",bg:"0F172A",align:"left",sz:10}),
+      cell("Allocated (h)",{bold:true,fg:"FFFFFF",bg:"0F172A",align:"center",sz:10}),
+      cell("Capacity (h)", {bold:true,fg:"FFFFFF",bg:"0F172A",align:"center",sz:10}),
+      cell("Free (h)",     {bold:true,fg:"FFFFFF",bg:"0F172A",align:"center",sz:10}),
+      cell("Util %",       {bold:true,fg:"FFFFFF",bg:"0F172A",align:"center",sz:10}),
+      cell("Status",       {bold:true,fg:"FFFFFF",bg:"0F172A",align:"center",sz:10}),
+      cell("Leave Days",   {bold:true,fg:"FFFFFF",bg:"0F172A",align:"center",sz:10}),
+      cell("Hrs Deducted", {bold:true,fg:"FFFFFF",bg:"0F172A",align:"center",sz:10}),
+    ]);
+
+    // Data rows
+    rows.forEach((r,i)=>{
+      const bg = i%2===0?"FFFFFF":"F8FAFC";
+      const pctColor = r.pct>=90?"059669":r.pct>=70?"0891B2":"EF4444";
+      setRow([
+        cell(r.e.name,           {bg,align:"left"}),
+        cell(r.e.department?.replace(" Department","")||"",{bg,align:"left"}),
+        cell(r.e.position||"",   {bg,align:"left"}),
+        cell(r.onLeave?"—":r.allocated,{bg,align:"center"}),
+        cell(r.effectiveHPM,     {bg,align:"center"}),
+        cell(r.onLeave?"—":r.free,{bg,align:"center",fg:r.free===0?"94A3B8":"0F172A"}),
+        cell(r.onLeave?"—":r.pct+"%",{bg,align:"center",bold:true,fg:r.onLeave?"94A3B8":pctColor}),
+        cell(r.status.label,     {bg:r.status.bgRGB,fg:r.status.fgRGB,align:"center",bold:true}),
+        cell(r.leavedays||0,     {bg,align:"center",fg:r.onLeave?"D97706":"0F172A",bold:r.onLeave}),
+        cell(r.leaveDeduction||0,{bg,align:"center",fg:r.onLeave?"D97706":"0F172A",bold:r.onLeave}),
+      ]);
+    });
+
+    spacer();
+
+    // Summary
+    mergeRow("SUMMARY",{sz:11,bold:true,fg:"FFFFFF",bg:"008A57",align:"center"});
+    const counts = {"Fully Utilized":0,"Optimal":0,"Under Util.":0,"Unallocated":0,"On Leave":0};
+    rows.forEach(r=>{ counts[r.status.label]=(counts[r.status.label]||0)+1; });
+    [
+      ["Total Employees",rows.length],
+      ["Total Allocated Hours",totalAlloc+"h"],
+      ["Total Capacity Hours",rows.reduce((s,r)=>s+r.effectiveHPM,0)+"h"],
+      ["Employees On Leave",onLeaveCount],
+      ["Fully Utilized",counts["Fully Utilized"]],
+      ["Optimal",counts["Optimal"]],
+      ["Under Utilized",counts["Under Util."]],
+      ["Unallocated",counts["Unallocated"]],
+      ["Average Utilization",avgUtil+"%"],
+    ].forEach(([lbl,val],i)=>{
+      const bg = i%2===0?"F8FAFC":"FFFFFF";
+      const r = Array(cols).fill(cell("",{noBorder:true}));
+      r[0]=cell(lbl,{bold:true,bg,align:"left"});
+      r[1]=cell(String(val),{bold:true,bg:"FFFFFF",fg:"008A57",align:"center"});
+      setRow(r);
+    });
+
+    spacer();
+
+    // Legend
+    mergeRow("UTILIZATION STATUS REFERENCE",{sz:11,bold:true,fg:"FFFFFF",bg:"0F172A",align:"center"});
+    setRow([cell("Status",{bold:true,bg:"F1F5F9",align:"center"}),cell("Range",{bold:true,bg:"F1F5F9",align:"center"}),cell("Description",{bold:true,bg:"F1F5F9",align:"left"}),...Array(cols-3).fill(cell("",{bg:"F1F5F9",noBorder:true}))]);
+    [
+      ["Fully Utilized","≥ 90%","Employee is at or near full capacity","065F46","D1FAE5"],
+      ["Optimal","70 – 89%","Healthy utilization range — employee is well allocated","0E7490","E0F7FA"],
+      ["Under Util.","1 – 69%","Employee has significant free capacity — needs more allocation","991B1B","FEE2E2"],
+      ["Unallocated","0%","No hours allocated this month — employee is on the bench","475569","F1F5F9"],
+      ["On Leave","—","Capacity reduced by approved leave days","92400E","FEF9C3"],
+    ].forEach(([s,range,desc,fg,bg])=>{
+      const r=Array(cols).fill(cell("",{noBorder:true}));
+      r[0]=cell(s,{bold:true,fg,bg,align:"center"});
+      r[1]=cell(range,{bold:true,align:"center"});
+      r[2]=cell(desc,{fg:"64748B",align:"left"});
+      setRow(r);
+    });
+
+    spacer();
+    mergeRow("Acquaint Communications © 2026 — Team Allocation Platform — Confidential",{sz:9,fg:"94A3B8",align:"center",italic:true,noBorder:true});
+
+    // Merges
+    ws['!merges']=[
+      {s:{r:0,c:0},e:{r:0,c:cols-1}},{s:{r:1,c:0},e:{r:1,c:cols-1}},
+      {s:{r:3,c:0},e:{r:3,c:1}},{s:{r:3,c:2},e:{r:3,c:3}},
+      {s:{r:3,c:4},e:{r:3,c:5}},{s:{r:3,c:6},e:{r:3,c:7}},
+    ];
+    // find summary/legend merge rows dynamically
+    const lastRow = rowNum-1;
+    ws['!merges'].push(
+      {s:{r:lastRow,c:0},e:{r:lastRow,c:cols-1}}
+    );
+
+    ws['!cols']=[{wch:30},{wch:18},{wch:26},{wch:13},{wch:13},{wch:10},{wch:10},{wch:16},{wch:12},{wch:13}];
+    ws['!rows']=[{hpt:28},{hpt:18},{hpt:6},{hpt:36},{hpt:6},...Array(rows.length+20).fill({hpt:18})];
+    ws['!ref']=XS.utils.encode_range({r:0,c:0},{r:rowNum-1,c:cols-1});
+
+    const wb=XS.utils.book_new();
+    XS.utils.book_append_sheet(wb,ws,"Monthly Utilization");
+    const deptLabel=dept==="All Departments"?"All":dept.replace(" Department","");
+    XS.writeFile(wb,`Utilization_Report_${month.replace(" ","_")}_${deptLabel}.xlsx`);
+  });
+};
+
 const exportXLSX = (wsData, sheetName, filename) => {
   const script = document.createElement('script');
   script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
@@ -2833,6 +3031,203 @@ const exportPDFTable = (title, headers, rows, filename) => {
     document.head.appendChild(script);
   }
 };
+
+// ── Fixed Reports Section ────────────────────────────────────────────────────
+const FIXED_REPORT_TYPES = [
+  { id:"utilization", title:"Monthly Utilization Report",    desc:"Employee allocated hours, free capacity, utilization % and status for a selected month" },
+  { id:"capacity",    title:"Team Capacity Summary",          desc:"Department-level breakdown of capacity, allocation, and headcount" },
+  { id:"client",      title:"Client Allocation Report",       desc:"Hours allocated per client across departments for a selected month" },
+  { id:"leave",       title:"On Leave Report",                desc:"Employees on leave, dates, days taken, and hours deducted from capacity" },
+  { id:"renewals",    title:"Contract Renewals Report",       desc:"Contracts expiring within 60/90 days with client name and value" },
+  { id:"cost",        title:"Employee Cost vs Allocation",    desc:"Monthly cost vs allocated hours — shows cost recovery per employee" },
+];
+
+const UTIL_STATUS_ORDER = {"Fully Utilized":0,"Optimal":1,"Under Util.":2,"Unallocated":3,"On Leave":4};
+
+function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,allowedDepts}){
+  const [selReport,setSelReport] = useState("utilization");
+  const [selMonth,setSelMonth]   = useState(currentMonth);
+  const [selDept,setSelDept]     = useState("all");
+
+  const DEPTS = ["all","Creative Department","Client Servicing Department","Production Department","Planning Department"];
+  const DEPT_LABELS = {"all":"All Departments","Creative Department":"Creative","Client Servicing Department":"Client Servicing","Production Department":"Production","Planning Department":"Planning"};
+
+  const availDepts = allowedDepts ? ["all",...allowedDepts] : DEPTS;
+
+  // Compute utilization rows
+  const utilRows = React.useMemo(()=>{
+    const emps = employees.filter(e=>
+      (e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=selMonth))&&
+      (!allowedDepts||allowedDepts.includes(e.department))&&
+      (selDept==="all"||e.department===selDept)
+    );
+    return emps.map(e=>{
+      const empAllocs = allocs.filter(a=>a.employee_id===e.id&&a.month===selMonth);
+      const allocated = empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
+      const leaveDeduction = empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
+      const effectiveHPM = Math.max(0,HPM-leaveDeduction);
+      const free = Math.max(0,effectiveHPM-allocated);
+      const pct = effectiveHPM>0?Math.round((allocated/effectiveHPM)*100):0;
+      const onLeave = empAllocs.some(a=>a.status==='On Leave');
+      const leavedays = empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(a.leave_days||0),0);
+      const status = getUtilStatus(allocated,effectiveHPM,onLeave);
+      return {e,allocated,effectiveHPM,free,pct,onLeave,leavedays,leaveDeduction,status};
+    }).sort((a,b)=>(UTIL_STATUS_ORDER[a.status.label]??5)-(UTIL_STATUS_ORDER[b.status.label]??5));
+  },[employees,allocs,selMonth,selDept,allowedDepts]);
+
+  const totalAlloc = utilRows.reduce((s,r)=>s+r.allocated,0);
+  const onLeaveCount = utilRows.filter(r=>r.onLeave).length;
+  const nonLeave = utilRows.filter(r=>!r.onLeave&&r.effectiveHPM>0);
+  const avgUtil = Math.round(nonLeave.reduce((s,r)=>s+r.pct,0)/Math.max(1,nonLeave.length));
+
+  const deptLabel = DEPT_LABELS[selDept]||selDept;
+
+  const handleExcelDownload = () => {
+    exportMonthlyUtilization(
+      employees.filter(e=>(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=selMonth))&&(!allowedDepts||allowedDepts.includes(e.department))&&(selDept==="all"||e.department===selDept)),
+      allocs, selMonth, deptLabel, HPM
+    );
+  };
+
+  const handlePDFDownload = () => {
+    const headers = ["Employee","Department","Position","Allocated","Capacity","Free","Util %","Status","Leave Days","Hrs Deducted"];
+    const rows = utilRows.map(r=>[
+      r.e.name, r.e.department?.replace(" Department","")||"", r.e.position||"",
+      r.onLeave?"—":r.allocated+"h", r.effectiveHPM+"h",
+      r.onLeave?"—":r.free+"h", r.onLeave?"—":r.pct+"%",
+      r.status.label, r.leavedays||0, r.leaveDeduction||0,
+    ]);
+    exportPDFTable(`Monthly Utilization Report — ${fmtLong(selMonth)} — ${deptLabel}`, headers, rows, `Utilization_${selMonth}_${deptLabel}.pdf`);
+  };
+
+  return(
+    <div style={{display:"flex",gap:0,flex:1}}>
+      {/* Left sidebar */}
+      <div style={{width:280,flexShrink:0,display:"flex",flexDirection:"column",gap:8,paddingRight:16}}>
+        <p style={{margin:"0 0 6px",fontSize:11,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".06em"}}>Select Report</p>
+        {FIXED_REPORT_TYPES.map(r=>(
+          <div key={r.id} onClick={()=>setSelReport(r.id)} style={{padding:"13px 15px",borderRadius:11,border:`1.5px solid ${selReport===r.id?"#008A57":"#e2e8f0"}`,background:selReport===r.id?"#f0fdf4":"#fff",cursor:"pointer",transition:"all .15s",boxShadow:selReport===r.id?"0 2px 8px rgba(0,138,87,.12)":"0 1px 3px rgba(0,0,0,.04)"}}>
+            <p style={{margin:"0 0 3px",fontWeight:700,fontSize:13,color:selReport===r.id?"#008A57":"#0f172a"}}>{r.title}</p>
+            <p style={{margin:0,fontSize:11,color:"#64748b",lineHeight:1.4}}>{r.desc}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Right: report preview */}
+      <div style={{flex:1,display:"flex",flexDirection:"column",gap:14,minWidth:0}}>
+        {/* Filters + download */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <Sel value={selMonth} onChange={setSelMonth} options={MONTHS.map(m=>({v:m,l:fmtLong(m)}))} style={{width:155}}/>
+            <Sel value={selDept} onChange={setSelDept} options={availDepts.map(d=>({v:d,l:DEPT_LABELS[d]||d}))} style={{width:180}}/>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <Btn variant="outline" size="sm" onClick={handleExcelDownload} style={{gap:6}}>
+              <FileSpreadsheet size={13} strokeWidth={1.75} color="#008A57"/>Download Excel
+            </Btn>
+            <Btn variant="primary" size="sm" onClick={handlePDFDownload} style={{gap:6}}>
+              <Download size={13} strokeWidth={1.75}/>Download PDF
+            </Btn>
+          </div>
+        </div>
+
+        {/* Report title card */}
+        <Card style={{padding:0,overflow:"hidden"}}>
+          <div style={{padding:"14px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <p style={{margin:0,fontWeight:700,fontSize:15,color:"#0f172a"}}>Monthly Utilization Report</p>
+              <p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>{fmtLong(selMonth)} · {deptLabel}</p>
+            </div>
+          </div>
+          {/* KPI summary */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",borderBottom:"1px solid #f1f5f9"}}>
+            {[
+              {label:"Total Employees",  value:utilRows.length,      color:"#0f172a"},
+              {label:"Total Allocated",  value:totalAlloc+"h",       color:"#0f172a"},
+              {label:"On Leave",         value:onLeaveCount,         color:"#d97706"},
+              {label:"Avg Utilization",  value:avgUtil+"%",          color:avgUtil>=90?"#059669":avgUtil>=70?"#0891b2":"#ef4444"},
+            ].map((s,i)=>(
+              <div key={i} style={{padding:"13px 18px",borderRight:i<3?"1px solid #f1f5f9":"none"}}>
+                <p style={{margin:0,fontSize:11,fontWeight:600,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".05em"}}>{s.label}</p>
+                <p style={{margin:"3px 0 0",fontSize:20,fontWeight:800,color:s.color,lineHeight:1}}>{s.value}</p>
+              </div>
+            ))}
+          </div>
+          {/* Table */}
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead>
+                <tr style={{background:"#f8fafc"}}>
+                  {["Employee","Department","Position","Allocated","Capacity","Free","Util %","Status","Leave Days","Hrs Deducted"].map((h,i)=>(
+                    <th key={h} style={{padding:"9px 13px",textAlign:i>=3?"center":"left",fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".04em",borderBottom:"1px solid #e2e8f0",whiteSpace:"nowrap"}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {utilRows.length===0&&(
+                  <tr><td colSpan={10} style={{padding:"32px",textAlign:"center",color:"#94a3b8",fontSize:13}}>No employees found for this selection</td></tr>
+                )}
+                {utilRows.map((r,i)=>(
+                  <tr key={r.e.id} style={{borderTop:i>0?"1px solid #f8fafc":"none",background:i%2===0?"#fff":"#f8fafc"}}
+                    onMouseEnter={e=>e.currentTarget.style.background="#f0fdf4"}
+                    onMouseLeave={e=>e.currentTarget.style.background=i%2===0?"#fff":"#f8fafc"}>
+                    <td style={{padding:"10px 13px",fontWeight:600,fontSize:13,color:"#0f172a",whiteSpace:"nowrap"}}>{r.e.name}</td>
+                    <td style={{padding:"10px 13px",fontSize:13,color:"#64748b"}}>{r.e.department?.replace(" Department","")||"—"}</td>
+                    <td style={{padding:"10px 13px",fontSize:13,color:"#64748b",whiteSpace:"nowrap"}}>{r.e.position||"—"}</td>
+                    <td style={{padding:"10px 13px",textAlign:"center",fontSize:13,fontWeight:600,color:"#0f172a"}}>{r.onLeave?"—":r.allocated+"h"}</td>
+                    <td style={{padding:"10px 13px",textAlign:"center",fontSize:13,color:"#64748b"}}>{r.effectiveHPM}h</td>
+                    <td style={{padding:"10px 13px",textAlign:"center",fontSize:13,color:r.free===0?"#94a3b8":"#0f172a"}}>{r.onLeave?"—":r.free+"h"}</td>
+                    <td style={{padding:"10px 13px",textAlign:"center"}}>
+                      {r.onLeave?"—":(
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
+                          <div style={{width:40,height:4,borderRadius:99,background:"#f1f5f9",overflow:"hidden"}}>
+                            <div style={{height:"100%",width:`${Math.min(r.pct,100)}%`,background:r.status.label==="Fully Utilized"?"#059669":r.status.label==="Optimal"?"#0891b2":"#ef4444",borderRadius:99}}/>
+                          </div>
+                          <span style={{fontSize:12,fontWeight:700,color:"#"+r.status.fgRGB}}>{r.pct}%</span>
+                        </div>
+                      )}
+                    </td>
+                    <td style={{padding:"10px 13px",textAlign:"center"}}>
+                      <span style={{padding:"2px 9px",borderRadius:999,fontSize:11,fontWeight:700,color:"#"+r.status.fgRGB,background:"#"+r.status.bgRGB}}>{r.status.label}</span>
+                    </td>
+                    <td style={{padding:"10px 13px",textAlign:"center",fontSize:12,fontWeight:r.onLeave?700:400,color:r.onLeave?"#d97706":"#64748b"}}>{r.leavedays||"—"}</td>
+                    <td style={{padding:"10px 13px",textAlign:"center",fontSize:12,fontWeight:r.onLeave?700:400,color:r.onLeave?"#d97706":"#64748b"}}>{r.leaveDeduction||"—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        {/* Legend */}
+        <Card style={{padding:"14px 18px"}}>
+          <p style={{margin:"0 0 10px",fontSize:12,fontWeight:700,color:"#0f172a"}}>Utilization Status Reference</p>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+            {[
+              {label:"Fully Utilized",range:"≥ 90%", color:"#059669",bg:"#d1fae5",desc:"At or near full capacity"},
+              {label:"Optimal",       range:"70–89%",color:"#0891b2",bg:"#e0f7fa",desc:"Healthy utilization range"},
+              {label:"Under Util.",   range:"1–69%", color:"#ef4444",bg:"#fee2e2",desc:"Significant free capacity"},
+              {label:"Unallocated",   range:"0%",    color:"#94a3b8",bg:"#f1f5f9",desc:"No hours allocated"},
+              {label:"On Leave",      range:"—",     color:"#d97706",bg:"#fef9c3",desc:"Capacity reduced by leave"},
+            ].map(s=>(
+              <div key={s.label} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:8,border:"1px solid #f1f5f9",background:"#fafafa",flex:"1 1 150px"}}>
+                <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:700,color:s.color,background:s.bg,flexShrink:0}}>{s.label}</span>
+                <div>
+                  <p style={{margin:0,fontSize:12,fontWeight:700,color:"#0f172a"}}>{s.range}</p>
+                  <p style={{margin:0,fontSize:10,color:"#64748b"}}>{s.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <p style={{margin:0,fontSize:11,color:"#94a3b8",textAlign:"center"}}>
+          Acquaint Communications © 2026 · Team Allocation Platform
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function ReportsPage(){
   const {sb} = useAuth();
@@ -3071,11 +3466,24 @@ function ReportsPage(){
       </div>
 
       {/* Top section tabs */}
-      <div style={{display:"flex",gap:4,background:"#f1f5f9",borderRadius:12,padding:4,maxWidth:420}}>
-        {[["charts",TrendingUp,"Charts & Graphs"],["custom",ClipboardList,"Custom Reports"]].map(([v,Ic,l])=>(
+      <div style={{display:"flex",gap:4,background:"#f1f5f9",borderRadius:12,padding:4,maxWidth:560}}>
+        {[["fixed",FileText,"Fixed Reports"],["charts",TrendingUp,"Charts & Graphs"],["custom",ClipboardList,"Custom Reports"]].map(([v,Ic,l])=>(
           <button key={v} onClick={()=>setSection(v)} style={{flex:1,padding:"9px 14px",borderRadius:9,border:"none",background:section===v?"#fff":"transparent",fontWeight:section===v?700:500,fontSize:13,color:section===v?"#0f172a":"#64748b",cursor:"pointer",boxShadow:section===v?"0 1px 3px rgba(0,0,0,.1)":"none",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}><Ic size={14} strokeWidth={1.75}/>{l}</button>
         ))}
       </div>
+
+      {/* ── FIXED REPORTS SECTION ── */}
+      {section==="fixed"&&(
+        <FixedReportsSection
+          employees={realEmployees}
+          allocs={realAllocs}
+          contracts={realContracts}
+          clients={realClients}
+          HPM={HPM}
+          fmtLong={fmtLong}
+          allowedDepts={allowedDepts}
+        />
+      )}
 
       {/* ── CHARTS SECTION ── */}
       {section==="charts"&&(
