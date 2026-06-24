@@ -2880,9 +2880,9 @@ const exportMonthlyUtilization = (employees, allocs, month, dept, HPM) => {
 
     spacer();
 
-    // KPI row — 4 boxes across cols 0-7
+    // KPI row — 5 boxes across cols 0-9
     const kpiRow = Array(cols).fill(cell("",{noBorder:true}));
-    [[0,"Total Employees",rows.length],[2,"Total Allocated",totalAlloc+"h"],[4,"On Leave",onLeaveCount],[6,"Avg Utilization",avgUtil+"%"]].forEach(([ci,lbl,val])=>{
+    [[0,"Total Employees",rows.length],[2,"Total Allocated",totalAlloc+"h"],[4,"On Leave",onLeaveCount],[6,"Avg Utilization",avgUtil+"%"],[8,"Month",month]].forEach(([ci,lbl,val])=>{
       kpiRow[ci]=cell(`${lbl}
 ${val}`,{bold:true,sz:11,bg:"F8FAFC",align:"center",wrap:true});
     });
@@ -2911,7 +2911,7 @@ ${val}`,{bold:true,sz:11,bg:"F8FAFC",align:"center",wrap:true});
       setRow([
         cell(r.e.name,           {bg,align:"left"}),
         cell(r.e.department?.replace(" Department","")||"",{bg,align:"left"}),
-        cell(r.e.position||"",   {bg,align:"left"}),
+        cell(r.e.designation||"",{bg,align:"left"}),
         cell(r.onLeave?"—":r.allocated,{bg,align:"center"}),
         cell(r.effectiveHPM,     {bg,align:"center"}),
         cell(r.onLeave?"—":r.free,{bg,align:"center",fg:r.free===0?"94A3B8":"0F172A"}),
@@ -2973,6 +2973,7 @@ ${val}`,{bold:true,sz:11,bg:"F8FAFC",align:"center",wrap:true});
       {s:{r:0,c:0},e:{r:0,c:cols-1}},{s:{r:1,c:0},e:{r:1,c:cols-1}},
       {s:{r:3,c:0},e:{r:3,c:1}},{s:{r:3,c:2},e:{r:3,c:3}},
       {s:{r:3,c:4},e:{r:3,c:5}},{s:{r:3,c:6},e:{r:3,c:7}},
+      {s:{r:3,c:8},e:{r:3,c:9}},
     ];
     // find summary/legend merge rows dynamically
     const lastRow = rowNum-1;
@@ -3101,7 +3102,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
   const handlePDFDownload = () => {
     const headers = ["Employee","Department","Position","Allocated","Capacity","Free","Util %","Status","Leave Days","Hrs Deducted"];
     const rows = utilRows.map(r=>[
-      r.e.name, r.e.department?.replace(" Department","")||"", r.e.position||"",
+      r.e.name, r.e.department?.replace(" Department","")||"", r.e.designation||"",
       r.onLeave?"—":r.allocated+"h", r.effectiveHPM+"h",
       r.onLeave?"—":r.free+"h", r.onLeave?"—":r.pct+"%",
       r.status.label, r.leavedays||0, r.leaveDeduction||0,
@@ -3199,7 +3200,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
                     onMouseLeave={e=>e.currentTarget.style.background=i%2===0?"#fff":"#f8fafc"}>
                     <td style={{padding:"10px 13px",fontWeight:600,fontSize:13,color:"#0f172a",whiteSpace:"nowrap"}}>{r.e.name}</td>
                     <td style={{padding:"10px 13px",fontSize:13,color:"#64748b"}}>{r.e.department?.replace(" Department","")||"—"}</td>
-                    <td style={{padding:"10px 13px",fontSize:13,color:"#64748b",whiteSpace:"nowrap"}}>{r.e.position||"—"}</td>
+                    <td style={{padding:"10px 13px",fontSize:13,color:"#64748b",whiteSpace:"nowrap"}}>{r.e.designation||"—"}</td>
                     <td style={{padding:"10px 13px",textAlign:"center",fontSize:13,fontWeight:600,color:"#0f172a"}}>{r.onLeave?"—":r.allocated+"h"}</td>
                     <td style={{padding:"10px 13px",textAlign:"center",fontSize:13,color:"#64748b"}}>{r.effectiveHPM}h</td>
                     <td style={{padding:"10px 13px",textAlign:"center",fontSize:13,color:r.free===0?"#94a3b8":"#0f172a"}}>{r.onLeave?"—":r.free+"h"}</td>
