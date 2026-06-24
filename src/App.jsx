@@ -2799,9 +2799,9 @@ const getUtilStatus = (allocated, capacity, onLeave) => {
 };
 
 const loadXlsxStyle = (cb) => {
-  if(window.XLSXStyle){ cb(); return; }
+  if(window.XLSX){ cb(); return; }
   const s = document.createElement('script');
-  s.src = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
   s.onload = cb;
   document.head.appendChild(s);
 };
@@ -2826,7 +2826,7 @@ const cell = (v, opts={}) => ({
 
 const exportMonthlyUtilization = (employees, allocs, month, dept, HPM) => {
   loadXlsxStyle(()=>{
-    const XS = window.XLSXStyle;
+    const XS = window.XLSX;
     const rows = employees
       .map(e=>{
         const empAllocs = allocs.filter(a=>a.employee_id===e.id&&a.month===month);
@@ -3132,7 +3132,24 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
         </div>
 
         {/* Report title card */}
-        <Card style={{padding:0,overflow:"hidden"}}>
+        {selReport!=="utilization"&&(
+          <Card style={{padding:"40px",textAlign:"center"}}>
+            <div style={{width:48,height:48,borderRadius:12,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}>
+              <FileText size={24} color="#94a3b8" strokeWidth={1.75}/>
+            </div>
+            <p style={{margin:"0 0 6px",fontSize:16,fontWeight:700,color:"#0f172a"}}>
+              {FIXED_REPORT_TYPES.find(r=>r.id===selReport)?.title}
+            </p>
+            <p style={{margin:"0 0 20px",fontSize:13,color:"#64748b",lineHeight:1.6,maxWidth:400,marginLeft:"auto",marginRight:"auto"}}>
+              {FIXED_REPORT_TYPES.find(r=>r.id===selReport)?.desc}
+            </p>
+            <div style={{display:"inline-flex",alignItems:"center",gap:8,padding:"10px 20px",borderRadius:10,background:"#f8fafc",border:"1px solid #e2e8f0"}}>
+              <div style={{width:8,height:8,borderRadius:"50%",background:"#f59e0b"}}/>
+              <span style={{fontSize:13,color:"#64748b",fontWeight:500}}>Coming soon — this report is being built</span>
+            </div>
+          </Card>
+        )}
+        {selReport==="utilization"&&<Card style={{padding:0,overflow:"hidden"}}>
           <div style={{padding:"14px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div>
               <p style={{margin:0,fontWeight:700,fontSize:15,color:"#0f172a"}}>Monthly Utilization Report</p>
@@ -3197,7 +3214,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
               </tbody>
             </table>
           </div>
-        </Card>
+        </Card>}
 
         {/* Legend */}
         <Card style={{padding:"14px 18px"}}>
