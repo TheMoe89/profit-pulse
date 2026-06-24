@@ -3142,23 +3142,275 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
         </div>
 
         {/* Report title card */}
-        {selReport!=="utilization"&&(
-          <Card style={{padding:"40px",textAlign:"center"}}>
-            <div style={{width:48,height:48,borderRadius:12,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}>
-              <FileText size={24} color="#94a3b8" strokeWidth={1.75}/>
-            </div>
-            <p style={{margin:"0 0 6px",fontSize:16,fontWeight:700,color:"#0f172a"}}>
-              {FIXED_REPORT_TYPES.find(r=>r.id===selReport)?.title}
-            </p>
-            <p style={{margin:"0 0 20px",fontSize:13,color:"#64748b",lineHeight:1.6,maxWidth:400,marginLeft:"auto",marginRight:"auto"}}>
-              {FIXED_REPORT_TYPES.find(r=>r.id===selReport)?.desc}
-            </p>
-            <div style={{display:"inline-flex",alignItems:"center",gap:8,padding:"10px 20px",borderRadius:10,background:"#f8fafc",border:"1px solid #e2e8f0"}}>
-              <div style={{width:8,height:8,borderRadius:"50%",background:"#f59e0b"}}/>
-              <span style={{fontSize:13,color:"#64748b",fontWeight:500}}>Coming soon — this report is being built</span>
-            </div>
-          </Card>
-        )}
+
+        {/* ── Team Capacity Summary ── */}
+        {selReport==="capacity"&&(()=>{
+          const depts=["Creative Department","Client Servicing Department","Production Department","Planning Department"].filter(d=>!allowedDepts||allowedDepts.includes(d));
+          const rows=depts.map(dept=>{
+            const emps=employees.filter(e=>(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=selMonth))&&e.department===dept);
+            const totalCap=emps.reduce((s,e)=>{
+              const empAllocs=allocs.filter(a=>a.employee_id===e.id&&a.month===selMonth);
+              const ld=empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
+              return s+Math.max(0,HPM-ld);
+            },0);
+            const totalAlloc=allocs.filter(a=>emps.some(e=>e.id===a.employee_id)&&a.month===selMonth).reduce((s,a)=>s+(a.allocated_hours||0),0);
+            const onLeave=emps.filter(e=>allocs.some(a=>a.employee_id===e.id&&a.month===selMonth&&a.status==='On Leave')).length;
+            const pct=totalCap>0?Math.round((totalAlloc/totalCap)*100):0;
+            const st=getUtilStatus(totalAlloc,totalCap,false);
+            return{dept:dept.replace(" Department",""),headcount:emps.length,totalCap,totalAlloc,free:Math.max(0,totalCap-totalAlloc),pct,onLeave,st};
+          });
+          const totCap=rows.reduce((s,r)=>s+r.totalCap,0);
+          const totAlloc=rows.reduce((s,r)=>s+r.totalAlloc,0);
+          const avgPct=totCap>0?Math.round((totAlloc/totCap)*100):0;
+          return(
+            <Card style={{padding:0,overflow:"hidden"}}>
+              <div style={{padding:"14px 18px",borderBottom:"1px solid #f1f5f9"}}>
+                <p style={{margin:0,fontWeight:700,fontSize:15,color:"#0f172a"}}>Team Capacity Summary</p>
+                <p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>{fmtLong(selMonth)} · {deptLabel}</p>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",borderBottom:"1px solid #f1f5f9"}}>
+                {[{label:"Departments",value:rows.length,color:"#0f172a"},{label:"Total Headcount",value:rows.reduce((s,r)=>s+r.headcount,0),color:"#0f172a"},{label:"Total Capacity",value:totCap+"h",color:"#0f172a"},{label:"Avg Utilization",value:avgPct+"%",color:avgPct>=90?"#059669":avgPct>=70?"#0891b2":"#ef4444"}].map((s,i)=>(
+                  <div key={i} style={{padding:"13px 18px",borderRight:i<3?"1px solid #f1f5f9":"none"}}>
+                    <p style={{margin:0,fontSize:11,fontWeight:600,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".05em"}}>{s.label}</p>
+                    <p style={{margin:"3px 0 0",fontSize:20,fontWeight:800,color:s.color,lineHeight:1}}>{s.value}</p>
+                  </div>
+                ))}
+              </div>
+              <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead><tr style={{background:"#f8fafc"}}>
+                  {["Department","Headcount","On Leave","Total Capacity","Allocated","Free","Utilization","Status"].map((h,i)=>(
+                    <th key={h} style={{padding:"9px 13px",textAlign:i>=2?"center":"left",fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".04em",borderBottom:"1px solid #e2e8f0",whiteSpace:"nowrap"}}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>{rows.map((r,i)=>(
+                  <tr key={r.dept} style={{borderTop:i>0?"1px solid #f8fafc":"none",background:i%2===0?"#fff":"#f8fafc"}}>
+                    <td style={{padding:"10px 13px",fontWeight:700,fontSize:13,color:"#0f172a"}}>{r.dept}</td>
+                    <td style={{padding:"10px 13px",fontSize:13,color:"#0f172a",textAlign:"center"}}>{r.headcount}</td>
+                    <td style={{padding:"10px 13px",fontSize:13,color:r.onLeave>0?"#d97706":"#64748b",textAlign:"center",fontWeight:r.onLeave>0?700:400}}>{r.onLeave}</td>
+                    <td style={{padding:"10px 13px",fontSize:13,color:"#64748b",textAlign:"center"}}>{r.totalCap}h</td>
+                    <td style={{padding:"10px 13px",fontSize:13,fontWeight:600,color:"#0f172a",textAlign:"center"}}>{r.totalAlloc}h</td>
+                    <td style={{padding:"10px 13px",fontSize:13,color:"#64748b",textAlign:"center"}}>{r.free}h</td>
+                    <td style={{padding:"10px 13px",textAlign:"center"}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
+                        <div style={{width:48,height:4,borderRadius:99,background:"#f1f5f9",overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(r.pct,100)}%`,background:"#"+r.st.fgRGB,borderRadius:99}}/></div>
+                        <span style={{fontSize:12,fontWeight:700,color:"#"+r.st.fgRGB}}>{r.pct}%</span>
+                      </div>
+                    </td>
+                    <td style={{padding:"10px 13px",textAlign:"center"}}><span style={{padding:"2px 9px",borderRadius:999,fontSize:11,fontWeight:700,color:"#"+r.st.fgRGB,background:"#"+r.st.bgRGB}}>{r.st.label}</span></td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </Card>
+          );
+        })()}
+
+        {/* ── Client Allocation Report ── */}
+        {selReport==="client"&&(()=>{
+          const allowedEmps=employees.filter(e=>!allowedDepts||allowedDepts.includes(e.department));
+          const monthAllocs=allocs.filter(a=>a.month===selMonth&&(selDept==="all"||employees.find(e=>e.id===a.employee_id)?.department===selDept)&&allowedEmps.some(e=>e.id===a.employee_id)&&a.status!=="On Leave");
+          const clientMap={};
+          monthAllocs.forEach(a=>{
+            if(!clientMap[a.client_name]) clientMap[a.client_name]={name:a.client_name,hours:0,employees:new Set()};
+            clientMap[a.client_name].hours+=a.allocated_hours||0;
+            clientMap[a.client_name].employees.add(a.employee_id);
+          });
+          const rows=Object.values(clientMap).map(c=>({...c,employees:c.employees.size})).sort((a,b)=>b.hours-a.hours);
+          const totalHours=rows.reduce((s,r)=>s+r.hours,0);
+          return(
+            <Card style={{padding:0,overflow:"hidden"}}>
+              <div style={{padding:"14px 18px",borderBottom:"1px solid #f1f5f9"}}>
+                <p style={{margin:0,fontWeight:700,fontSize:15,color:"#0f172a"}}>Client Allocation Report</p>
+                <p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>{fmtLong(selMonth)} · {deptLabel}</p>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",borderBottom:"1px solid #f1f5f9"}}>
+                {[{label:"Active Clients",value:rows.length,color:"#0f172a"},{label:"Total Hours",value:totalHours+"h",color:"#0f172a"},{label:"Month",value:fmtLong(selMonth),color:"#0f172a"}].map((s,i)=>(
+                  <div key={i} style={{padding:"13px 18px",borderRight:i<2?"1px solid #f1f5f9":"none"}}>
+                    <p style={{margin:0,fontSize:11,fontWeight:600,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".05em"}}>{s.label}</p>
+                    <p style={{margin:"3px 0 0",fontSize:i===2?14:20,fontWeight:800,color:s.color,lineHeight:1}}>{s.value}</p>
+                  </div>
+                ))}
+              </div>
+              <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead><tr style={{background:"#f8fafc"}}>
+                  {["#","Client","Hours Allocated","% of Total","Employees"].map((h,i)=>(
+                    <th key={h} style={{padding:"9px 13px",textAlign:i>=2?"center":"left",fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".04em",borderBottom:"1px solid #e2e8f0"}}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>{rows.map((r,i)=>(
+                  <tr key={r.name} style={{borderTop:i>0?"1px solid #f8fafc":"none",background:i%2===0?"#fff":"#f8fafc"}}>
+                    <td style={{padding:"10px 13px",fontSize:12,color:"#94a3b8",fontWeight:600}}>{i+1}</td>
+                    <td style={{padding:"10px 13px",fontWeight:600,fontSize:13,color:"#0f172a"}}>{r.name||"—"}</td>
+                    <td style={{padding:"10px 13px",fontSize:13,fontWeight:700,color:"#0f172a",textAlign:"center"}}>{r.hours}h</td>
+                    <td style={{padding:"10px 13px",textAlign:"center"}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
+                        <div style={{width:60,height:4,borderRadius:99,background:"#f1f5f9",overflow:"hidden"}}><div style={{height:"100%",width:`${totalHours>0?Math.round((r.hours/totalHours)*100):0}%`,background:"#008A57",borderRadius:99}}/></div>
+                        <span style={{fontSize:12,fontWeight:700,color:"#008A57"}}>{totalHours>0?Math.round((r.hours/totalHours)*100):0}%</span>
+                      </div>
+                    </td>
+                    <td style={{padding:"10px 13px",fontSize:13,color:"#64748b",textAlign:"center"}}>{r.employees}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </Card>
+          );
+        })()}
+
+        {/* ── On Leave Report ── */}
+        {selReport==="leave"&&(()=>{
+          const leaveAllocs=allocs.filter(a=>a.status==="On Leave"&&a.month===selMonth&&(!allowedDepts||allowedDepts.includes(employees.find(e=>e.id===a.employee_id)?.department))&&(selDept==="all"||employees.find(e=>e.id===a.employee_id)?.department===selDept));
+          const rows=leaveAllocs.map(a=>{
+            const emp=employees.find(e=>e.id===a.employee_id);
+            return{name:emp?.name||a.employee_name,dept:emp?.department?.replace(" Department","")||"",designation:emp?.designation||"",from:a.leave_from,to:a.leave_to,days:a.leave_days||0,deduction:a.capacity_deduction||0,adjusted:Math.max(0,HPM-(a.capacity_deduction||0))};
+          }).sort((a,b)=>a.name.localeCompare(b.name));
+          const totalDays=rows.reduce((s,r)=>s+r.days,0);
+          const totalDeduction=rows.reduce((s,r)=>s+r.deduction,0);
+          return(
+            <Card style={{padding:0,overflow:"hidden"}}>
+              <div style={{padding:"14px 18px",borderBottom:"1px solid #f1f5f9"}}>
+                <p style={{margin:0,fontWeight:700,fontSize:15,color:"#0f172a"}}>On Leave Report</p>
+                <p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>{fmtLong(selMonth)} · {deptLabel}</p>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",borderBottom:"1px solid #f1f5f9"}}>
+                {[{label:"On Leave",value:rows.length,color:"#d97706"},{label:"Total Days",value:totalDays,color:"#d97706"},{label:"Hrs Deducted",value:totalDeduction+"h",color:"#d97706"},{label:"Month",value:fmtLong(selMonth),color:"#0f172a"}].map((s,i)=>(
+                  <div key={i} style={{padding:"13px 18px",borderRight:i<3?"1px solid #f1f5f9":"none"}}>
+                    <p style={{margin:0,fontSize:11,fontWeight:600,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".05em"}}>{s.label}</p>
+                    <p style={{margin:"3px 0 0",fontSize:i===3?14:20,fontWeight:800,color:s.color,lineHeight:1}}>{s.value}</p>
+                  </div>
+                ))}
+              </div>
+              {rows.length===0?<div style={{padding:"40px",textAlign:"center",color:"#94a3b8",fontSize:13}}>No employees on leave this month</div>:(
+              <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead><tr style={{background:"#f8fafc"}}>
+                  {["Employee","Department","Designation","Leave From","Leave To","Working Days","Hrs Deducted","Adjusted Capacity"].map((h,i)=>(
+                    <th key={h} style={{padding:"9px 13px",textAlign:i>=5?"center":"left",fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".04em",borderBottom:"1px solid #e2e8f0",whiteSpace:"nowrap"}}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>{rows.map((r,i)=>(
+                  <tr key={i} style={{borderTop:i>0?"1px solid #f8fafc":"none",background:i%2===0?"#fff":"#f8fafc"}}>
+                    <td style={{padding:"10px 13px",fontWeight:600,fontSize:13,color:"#0f172a"}}>{r.name}</td>
+                    <td style={{padding:"10px 13px",fontSize:13,color:"#64748b"}}>{r.dept}</td>
+                    <td style={{padding:"10px 13px",fontSize:13,color:"#64748b"}}>{r.designation||"—"}</td>
+                    <td style={{padding:"10px 13px",fontSize:13,color:"#0f172a"}}>{r.from||"—"}</td>
+                    <td style={{padding:"10px 13px",fontSize:13,color:"#0f172a"}}>{r.to||"—"}</td>
+                    <td style={{padding:"10px 13px",fontSize:13,fontWeight:700,color:"#d97706",textAlign:"center"}}>{r.days}</td>
+                    <td style={{padding:"10px 13px",fontSize:13,fontWeight:700,color:"#ef4444",textAlign:"center"}}>{r.deduction}h</td>
+                    <td style={{padding:"10px 13px",fontSize:13,fontWeight:700,color:"#008A57",textAlign:"center"}}>{r.adjusted}h</td>
+                  </tr>
+                ))}</tbody>
+              </table>)}
+            </Card>
+          );
+        })()}
+
+        {/* ── Contract Renewals Report ── */}
+        {selReport==="renewals"&&(()=>{
+          const today=new Date();
+          const in90=new Date(today); in90.setDate(in90.getDate()+90);
+          const rows=contracts.filter(c=>c.status==="Active"&&c.end_date).map(c=>{
+            const end=new Date(c.end_date);
+            const daysLeft=Math.ceil((end-today)/(1000*60*60*24));
+            return{...c,daysLeft,urgency:daysLeft<=30?"high":daysLeft<=60?"medium":"low"};
+          }).filter(c=>c.daysLeft<=90).sort((a,b)=>a.daysLeft-b.daysLeft);
+          return(
+            <Card style={{padding:0,overflow:"hidden"}}>
+              <div style={{padding:"14px 18px",borderBottom:"1px solid #f1f5f9"}}>
+                <p style={{margin:0,fontWeight:700,fontSize:15,color:"#0f172a"}}>Contract Renewals Report</p>
+                <p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>Contracts expiring within 90 days</p>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",borderBottom:"1px solid #f1f5f9"}}>
+                {[{label:"Expiring ≤ 30 days",value:rows.filter(r=>r.urgency==="high").length,color:"#ef4444"},{label:"Expiring 31–60 days",value:rows.filter(r=>r.urgency==="medium").length,color:"#d97706"},{label:"Expiring 61–90 days",value:rows.filter(r=>r.urgency==="low").length,color:"#0891b2"}].map((s,i)=>(
+                  <div key={i} style={{padding:"13px 18px",borderRight:i<2?"1px solid #f1f5f9":"none"}}>
+                    <p style={{margin:0,fontSize:11,fontWeight:600,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".05em"}}>{s.label}</p>
+                    <p style={{margin:"3px 0 0",fontSize:20,fontWeight:800,color:s.color,lineHeight:1}}>{s.value}</p>
+                  </div>
+                ))}
+              </div>
+              {rows.length===0?<div style={{padding:"40px",textAlign:"center",color:"#94a3b8",fontSize:13}}>No contracts expiring in the next 90 days</div>:(
+              <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead><tr style={{background:"#f8fafc"}}>
+                  {["Contract","Client","Value","End Date","Days Left","Urgency"].map((h,i)=>(
+                    <th key={h} style={{padding:"9px 13px",textAlign:i>=2?"center":"left",fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".04em",borderBottom:"1px solid #e2e8f0",whiteSpace:"nowrap"}}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>{rows.map((r,i)=>{
+                  const urgColor=r.urgency==="high"?"#ef4444":r.urgency==="medium"?"#d97706":"#0891b2";
+                  const urgBg=r.urgency==="high"?"#fee2e2":r.urgency==="medium"?"#fef9c3":"#e0f7fa";
+                  return(
+                  <tr key={r.id} style={{borderTop:i>0?"1px solid #f8fafc":"none",background:i%2===0?"#fff":"#f8fafc"}}>
+                    <td style={{padding:"10px 13px",fontWeight:600,fontSize:12,color:"#0f172a"}}>{r.contract_number||r.id}</td>
+                    <td style={{padding:"10px 13px",fontSize:13,color:"#0f172a",fontWeight:600}}>{r.client_name||r.cn}</td>
+                    <td style={{padding:"10px 13px",fontSize:13,fontWeight:700,color:"#0f172a",textAlign:"center"}}>SAR {(r.contract_value||r.cv||0).toLocaleString()}</td>
+                    <td style={{padding:"10px 13px",fontSize:13,color:"#0f172a",textAlign:"center"}}>{r.end_date||r.ed}</td>
+                    <td style={{padding:"10px 13px",textAlign:"center"}}>
+                      <span style={{fontSize:13,fontWeight:800,color:urgColor}}>{r.daysLeft}d</span>
+                    </td>
+                    <td style={{padding:"10px 13px",textAlign:"center"}}>
+                      <span style={{padding:"2px 9px",borderRadius:999,fontSize:11,fontWeight:700,color:urgColor,background:urgBg}}>{r.urgency==="high"?"Critical":r.urgency==="medium"?"Soon":"Upcoming"}</span>
+                    </td>
+                  </tr>);
+                })}</tbody>
+              </table>)}
+            </Card>
+          );
+        })()}
+
+        {/* ── Employee Cost vs Allocation ── */}
+        {selReport==="cost"&&(()=>{
+          const emps=employees.filter(e=>(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=selMonth))&&(!allowedDepts||allowedDepts.includes(e.department))&&(selDept==="all"||e.department===selDept));
+          const rows=emps.map(e=>{
+            const empAllocs=allocs.filter(a=>a.employee_id===e.id&&a.month===selMonth);
+            const allocated=empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
+            const leaveDeduction=empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
+            const effectiveHPM=Math.max(0,HPM-leaveDeduction);
+            const pct=effectiveHPM>0?Math.round((allocated/effectiveHPM)*100):0;
+            const mc=e.mc||e.monthly_cost||0;
+            const costRate=mc>0?(mc/30/8):0;
+            const billedValue=allocated*costRate*1.267;
+            const recovery=mc>0?Math.round((billedValue/mc)*100):0;
+            return{e,allocated,effectiveHPM,pct,mc,billedValue:Math.round(billedValue),recovery};
+          }).sort((a,b)=>b.recovery-a.recovery);
+          const totalCost=rows.reduce((s,r)=>s+r.mc,0);
+          const totalBilled=rows.reduce((s,r)=>s+r.billedValue,0);
+          const avgRecovery=totalCost>0?Math.round((totalBilled/totalCost)*100):0;
+          return(
+            <Card style={{padding:0,overflow:"hidden"}}>
+              <div style={{padding:"14px 18px",borderBottom:"1px solid #f1f5f9"}}>
+                <p style={{margin:0,fontWeight:700,fontSize:15,color:"#0f172a"}}>Employee Cost vs Allocation</p>
+                <p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>{fmtLong(selMonth)} · {deptLabel}</p>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",borderBottom:"1px solid #f1f5f9"}}>
+                {[{label:"Total Payroll",value:"SAR "+totalCost.toLocaleString(),color:"#0f172a"},{label:"Billed Value",value:"SAR "+totalBilled.toLocaleString(),color:"#008A57"},{label:"Avg Recovery",value:avgRecovery+"%",color:avgRecovery>=100?"#059669":avgRecovery>=70?"#d97706":"#ef4444"},{label:"Month",value:fmtLong(selMonth),color:"#0f172a"}].map((s,i)=>(
+                  <div key={i} style={{padding:"13px 18px",borderRight:i<3?"1px solid #f1f5f9":"none"}}>
+                    <p style={{margin:0,fontSize:11,fontWeight:600,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".05em"}}>{s.label}</p>
+                    <p style={{margin:"3px 0 0",fontSize:i===3?14:18,fontWeight:800,color:s.color,lineHeight:1}}>{s.value}</p>
+                  </div>
+                ))}
+              </div>
+              <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead><tr style={{background:"#f8fafc"}}>
+                  {["Employee","Department","Designation","Monthly Cost","Allocated","Util %","Billed Value","Cost Recovery"].map((h,i)=>(
+                    <th key={h} style={{padding:"9px 13px",textAlign:i>=3?"center":"left",fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".04em",borderBottom:"1px solid #e2e8f0",whiteSpace:"nowrap"}}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>{rows.map((r,i)=>{
+                  const recColor=r.recovery>=100?"#059669":r.recovery>=70?"#d97706":"#ef4444";
+                  const recBg=r.recovery>=100?"#d1fae5":r.recovery>=70?"#fef9c3":"#fee2e2";
+                  return(
+                  <tr key={r.e.id} style={{borderTop:i>0?"1px solid #f8fafc":"none",background:i%2===0?"#fff":"#f8fafc"}}>
+                    <td style={{padding:"10px 13px",fontWeight:600,fontSize:13,color:"#0f172a"}}>{r.e.name}</td>
+                    <td style={{padding:"10px 13px",fontSize:13,color:"#64748b"}}>{r.e.department?.replace(" Department","")||"—"}</td>
+                    <td style={{padding:"10px 13px",fontSize:13,color:"#64748b"}}>{r.e.designation||"—"}</td>
+                    <td style={{padding:"10px 13px",fontSize:13,fontWeight:600,color:"#0f172a",textAlign:"center"}}>SAR {r.mc.toLocaleString()}</td>
+                    <td style={{padding:"10px 13px",fontSize:13,fontWeight:600,color:"#0f172a",textAlign:"center"}}>{r.allocated}h</td>
+                    <td style={{padding:"10px 13px",fontSize:13,fontWeight:700,color:"#"+getUtilStatus(r.allocated,r.effectiveHPM,false).fgRGB,textAlign:"center"}}>{r.pct}%</td>
+                    <td style={{padding:"10px 13px",fontSize:13,fontWeight:600,color:"#008A57",textAlign:"center"}}>SAR {r.billedValue.toLocaleString()}</td>
+                    <td style={{padding:"10px 13px",textAlign:"center"}}><span style={{padding:"2px 9px",borderRadius:999,fontSize:11,fontWeight:700,color:recColor,background:recBg}}>{r.recovery}%</span></td>
+                  </tr>);
+                })}</tbody>
+              </table>
+            </Card>
+          );
+        })()}
         {selReport==="utilization"&&<Card style={{padding:0,overflow:"hidden"}}>
           <div style={{padding:"14px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div>
@@ -5298,11 +5550,24 @@ function SystemUsersPage(){
     await adminFetch(`users/${userId}`,'PUT',{password:newPassword});
   };
   const dbUpdateUser=async(id,payload)=>{const{data}=await sb.from('profiles').update(payload).eq('id',id).select().single();if(data)setUsers(p=>p.map(u=>u.id===id?{...u,...data}:u));};
-  const dbDeleteUser=async id=>{
-    // Delete from profiles (RLS allows admin)
+  const dbDeleteUser=async(id,email)=>{
+    // 1. Delete from Supabase Auth via admin REST API
+    try{ await adminFetch(`users/${id}`,'DELETE'); }
+    catch(e){ console.warn('Auth delete failed:',e.message); }
+    // 2. Delete from profiles table
     await sb.from('profiles').delete().eq('id',id);
-    // Also disable their session via admin RPC (requires SQL function in Supabase)
-    await sb.rpc('delete_auth_user',{user_id:id}).catch(()=>null);
+    // 3. Delete from role_permissions assigned_users
+    try{
+      const{data:rps}=await sb.from('role_permissions').select('id,assigned_users');
+      if(rps){
+        for(const rp of rps){
+          const arr=rp.assigned_users||[];
+          if(arr.includes(email)){
+            await sb.from('role_permissions').update({assigned_users:arr.filter(e=>e!==email)}).eq('id',rp.id);
+          }
+        }
+      }
+    }catch(e){ console.warn('Role cleanup failed:',e.message); }
     setUsers(p=>p.filter(u=>u.id!==id));
   };
   const [inviteEmail,setInviteEmail]   = useState("");
@@ -5409,7 +5674,7 @@ function SystemUsersPage(){
   const deleteUser=async u=>{
     if(u.role==="admin"){toast('Cannot delete admin users','warning');return;}
     const _uok=await confirm({title:'Remove user?',message:`${u.full_name||u.email} will lose access to Profit Pulse.`,danger:true,confirmLabel:'Remove'});
-      if(_uok){await dbDeleteUser(u.id);toast('User removed','success');}
+      if(_uok){await dbDeleteUser(u.id,u.email);toast('User removed','success');}
   };
   const resendInvite=async(email)=>{
     await adminFetch('invite','POST',{email});
