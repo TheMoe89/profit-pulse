@@ -3230,7 +3230,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
 }
 
 function ReportsPage(){
-  const {sb} = useAuth();
+  const {sb,allowedDepts} = useAuth();
   const [section,setSection]   = usePersistState("pp_reports_section","charts");
   const [chartTab,setChartTab] = usePersistState("pp_reports_chart_tab","profit-by-client");
   const [customTab,setCustomTab]= useState("revenue-profit-contract");
