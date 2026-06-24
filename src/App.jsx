@@ -3093,21 +3093,101 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
   const deptLabel = DEPT_LABELS[selDept]||selDept;
 
   const handleExcelDownload = () => {
-    exportMonthlyUtilization(
-      employees.filter(e=>(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=selMonth))&&(!allowedDepts||allowedDepts.includes(e.department))&&(selDept==="all"||e.department===selDept)),
-      allocs, selMonth, deptLabel, HPM
-    );
+    const filteredEmps = employees.filter(e=>(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=selMonth))&&(!allowedDepts||allowedDepts.includes(e.department))&&(selDept==="all"||e.department===selDept));
+    if(selReport==="utilization"){
+      exportMonthlyUtilization(filteredEmps, allocs, selMonth, deptLabel, HPM);
+    } else {
+      // Generic Excel for other reports — use exportXLSX
+      let wsData=[]; let sheetName="Report"; let filename="report.xlsx";
+      if(selReport==="capacity"){
+        const depts=["Creative Department","Client Servicing Department","Production Department","Planning Department"].filter(d=>!allowedDepts||allowedDepts.includes(d));
+        wsData=[["Team Capacity Summary"],[`Period: ${fmtLong(selMonth)} | ${deptLabel}`],[],["Department","Headcount","On Leave","Total Capacity (h)","Allocated (h)","Free (h)","Utilization %","Status"],...depts.map(dept=>{
+          const emps=employees.filter(e=>(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=selMonth))&&e.department===dept);
+          const totalCap=emps.reduce((s,e)=>{const ld=allocs.filter(a=>a.employee_id===e.id&&a.month===selMonth&&a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);return s+Math.max(0,HPM-ld);},0);
+          const totalAlloc=allocs.filter(a=>emps.some(e=>e.id===a.employee_id)&&a.month===selMonth).reduce((s,a)=>s+(a.allocated_hours||0),0);
+          const onLeave=emps.filter(e=>allocs.some(a=>a.employee_id===e.id&&a.month===selMonth&&a.status==='On Leave')).length;
+          const pct=totalCap>0?Math.round((totalAlloc/totalCap)*100):0;
+          return[dept.replace(" Department",""),emps.length,onLeave,totalCap,totalAlloc,Math.max(0,totalCap-totalAlloc),pct+"%",getUtilStatus(totalAlloc,totalCap,false).label];
+        })];
+        sheetName="Team Capacity"; filename=`Team_Capacity_${selMonth}.xlsx`;
+      } else if(selReport==="client"){
+        const allowedEmps=employees.filter(e=>!allowedDepts||allowedDepts.includes(e.department));
+        const monthAllocs=allocs.filter(a=>a.month===selMonth&&allowedEmps.some(e=>e.id===a.employee_id)&&(selDept==="all"||employees.find(e=>e.id===a.employee_id)?.department===selDept)&&a.status!=="On Leave");
+        const clientMap={};
+        monthAllocs.forEach(a=>{if(!clientMap[a.client_name])clientMap[a.client_name]={name:a.client_name,hours:0,employees:new Set()};clientMap[a.client_name].hours+=a.allocated_hours||0;clientMap[a.client_name].employees.add(a.employee_id);});
+        const rows=Object.values(clientMap).sort((a,b)=>b.hours-a.hours);
+        const totalH=rows.reduce((s,r)=>s+r.hours,0);
+        wsData=[["Client Allocation Report"],[`Period: ${fmtLong(selMonth)} | ${deptLabel}`],[],["#","Client","Hours Allocated","% of Total","Employees"],...rows.map((r,i)=>[i+1,r.name||"—",r.hours,totalH>0?Math.round((r.hours/totalH)*100)+"%":"0%",r.employees.size])];
+        sheetName="Client Allocation"; filename=`Client_Allocation_${selMonth}.xlsx`;
+      } else if(selReport==="leave"){
+        const leaveAllocs=allocs.filter(a=>a.status==="On Leave"&&a.month===selMonth&&(!allowedDepts||allowedDepts.includes(employees.find(e=>e.id===a.employee_id)?.department))&&(selDept==="all"||employees.find(e=>e.id===a.employee_id)?.department===selDept));
+        wsData=[["On Leave Report"],[`Period: ${fmtLong(selMonth)} | ${deptLabel}`],[],["Employee","Department","Designation","Leave From","Leave To","Working Days","Hrs Deducted","Adjusted Capacity"],...leaveAllocs.map(a=>{const emp=employees.find(e=>e.id===a.employee_id);return[emp?.name||a.employee_name,emp?.department?.replace(" Department","")||"",emp?.designation||"",a.leave_from||"—",a.leave_to||"—",a.leave_days||0,a.capacity_deduction||0,Math.max(0,HPM-(a.capacity_deduction||0))+"h"];})];
+        sheetName="On Leave"; filename=`On_Leave_${selMonth}.xlsx`;
+      } else if(selReport==="renewals"){
+        const today=new Date(); const in90=new Date(today); in90.setDate(in90.getDate()+90);
+        const rows=contracts.filter(c=>c.status==="Active"&&c.end_date).map(c=>({...c,daysLeft:Math.ceil((new Date(c.end_date)-today)/(1000*60*60*24))})).filter(c=>c.daysLeft<=90).sort((a,b)=>a.daysLeft-b.daysLeft);
+        wsData=[["Contract Renewals Report"],["Contracts expiring within 90 days"],[],["Contract","Client","Value (SAR)","End Date","Days Left","Urgency"],...rows.map(r=>[r.contract_number||r.id,r.client_name||r.cn,(r.contract_value||r.cv||0),r.end_date||r.ed,r.daysLeft,r.daysLeft<=30?"Critical":r.daysLeft<=60?"Soon":"Upcoming"])];
+        sheetName="Renewals"; filename=`Contract_Renewals.xlsx`;
+      } else if(selReport==="cost"){
+        wsData=[["Employee Cost vs Allocation"],[`Period: ${fmtLong(selMonth)} | ${deptLabel}`],[],["Employee","Department","Designation","Monthly Cost (SAR)","Allocated (h)","Util %","Billed Value (SAR)","Cost Recovery"],...filteredEmps.map(e=>{
+          const empAllocs=allocs.filter(a=>a.employee_id===e.id&&a.month===selMonth);
+          const allocated=empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
+          const ld=empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
+          const effHPM=Math.max(0,HPM-ld);
+          const pct=effHPM>0?Math.round((allocated/effHPM)*100):0;
+          const mc=e.mc||0; const billed=Math.round(allocated*(mc>0?mc/30/8:0)*1.267);
+          const rec=mc>0?Math.round((billed/mc)*100):0;
+          return[e.name,e.department?.replace(" Department","")||"",e.designation||"",mc,allocated,pct+"%",billed,rec+"%"];
+        })];
+        sheetName="Cost vs Allocation"; filename=`Cost_vs_Allocation_${selMonth}.xlsx`;
+      }
+      exportXLSX(wsData, sheetName, filename);
+    }
   };
 
   const handlePDFDownload = () => {
-    const headers = ["Employee","Department","Position","Allocated","Capacity","Free","Util %","Status","Leave Days","Hrs Deducted"];
-    const rows = utilRows.map(r=>[
-      r.e.name, r.e.department?.replace(" Department","")||"", r.e.designation||"",
-      r.onLeave?"—":r.allocated+"h", r.effectiveHPM+"h",
-      r.onLeave?"—":r.free+"h", r.onLeave?"—":r.pct+"%",
-      r.status.label, r.leavedays||0, r.leaveDeduction||0,
-    ]);
-    exportPDFTable(`Monthly Utilization Report — ${fmtLong(selMonth)} — ${deptLabel}`, headers, rows, `Utilization_${selMonth}_${deptLabel}.pdf`);
+    let title="", headers=[], rows=[], filename="report.pdf";
+    const filteredEmps=employees.filter(e=>(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=selMonth))&&(!allowedDepts||allowedDepts.includes(e.department))&&(selDept==="all"||e.department===selDept));
+    if(selReport==="utilization"){
+      title=`Monthly Utilization Report — ${fmtLong(selMonth)} — ${deptLabel}`;
+      headers=["Employee","Department","Designation","Allocated","Capacity","Free","Util %","Status","Leave Days","Hrs Deducted"];
+      rows=utilRows.map(r=>[r.e.name,r.e.department?.replace(" Department","")||"",r.e.designation||"",r.onLeave?"—":r.allocated+"h",r.effectiveHPM+"h",r.onLeave?"—":r.free+"h",r.onLeave?"—":r.pct+"%",r.status.label,r.leavedays||0,r.leaveDeduction||0]);
+      filename=`Utilization_${selMonth}_${deptLabel}.pdf`;
+    } else if(selReport==="capacity"){
+      title=`Team Capacity Summary — ${fmtLong(selMonth)} — ${deptLabel}`;
+      headers=["Department","Headcount","On Leave","Total Capacity","Allocated","Free","Util %","Status"];
+      const depts=["Creative Department","Client Servicing Department","Production Department","Planning Department"].filter(d=>!allowedDepts||allowedDepts.includes(d));
+      rows=depts.map(dept=>{const emps=employees.filter(e=>(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=selMonth))&&e.department===dept);const totalCap=emps.reduce((s,e)=>{const ld=allocs.filter(a=>a.employee_id===e.id&&a.month===selMonth&&a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);return s+Math.max(0,HPM-ld);},0);const totalAlloc=allocs.filter(a=>emps.some(e=>e.id===a.employee_id)&&a.month===selMonth).reduce((s,a)=>s+(a.allocated_hours||0),0);const onLeave=emps.filter(e=>allocs.some(a=>a.employee_id===e.id&&a.month===selMonth&&a.status==='On Leave')).length;const pct=totalCap>0?Math.round((totalAlloc/totalCap)*100):0;return[dept.replace(" Department",""),emps.length,onLeave,totalCap+"h",totalAlloc+"h",Math.max(0,totalCap-totalAlloc)+"h",pct+"%",getUtilStatus(totalAlloc,totalCap,false).label];});
+      filename=`Team_Capacity_${selMonth}.pdf`;
+    } else if(selReport==="client"){
+      title=`Client Allocation Report — ${fmtLong(selMonth)} — ${deptLabel}`;
+      headers=["#","Client","Hours Allocated","% of Total","Employees"];
+      const allowedEmps=employees.filter(e=>!allowedDepts||allowedDepts.includes(e.department));
+      const monthAllocs=allocs.filter(a=>a.month===selMonth&&allowedEmps.some(e=>e.id===a.employee_id)&&(selDept==="all"||employees.find(e=>e.id===a.employee_id)?.department===selDept)&&a.status!=="On Leave");
+      const clientMap={};monthAllocs.forEach(a=>{if(!clientMap[a.client_name])clientMap[a.client_name]={name:a.client_name,hours:0,emps:new Set()};clientMap[a.client_name].hours+=a.allocated_hours||0;clientMap[a.client_name].emps.add(a.employee_id);});
+      const cr=Object.values(clientMap).sort((a,b)=>b.hours-a.hours);const totalH=cr.reduce((s,r)=>s+r.hours,0);
+      rows=cr.map((r,i)=>[i+1,r.name||"—",r.hours+"h",totalH>0?Math.round((r.hours/totalH)*100)+"%":"0%",r.emps.size]);
+      filename=`Client_Allocation_${selMonth}.pdf`;
+    } else if(selReport==="leave"){
+      title=`On Leave Report — ${fmtLong(selMonth)} — ${deptLabel}`;
+      headers=["Employee","Department","Designation","Leave From","Leave To","Days","Hrs Deducted","Adj. Capacity"];
+      const leaveAllocs=allocs.filter(a=>a.status==="On Leave"&&a.month===selMonth&&(!allowedDepts||allowedDepts.includes(employees.find(e=>e.id===a.employee_id)?.department))&&(selDept==="all"||employees.find(e=>e.id===a.employee_id)?.department===selDept));
+      rows=leaveAllocs.map(a=>{const emp=employees.find(e=>e.id===a.employee_id);return[emp?.name||a.employee_name,emp?.department?.replace(" Department","")||"",emp?.designation||"",a.leave_from||"—",a.leave_to||"—",a.leave_days||0,a.capacity_deduction||0,Math.max(0,HPM-(a.capacity_deduction||0))+"h"];});
+      filename=`On_Leave_${selMonth}.pdf`;
+    } else if(selReport==="renewals"){
+      title="Contract Renewals Report — Expiring within 90 days";
+      headers=["Contract","Client","Value (SAR)","End Date","Days Left","Urgency"];
+      const today=new Date();
+      const renewRows=contracts.filter(c=>c.status==="Active"&&c.end_date).map(c=>({...c,daysLeft:Math.ceil((new Date(c.end_date)-today)/(1000*60*60*24))})).filter(c=>c.daysLeft<=90).sort((a,b)=>a.daysLeft-b.daysLeft);
+      rows=renewRows.map(r=>[r.contract_number||r.id,r.client_name||r.cn,(r.contract_value||r.cv||0).toLocaleString(),r.end_date||r.ed,r.daysLeft+"d",r.daysLeft<=30?"Critical":r.daysLeft<=60?"Soon":"Upcoming"]);
+      filename="Contract_Renewals.pdf";
+    } else if(selReport==="cost"){
+      title=`Employee Cost vs Allocation — ${fmtLong(selMonth)} — ${deptLabel}`;
+      headers=["Employee","Department","Designation","Monthly Cost","Allocated","Util %","Billed Value","Recovery"];
+      rows=filteredEmps.map(e=>{const empAllocs=allocs.filter(a=>a.employee_id===e.id&&a.month===selMonth);const allocated=empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);const ld=empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);const effHPM=Math.max(0,HPM-ld);const pct=effHPM>0?Math.round((allocated/effHPM)*100):0;const mc=e.mc||0;const billed=Math.round(allocated*(mc>0?mc/30/8:0)*1.267);return[e.name,e.department?.replace(" Department","")||"",e.designation||"","SAR "+mc.toLocaleString(),allocated+"h",pct+"%","SAR "+billed.toLocaleString(),mc>0?Math.round((billed/mc)*100)+"%":"—"];});
+      filename=`Cost_vs_Allocation_${selMonth}.pdf`;
+    }
+    exportPDFTable(title, headers, rows, filename);
   };
 
   return(
@@ -3240,7 +3320,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
                   <tr key={r.name} style={{borderTop:i>0?"1px solid #f8fafc":"none",background:i%2===0?"#fff":"#f8fafc"}}>
                     <td style={{padding:"10px 13px",fontSize:12,color:"#94a3b8",fontWeight:600}}>{i+1}</td>
                     <td style={{padding:"10px 13px",fontWeight:600,fontSize:13,color:"#0f172a"}}>{r.name||"—"}</td>
-                    <td style={{padding:"10px 13px",fontSize:13,fontWeight:700,color:"#0f172a",textAlign:"center"}}>{r.hours}h</td>
+                    <td style={{padding:"10px 13px",fontSize:13,fontWeight:700,color:"#0f172a",textAlign:"center"}}>{Math.round(r.hours*10)/10}h</td>
                     <td style={{padding:"10px 13px",textAlign:"center"}}>
                       <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
                         <div style={{width:60,height:4,borderRadius:99,background:"#f1f5f9",overflow:"hidden"}}><div style={{height:"100%",width:`${totalHours>0?Math.round((r.hours/totalHours)*100):0}%`,background:"#008A57",borderRadius:99}}/></div>
@@ -3478,8 +3558,8 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
           </div>
         </Card>}
 
-        {/* Legend */}
-        <Card style={{padding:"14px 18px"}}>
+        {/* Legend — only for utilization */}
+        {selReport==="utilization"&&<Card style={{padding:"14px 18px"}}>
           <p style={{margin:"0 0 10px",fontSize:12,fontWeight:700,color:"#0f172a"}}>Utilization Status Reference</p>
           <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
             {[
@@ -3498,7 +3578,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
               </div>
             ))}
           </div>
-        </Card>
+        </Card>}
 
         <p style={{margin:0,fontSize:11,color:"#94a3b8",textAlign:"center"}}>
           Acquaint Communications © 2026 · Team Allocation Platform
