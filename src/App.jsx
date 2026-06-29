@@ -2311,6 +2311,9 @@ function AllocationsPage(){
   const [filterCli,setFilterCli] = useState("all");
   const [filterDept,setFilterDept]=useState("all");
   const [filterCat,setFilterCat] = useState("all");
+  const [fromMonth,setFromMonth]  = useState("");
+  const [toMonth,setToMonth]      = useState("");
+  const [showDuration,setShowDuration]=useState(false);
   const [chartMonth,setChartMonth]=usePersistState("pp_alloc_month","2026-04");
   const [modalOpen,setModalOpen] = useState(false);
   const [editing,setEditing]     = useState(null);
@@ -2596,9 +2599,53 @@ function AllocationsPage(){
           <Sel value={filterCli} onChange={setFilterCli} options={[{v:"all",l:"All Clients"},...[...new Set(allocs.map(a=>a.client_name))].filter(Boolean).map(c=>({v:c,l:c}))]} style={{flex:1,minWidth:140}}/>
           <Sel value={filterDept} onChange={setFilterDept} options={[{v:"all",l:"All Departments"},...(allowedDepts||DEPTS).map(d=>({v:d,l:d.replace(" Department","")}))]  } style={{flex:1,minWidth:150}}/>
           <Sel value={filterCat} onChange={setFilterCat} options={[{v:"all",l:"All Categories"},{v:"Retainer",l:"Retainer"},{v:"Project",l:"Project"},{v:"Adhoc",l:"Adhoc"}]} style={{flex:1,minWidth:130}}/>
-          <Btn variant="outline" size="sm" onClick={()=>{const rows=sorted.map(a=>[a.employee_name,a.client_name,a.allocated_hours,a.month,a.status]);exportXLSX([["Employee","Client","Hours","Month","Status"],...rows],"Allocations","allocations.xlsx");}} style={{gap:6,flexShrink:0}}><Download size={13} strokeWidth={1.75}/>Export</Btn>
+          <Btn variant="outline" size="sm" onClick={()=>setShowDuration(v=>!v)} style={{gap:6,flexShrink:0,background:showDuration?"#f0fdf4":"",borderColor:showDuration?"#008A57":"",color:showDuration?"#008A57":""}}><Calendar size={13} strokeWidth={1.75}/>Duration Export</Btn>
         </div>
       </div>
+
+      {/* ── Duration Export Panel ─────────────────────────────────── */}
+      {showDuration&&(
+        <div style={{background:"#f0fdf4",border:"1px solid #a7f3d0",borderRadius:12,padding:"16px 18px",display:"flex",flexDirection:"column",gap:12}}>
+          <div>
+            <p style={{margin:0,fontWeight:700,fontSize:13,color:"#0f172a"}}>Duration Export</p>
+            <p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>Select a month range to export a formatted 2-sheet report</p>
+          </div>
+          <div style={{display:"flex",gap:10,alignItems:"flex-end",flexWrap:"wrap"}}>
+            <div>
+              <p style={{margin:"0 0 5px",fontSize:11,fontWeight:600,color:"#64748b",textTransform:"uppercase",letterSpacing:".05em"}}>From</p>
+              <Sel value={fromMonth} onChange={setFromMonth} options={[{v:"",l:"Select month"},...MONTHS.map(m=>({v:m,l:fmtLong(m)}))]} style={{minWidth:155}}/>
+            </div>
+            <div>
+              <p style={{margin:"0 0 5px",fontSize:11,fontWeight:600,color:"#64748b",textTransform:"uppercase",letterSpacing:".05em"}}>To</p>
+              <Sel value={toMonth} onChange={setToMonth} options={[{v:"",l:"Select month"},...MONTHS.filter(m=>!fromMonth||m>=fromMonth).map(m=>({v:m,l:fmtLong(m)}))]} style={{minWidth:155}}/>
+            </div>
+            <div>
+              <p style={{margin:"0 0 5px",fontSize:11,fontWeight:600,color:"#64748b",textTransform:"uppercase",letterSpacing:".05em"}}>Employee</p>
+              <Sel value={filterEmp} onChange={setFilterEmp} options={[{v:"all",l:"All Employees"},...[...new Set((realEmps).map(e=>e.id))].map(id=>{const e=(realEmps).find(x=>x.id===id);return{v:id,l:e?.name||id};})]} style={{minWidth:175}}/>
+            </div>
+            <div>
+              <p style={{margin:"0 0 5px",fontSize:11,fontWeight:600,color:"#64748b",textTransform:"uppercase",letterSpacing:".05em"}}>Department</p>
+              <Sel value={filterDept} onChange={setFilterDept} options={[{v:"all",l:"All Departments"},...(allowedDepts||DEPTS).map(d=>({v:d,l:d.replace(" Department","")}))]  } style={{minWidth:155}}/>
+            </div>
+            <Btn variant="primary" size="sm" disabled={!fromMonth||!toMonth}
+              onClick={()=>{
+                const rangeMonths=MONTHS.filter(m=>m>=fromMonth&&m<=toMonth);
+                const fa=allocs.filter(a=>rangeMonths.includes(a.month)&&(filterEmp==="all"||a.employee_id===filterEmp)&&(filterDept==="all"||realEmps.find(e=>e.id===a.employee_id)?.department===filterDept));
+                const dl=filterDept==="all"?"All Departments":filterDept.replace(" Department","");
+                const el=filterEmp==="all"?"All Employees":(realEmps.find(e=>e.id===filterEmp)?.name||"");
+                exportDurationReport(fa,realEmps,fromMonth,toMonth,rangeMonths,dl,el,HPM);
+              }}
+              style={{gap:6,alignSelf:"flex-end"}}>
+              <Download size={13} strokeWidth={1.75}/>Download Report
+            </Btn>
+          </div>
+          {fromMonth&&toMonth&&(()=>{
+            const rm=MONTHS.filter(m=>m>=fromMonth&&m<=toMonth);
+            const cnt=allocs.filter(a=>rm.includes(a.month)&&(filterEmp==="all"||a.employee_id===filterEmp)&&(filterDept==="all"||realEmps.find(e=>e.id===a.employee_id)?.department===filterDept)).length;
+            return <p style={{margin:0,fontSize:12,color:"#008A57",fontWeight:600}}>{rm.length} month{rm.length!==1?"s":""} selected · {cnt} allocation entries will be exported</p>;
+          })()}
+        </div>
+      )}
 
       {/* ── Grouped by Month ─────────────────────────────────────── */}
       <div style={{display:"flex",flexDirection:"column",gap:10,marginTop:4}}>
@@ -2833,21 +2880,37 @@ const cell = (v, opts={}) => ({
   }
 });
 
-const exportMonthlyUtilization = (employees, allocs, month, dept, HPM) => {
+const exportMonthlyUtilization = (employees, allocs, month, dept, HPM, rangeMonthsArg, fromM, toM) => {
   loadXlsxStyle(()=>{
     const XS = window.XLSX;
+    const isRange = !!(rangeMonthsArg && rangeMonthsArg.length > 1);
     const rows = employees
       .map(e=>{
-        const empAllocs = allocs.filter(a=>a.employee_id===e.id&&a.month===month);
-        const allocated = empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
-        const leaveDeduction = empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
-        const effectiveHPM = Math.max(0,HPM-leaveDeduction);
-        const free = Math.max(0,effectiveHPM-allocated);
-        const pct = effectiveHPM>0?Math.round((allocated/effectiveHPM)*100):0;
-        const onLeave = empAllocs.some(a=>a.status==='On Leave');
-        const leavedays = empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(a.leave_days||0),0);
-        const status = getUtilStatus(allocated,effectiveHPM,onLeave);
-        return {e,allocated,effectiveHPM,free,pct,onLeave,leavedays,leaveDeduction,status};
+        if(!isRange){
+          const empAllocs = allocs.filter(a=>a.employee_id===e.id&&a.month===month);
+          const allocated = empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
+          const leaveDeduction = empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
+          const effectiveHPM = Math.max(0,HPM-leaveDeduction);
+          const free = Math.max(0,effectiveHPM-allocated);
+          const pct = effectiveHPM>0?Math.round((allocated/effectiveHPM)*100):0;
+          const onLeave = empAllocs.some(a=>a.status==='On Leave');
+          const leavedays = empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(a.leave_days||0),0);
+          const status = getUtilStatus(allocated,effectiveHPM,onLeave);
+          return {e,allocated,effectiveHPM,free,pct,onLeave,leavedays,leaveDeduction,status};
+        } else {
+          let totalAlloc=0,totalCap=0,totalLeave=0;
+          rangeMonthsArg.forEach(m=>{
+            const ea=allocs.filter(a=>a.employee_id===e.id&&a.month===m);
+            totalAlloc+=ea.reduce((s,a)=>s+(a.allocated_hours||0),0);
+            const ld=ea.filter(a=>a.status==="On Leave").reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
+            totalCap+=Math.max(0,HPM-ld); totalLeave+=ld;
+          });
+          const n=rangeMonthsArg.length||1;
+          const avgAlloc=Math.round(totalAlloc/n); const avgCap=Math.round(totalCap/n);
+          const avgPct=totalCap>0?Math.round((totalAlloc/totalCap)*100):0;
+          const status=getUtilStatus(avgAlloc,avgCap,false);
+          return {e,allocated:avgAlloc,effectiveHPM:avgCap,free:Math.max(0,avgCap-avgAlloc),pct:avgPct,onLeave:false,leavedays:n,leaveDeduction:Math.round(totalLeave/n),status,isRange:true,totalAlloc,n};
+        }
       })
       .sort((a,b)=>(STATUS_ORDER_MAP[a.status.label]??5)-(STATUS_ORDER_MAP[b.status.label]??5));
 
@@ -2872,11 +2935,12 @@ const exportMonthlyUtilization = (employees, allocs, month, dept, HPM) => {
     const spacer = () => { setRow(Array(cols).fill(cell("",{noBorder:true}))); };
 
     // Title row
-    mergeRow("MONTHLY UTILIZATION REPORT",{sz:16,bold:true,fg:"FFFFFF",bg:"008A57",align:"center"});
+    mergeRow(isRange?"UTILIZATION PERIOD AVERAGE REPORT":"MONTHLY UTILIZATION REPORT",{sz:16,bold:true,fg:"FFFFFF",bg:"008A57",align:"center"});
 
     // Meta row
     const dateStr = new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
-    mergeRow(`Period: ${month}   |   ${dept}   |   Generated: ${dateStr}`,{sz:10,fg:"64748B",bg:"F0FDF4",align:"center",italic:true});
+    const periodLabel=isRange?`${fromM} to ${toM} (${rangeMonthsArg.length}-month average)`:month;
+    mergeRow(`Period: ${periodLabel}   |   ${dept}   |   Generated: ${dateStr}`,{sz:10,fg:"64748B",bg:"F0FDF4",align:"center",italic:true});
 
     spacer();
 
@@ -2986,9 +3050,10 @@ ${val}`,{bold:true,sz:11,bg:"F8FAFC",align:"center",wrap:true});
     ws['!ref']=XS.utils.encode_range({r:0,c:0},{r:rowNum-1,c:cols-1});
 
     const wb=XS.utils.book_new();
-    XS.utils.book_append_sheet(wb,ws,"Monthly Utilization");
+    XS.utils.book_append_sheet(wb,ws,isRange?"Period Avg":"Monthly Utilization");
     const deptLabel=dept==="All Departments"?"All":dept.replace(" Department","");
-    XS.writeFile(wb,`Utilization_Report_${month.replace(" ","_")}_${deptLabel}.xlsx`);
+    const outFile=isRange?`Utilization_${(fromM||month).replace(" ","_")}_to_${(toM||month).replace(" ","_")}_${deptLabel}.xlsx`:`Utilization_Report_${month.replace(" ","_")}_${deptLabel}.xlsx`;
+    XS.writeFile(wb,outFile);
   });
 };
 
@@ -3015,7 +3080,8 @@ const exportTeamCapacity = (employees, allocs, month, dept, HPM, allowedDepts) =
     const spacer=()=>{setRow(Array(cols).fill(cell("",{noBorder:true})));};
     const dateStr=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
     mergeRow("TEAM CAPACITY SUMMARY",{sz:16,bold:true,fg:"FFFFFF",bg:"008A57",align:"center"});
-    mergeRow(`Period: ${month}   |   ${dept}   |   Generated: ${dateStr}`,{sz:10,fg:"64748B",bg:"F0FDF4",align:"center",italic:true});
+    const periodLabel=isRange?`${fromM} to ${toM} (${rangeMonthsArg.length}-month average)`:month;
+    mergeRow(`Period: ${periodLabel}   |   ${dept}   |   Generated: ${dateStr}`,{sz:10,fg:"64748B",bg:"F0FDF4",align:"center",italic:true});
     spacer();
     const kpiRow=Array(cols).fill(cell("",{noBorder:true}));
     [[0,"Departments",rows.length],[2,"Total Headcount",rows.reduce((s,r)=>s+r.headcount,0)],[4,"Total Capacity",totCap+"h"],[6,"Avg Utilization",avgPct+"%"]].forEach(([ci,lbl,val])=>{kpiRow[ci]=cell(`${lbl}
@@ -3059,7 +3125,8 @@ const exportClientAllocation = (employees, allocs, month, dept, allowedDepts, se
     const spacer=()=>{setRow(Array(cols).fill(cell("",{noBorder:true})));};
     const dateStr=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
     mergeRow("CLIENT ALLOCATION REPORT",{sz:16,bold:true,fg:"FFFFFF",bg:"008A57",align:"center"});
-    mergeRow(`Period: ${month}   |   ${dept}   |   Generated: ${dateStr}`,{sz:10,fg:"64748B",bg:"F0FDF4",align:"center",italic:true});
+    const periodLabel=isRange?`${fromM} to ${toM} (${rangeMonthsArg.length}-month average)`:month;
+    mergeRow(`Period: ${periodLabel}   |   ${dept}   |   Generated: ${dateStr}`,{sz:10,fg:"64748B",bg:"F0FDF4",align:"center",italic:true});
     spacer();
     const kpiRow=Array(cols).fill(cell("",{noBorder:true}));
     kpiRow[0]=cell(`Active Clients
@@ -3105,7 +3172,8 @@ const exportOnLeaveReport = (employees, allocs, month, dept, HPM, allowedDepts, 
     const spacer=()=>{setRow(Array(cols).fill(cell("",{noBorder:true})));};
     const dateStr=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
     mergeRow("ON LEAVE REPORT",{sz:16,bold:true,fg:"FFFFFF",bg:"008A57",align:"center"});
-    mergeRow(`Period: ${month}   |   ${dept}   |   Generated: ${dateStr}`,{sz:10,fg:"64748B",bg:"F0FDF4",align:"center",italic:true});
+    const periodLabel=isRange?`${fromM} to ${toM} (${rangeMonthsArg.length}-month average)`:month;
+    mergeRow(`Period: ${periodLabel}   |   ${dept}   |   Generated: ${dateStr}`,{sz:10,fg:"64748B",bg:"F0FDF4",align:"center",italic:true});
     spacer();
     const kpiRow=Array(cols).fill(cell("",{noBorder:true}));
     [[0,"Employees On Leave",rows.length],[2,"Total Leave Days",totalDays],[4,"Total Hrs Deducted",totalDed+"h"],[6,"Month",month]].forEach(([ci,lbl,val])=>{kpiRow[ci]=cell(`${lbl}
@@ -3206,7 +3274,8 @@ const exportCostAllocation = (employees, allocs, month, dept, HPM) => {
     const spacer=()=>{setRow(Array(cols).fill(cell("",{noBorder:true})));};
     const dateStr=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
     mergeRow("EMPLOYEE COST VS ALLOCATION",{sz:16,bold:true,fg:"FFFFFF",bg:"008A57",align:"center"});
-    mergeRow(`Period: ${month}   |   ${dept}   |   Generated: ${dateStr}`,{sz:10,fg:"64748B",bg:"F0FDF4",align:"center",italic:true});
+    const periodLabel=isRange?`${fromM} to ${toM} (${rangeMonthsArg.length}-month average)`:month;
+    mergeRow(`Period: ${periodLabel}   |   ${dept}   |   Generated: ${dateStr}`,{sz:10,fg:"64748B",bg:"F0FDF4",align:"center",italic:true});
     spacer();
     const kpiRow=Array(cols).fill(cell("",{noBorder:true}));
     [[0,"Total Payroll","SAR "+totalCost.toLocaleString()],[2,"Billed Value","SAR "+totalBilled.toLocaleString()],[4,"Avg Recovery",avgRec+"%"],[6,"Month",month]].forEach(([ci,lbl,val])=>{kpiRow[ci]=cell(`${lbl}
@@ -3233,6 +3302,78 @@ ${val}`,{bold:true,sz:11,bg:"F8FAFC",align:"center",wrap:true});});
     ws['!ref']=XS.utils.encode_range({r:0,c:0},{r:rowNum-1,c:cols-1});
     const wb=XS.utils.book_new();XS.utils.book_append_sheet(wb,ws,"Cost vs Allocation");
     XS.writeFile(wb,`Cost_vs_Allocation_${month.replace(" ","_")}.xlsx`);
+  });
+};
+
+const exportDurationReport = (filteredAllocs, employees, fromMonth, toMonth, rangeMonths, deptLabel, empLabel, HPM) => {
+  loadXlsxStyle(()=>{
+    const XS = window.XLSX;
+    const period = fromMonth===toMonth ? fromMonth : fromMonth+" to "+toMonth;
+    const dateStr = new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"});
+    const filterLabel = empLabel && empLabel!=="All Employees" ? empLabel : deptLabel;
+    const BORDER = {top:{style:"thin",color:{rgb:"E2E8F0"}},bottom:{style:"thin",color:{rgb:"E2E8F0"}},left:{style:"thin",color:{rgb:"E2E8F0"}},right:{style:"thin",color:{rgb:"E2E8F0"}}};
+    const W="FFFFFF",LG="F8FAFC";
+    function cx(v,o={}){return{v,t:typeof v==="number"?"n":"s",s:{font:{name:"Calibri",sz:o.sz||10,bold:o.bold||false,color:{rgb:o.fg||"0F172A"},italic:o.italic||false},alignment:{horizontal:o.align||"left",vertical:"center",wrapText:o.wrap||false},fill:{fgColor:{rgb:o.bg||W},patternType:"solid"},border:o.noBorder?{}:BORDER}};}
+    function getSt(total,hpm){const p=hpm>0?Math.round((total/hpm)*100):0;if(p===0)return{label:"Unallocated",fg:"475569",bg:"F1F5F9"};if(p>=90)return{label:"Fully Utilized",fg:"065F46",bg:"D1FAE5"};if(p>=70)return{label:"Optimal",fg:"0E7490",bg:"E0F7FA"};return{label:"Under Util.",fg:"991B1B",bg:"FEE2E2"};}
+    const LGND=[["Fully Utilized",">=90%","At or near full capacity","065F46","D1FAE5"],["Optimal","70-89%","Healthy utilization range","0E7490","E0F7FA"],["Under Util.","1-69%","Significant free capacity","991B1B","FEE2E2"],["Unallocated","0%","No hours allocated","475569","F1F5F9"],["On Leave","--","Capacity reduced by leave","92400E","FEF9C3"]];
+    const sorted=[...filteredAllocs].sort((a,b)=>(a.employee_name||"").localeCompare(b.employee_name||"")||a.month.localeCompare(b.month));
+    const groups=[];let gi=0;
+    while(gi<sorted.length){const key=sorted[gi].employee_name+"||"+sorted[gi].month;let gj=gi,gtot=0;while(gj<sorted.length&&sorted[gj].employee_name+"||"+sorted[gj].month===key){gtot+=sorted[gj].allocated_hours||0;gj++;}const st=getSt(gtot,HPM);groups.push({startIdx:gi,count:gj-gi,total:gtot,st});gi=gj;}
+    const empMap={};sorted.forEach(a=>{if(!empMap[a.employee_name])empMap[a.employee_name]={name:a.employee_name,dept:employees.find(e=>e.id===a.employee_id)?.department?.replace(" Department","")||"",months:{}};empMap[a.employee_name].months[a.month]=(empMap[a.employee_name].months[a.month]||0)+(a.allocated_hours||0);});
+    const sumRows=Object.values(empMap);
+    const totHrs=sorted.reduce((s,a)=>s+(a.allocated_hours||0),0);
+
+    // ── Sheet 1: Detail ──
+    const C1=7;const ws1={};let r1=0;
+    const sr1=rd=>{rd.forEach((c,ci)=>{ws1[XS.utils.encode_cell({r:r1,c:ci})]=c;});r1++;};
+    const mg1=(v,o)=>{const row=Array(C1).fill(cx("",{bg:o.bg||W,noBorder:true}));row[0]=cx(v,o);sr1(row);};
+    const sp1=()=>sr1(Array(C1).fill(cx("",{noBorder:true})));
+    mg1("ALLOCATION DETAIL REPORT",{sz:16,bold:true,fg:"FFFFFF",bg:"008A57",align:"center"});
+    mg1("Period: "+period+"   |   "+filterLabel+"   |   Generated: "+dateStr,{sz:10,fg:"64748B",bg:"F0FDF4",align:"center",italic:true});
+    sp1();
+    const k1=Array(C1).fill(cx("",{noBorder:true}));
+    [[0,"Total Entries",sorted.length],[2,"Total Hours",totHrs+"h"],[4,"Employees",[...new Set(sorted.map(a=>a.employee_name))].length],[6,"Period",period]].forEach(([ci,l,v])=>{k1[ci]=cx(l+"\n"+v,{bold:true,sz:11,bg:"F8FAFC",align:"center",wrap:true});});
+    sr1(k1);sp1();
+    sr1(["Employee","Department","Client","Month","Hours","Month Total","Status"].map((h,i)=>cx(h,{bold:true,fg:"FFFFFF",bg:"0F172A",align:i<=1?"left":"center"})));
+    const HR1=6;const m1=[];
+    sorted.forEach((a,i)=>{const bg=i%2===0?W:LG;const emp=employees.find(e=>e.id===a.employee_id);sr1([cx(a.employee_name||"",{bold:true,bg}),cx(emp?.department?.replace(" Department","")||"",{fg:"475569",bg}),cx(a.client_name||"",{bg}),cx(a.month,{align:"center",bg}),cx((a.allocated_hours||0)+"h",{align:"center",bg}),cx("",{bg:"F0FDF4"}),cx("",{bg})]);});
+    groups.forEach(g=>{const es=HR1+g.startIdx+1;const ee=es+g.count-1;ws1[XS.utils.encode_cell({r:es-1,c:5})]=cx(g.total+"h",{bold:true,fg:"008A57",bg:"F0FDF4",align:"center"});ws1[XS.utils.encode_cell({r:es-1,c:6})]=cx(g.st.label,{bold:true,fg:g.st.fg,bg:g.st.bg,align:"center"});if(g.count>1){m1.push({s:{r:es-1,c:5},e:{r:ee-1,c:5}});m1.push({s:{r:es-1,c:6},e:{r:ee-1,c:6}});}});
+    sp1();mg1("SUMMARY",{sz:11,bold:true,fg:"FFFFFF",bg:"008A57",align:"center"});
+    [["Total Entries",sorted.length],["Total Hours",totHrs+"h"],["Unique Employees",[...new Set(sorted.map(a=>a.employee_name))].length],["Unique Clients",[...new Set(sorted.map(a=>a.client_name))].length],["Period",period]].forEach(([l,v],i)=>{const row=Array(C1).fill(cx("",{noBorder:true}));row[0]=cx(l,{bold:true,bg:i%2===0?"F8FAFC":W});row[1]=cx(String(v),{bold:true,fg:"008A57",align:"center",bg:W});sr1(row);});
+    sp1();mg1("UTILIZATION STATUS REFERENCE",{sz:11,bold:true,fg:"FFFFFF",bg:"0F172A",align:"center"});
+    const lhr1=Array(C1).fill(cx("",{bg:"F1F5F9",noBorder:true}));lhr1[0]=cx("Status",{bold:true,bg:"F1F5F9",align:"center"});lhr1[1]=cx("Range",{bold:true,bg:"F1F5F9"});lhr1[2]=cx("Description",{bold:true,bg:"F1F5F9"});sr1(lhr1);
+    LGND.forEach(([l,rng,d,fg,bg],i)=>{const row=Array(C1).fill(cx("",{bg:i%2===0?"F8FAFC":W,noBorder:true}));row[0]=cx(l,{bold:true,fg,bg,align:"center"});row[1]=cx(rng,{bold:true,bg:i%2===0?"F8FAFC":W});row[2]=cx(d,{fg:"64748B",bg:i%2===0?"F8FAFC":W});sr1(row);});
+    sp1();mg1("Acquaint Communications 2026 - Team Allocation Platform - Confidential",{sz:9,fg:"94A3B8",align:"center",italic:true,noBorder:true});
+    ws1["!merges"]=[{s:{r:0,c:0},e:{r:0,c:C1-1}},{s:{r:1,c:0},e:{r:1,c:C1-1}},{s:{r:3,c:0},e:{r:3,c:1}},{s:{r:3,c:2},e:{r:3,c:3}},{s:{r:3,c:4},e:{r:3,c:5}},{s:{r:3,c:6},e:{r:3,c:C1-1}},...m1];
+    ws1["!cols"]=[{wch:28},{wch:18},{wch:30},{wch:13},{wch:10},{wch:13},{wch:16}];
+    ws1["!rows"]=[{hpt:28},{hpt:18},{hpt:6},{hpt:36},{hpt:6},...Array(sorted.length+30).fill({hpt:18})];
+    ws1["!ref"]=XS.utils.encode_range({r:0,c:0},{r:r1-1,c:C1-1});
+
+    // ── Sheet 2: Monthly Summary ──
+    const C2=2+rangeMonths.length+1;const ws2={};let r2=0;
+    const sr2=rd=>{rd.forEach((c,ci)=>{ws2[XS.utils.encode_cell({r:r2,c:ci})]=c;});r2++;};
+    const mg2=(v,o)=>{const row=Array(C2).fill(cx("",{bg:o.bg||W,noBorder:true}));row[0]=cx(v,o);sr2(row);};
+    const sp2=()=>sr2(Array(C2).fill(cx("",{noBorder:true})));
+    mg2("ALLOCATION MONTHLY SUMMARY",{sz:16,bold:true,fg:"FFFFFF",bg:"008A57",align:"center"});
+    mg2("Period: "+period+"   |   "+filterLabel+"   |   Generated: "+dateStr,{sz:10,fg:"64748B",bg:"F0FDF4",align:"center",italic:true});
+    sp2();
+    const k2=Array(C2).fill(cx("",{noBorder:true}));k2[0]=cx("Total Employees\n"+sumRows.length,{bold:true,sz:11,bg:"F8FAFC",align:"center",wrap:true});k2[2]=cx("Total Hours\n"+totHrs+"h",{bold:true,sz:11,bg:"F8FAFC",align:"center",wrap:true});k2[4]=cx("Period\n"+period,{bold:true,sz:11,bg:"F8FAFC",align:"center",wrap:true});sr2(k2);sp2();
+    const h2r=Array(C2).fill(cx("",{bold:true,fg:"FFFFFF",bg:"0F172A",align:"center"}));h2r[0]=cx("Employee",{bold:true,fg:"FFFFFF",bg:"0F172A",align:"left"});h2r[1]=cx("Department",{bold:true,fg:"FFFFFF",bg:"0F172A",align:"left"});rangeMonths.forEach((m,i)=>{h2r[2+i]=cx(m,{bold:true,fg:"FFFFFF",bg:"0F172A",align:"center"});});h2r[2+rangeMonths.length]=cx("Total",{bold:true,fg:"FFFFFF",bg:"0F172A",align:"center"});sr2(h2r);
+    sumRows.forEach((r,i)=>{const bg=i%2===0?W:LG;const tot=rangeMonths.reduce((s,m)=>s+(r.months[m]||0),0);const row=Array(C2).fill(cx("",{bg}));row[0]=cx(r.name,{bold:true,bg});row[1]=cx(r.dept,{fg:"475569",bg});rangeMonths.forEach((m,mi)=>{const h=r.months[m]||0;row[2+mi]=cx(h>0?h+"h":"--",{align:"center",bold:h>0,fg:h>=158?"059669":h>=123?"0891B2":h>0?"EF4444":"94A3B8",bg});});row[2+rangeMonths.length]=cx(tot+"h",{align:"center",bold:true,fg:"008A57",bg:"F0FDF4"});sr2(row);});
+    const tr=Array(C2).fill(cx("",{bg:"F1F5F9"}));tr[0]=cx("TOTAL",{bold:true,bg:"F1F5F9"});tr[1]=cx("",{bg:"F1F5F9"});let grand=0;rangeMonths.forEach((m,mi)=>{const mt=sorted.filter(a=>a.month===m).reduce((s,a)=>s+(a.allocated_hours||0),0);grand+=mt;tr[2+mi]=cx(mt+"h",{align:"center",bold:true,fg:"008A57",bg:"F0FDF4"});});tr[2+rangeMonths.length]=cx(grand+"h",{align:"center",bold:true,fg:"FFFFFF",bg:"008A57"});sr2(tr);
+    sp2();mg2("UTILIZATION STATUS REFERENCE",{sz:11,bold:true,fg:"FFFFFF",bg:"0F172A",align:"center"});
+    const lhr2=Array(C2).fill(cx("",{bg:"F1F5F9",noBorder:true}));lhr2[0]=cx("Status",{bold:true,bg:"F1F5F9",align:"center"});lhr2[1]=cx("Range",{bold:true,bg:"F1F5F9"});lhr2[2]=cx("Description",{bold:true,bg:"F1F5F9"});sr2(lhr2);
+    LGND.forEach(([l,rng,d,fg,bg],i)=>{const row=Array(C2).fill(cx("",{bg:i%2===0?"F8FAFC":W,noBorder:true}));row[0]=cx(l,{bold:true,fg,bg,align:"center"});row[1]=cx(rng,{bold:true,bg:i%2===0?"F8FAFC":W});row[2]=cx(d,{fg:"64748B",bg:i%2===0?"F8FAFC":W});sr2(row);});
+    sp2();mg2("Acquaint Communications 2026 - Team Allocation Platform - Confidential",{sz:9,fg:"94A3B8",align:"center",italic:true,noBorder:true});
+    ws2["!merges"]=[{s:{r:0,c:0},e:{r:0,c:C2-1}},{s:{r:1,c:0},e:{r:1,c:C2-1}},{s:{r:3,c:0},e:{r:3,c:1}},{s:{r:3,c:2},e:{r:3,c:3}},{s:{r:3,c:4},e:{r:3,c:C2-1}}];
+    ws2["!cols"]=[{wch:28},{wch:18},...rangeMonths.map(()=>({wch:13})),{wch:13}];
+    ws2["!rows"]=[{hpt:28},{hpt:18},{hpt:6},{hpt:36},{hpt:6},...Array(sumRows.length+30).fill({hpt:18})];
+    ws2["!ref"]=XS.utils.encode_range({r:0,c:0},{r:r2-1,c:C2-1});
+
+    const wb=XS.utils.book_new();
+    XS.utils.book_append_sheet(wb,ws1,"Detail");
+    XS.utils.book_append_sheet(wb,ws2,"Monthly Summary");
+    XS.writeFile(wb,"Allocation_"+fromMonth.replace(" ","_")+"_to_"+toMonth.replace(" ","_")+".xlsx");
   });
 };
 
@@ -3302,32 +3443,58 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
   const [selReport,setSelReport] = useState("utilization");
   const [selMonth,setSelMonth]   = useState(currentMonth);
   const [selDept,setSelDept]     = useState("all");
+  const [rangeMode,setRangeMode]   = useState(false);
+  const [fromMonth,setFromMonth]   = useState(currentMonth);
+  const [toMonth,setToMonth]       = useState(currentMonth);
+  const [selLocation,setSelLocation] = useState("all");
 
   const DEPTS = ["all","Creative Department","Client Servicing Department","Production Department","Planning Department"];
   const DEPT_LABELS = {"all":"All Departments","Creative Department":"Creative","Client Servicing Department":"Client Servicing","Production Department":"Production","Planning Department":"Planning"};
 
   const availDepts = allowedDepts ? ["all",...allowedDepts] : DEPTS;
 
-  // Compute utilization rows
+  const rangeMonths = React.useMemo(()=>MONTHS.filter(m=>m>=fromMonth&&m<=toMonth),[fromMonth,toMonth]);
+
+  // Compute utilization rows — single month or range average
   const utilRows = React.useMemo(()=>{
+    const activeMonth = rangeMode ? toMonth : selMonth;
     const emps = employees.filter(e=>
-      (e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=selMonth))&&
+      (e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=activeMonth))&&
       (!allowedDepts||allowedDepts.includes(e.department))&&
-      (selDept==="all"||e.department===selDept)
+      (selDept==="all"||e.department===selDept)&&
+      (selLocation==="all"||e.location===selLocation)
     );
-    return emps.map(e=>{
-      const empAllocs = allocs.filter(a=>a.employee_id===e.id&&a.month===selMonth);
-      const allocated = empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
-      const leaveDeduction = empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
-      const effectiveHPM = Math.max(0,HPM-leaveDeduction);
-      const free = Math.max(0,effectiveHPM-allocated);
-      const pct = effectiveHPM>0?Math.round((allocated/effectiveHPM)*100):0;
-      const onLeave = empAllocs.some(a=>a.status==='On Leave');
-      const leavedays = empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(a.leave_days||0),0);
-      const status = getUtilStatus(allocated,effectiveHPM,onLeave);
-      return {e,allocated,effectiveHPM,free,pct,onLeave,leavedays,leaveDeduction,status};
-    }).sort((a,b)=>(UTIL_STATUS_ORDER[a.status.label]??5)-(UTIL_STATUS_ORDER[b.status.label]??5));
-  },[employees,allocs,selMonth,selDept,allowedDepts]);
+    if(!rangeMode){
+      return emps.map(e=>{
+        const empAllocs = allocs.filter(a=>a.employee_id===e.id&&a.month===selMonth);
+        const allocated = empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
+        const leaveDeduction = empAllocs.filter(a=>a.status==="On Leave").reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
+        const effectiveHPM = Math.max(0,HPM-leaveDeduction);
+        const free = Math.max(0,effectiveHPM-allocated);
+        const pct = effectiveHPM>0?Math.round((allocated/effectiveHPM)*100):0;
+        const onLeave = empAllocs.some(a=>a.status==="On Leave");
+        const leavedays = empAllocs.filter(a=>a.status==="On Leave").reduce((s,a)=>s+(a.leave_days||0),0);
+        const status = getUtilStatus(allocated,effectiveHPM,onLeave);
+        return {e,allocated,effectiveHPM,free,pct,onLeave,leavedays,leaveDeduction,status};
+      }).sort((a,b)=>(UTIL_STATUS_ORDER[a.status.label]??5)-(UTIL_STATUS_ORDER[b.status.label]??5));
+    } else {
+      return emps.map(e=>{
+        let totalAlloc=0,totalCap=0,totalLeave=0;
+        rangeMonths.forEach(m=>{
+          const ea=allocs.filter(a=>a.employee_id===e.id&&a.month===m);
+          totalAlloc+=ea.reduce((s,a)=>s+(a.allocated_hours||0),0);
+          const ld=ea.filter(a=>a.status==="On Leave").reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
+          totalCap+=Math.max(0,HPM-ld); totalLeave+=ld;
+        });
+        const n=rangeMonths.length||1;
+        const avgAlloc=Math.round(totalAlloc/n);
+        const avgCap=Math.round(totalCap/n);
+        const avgPct=totalCap>0?Math.round((totalAlloc/totalCap)*100):0;
+        const status=getUtilStatus(avgAlloc,avgCap,false);
+        return {e,allocated:avgAlloc,effectiveHPM:avgCap,free:Math.max(0,avgCap-avgAlloc),pct:avgPct,onLeave:false,leavedays:0,leaveDeduction:Math.round(totalLeave/n),status,isRange:true,totalAlloc,n};
+      }).sort((a,b)=>(UTIL_STATUS_ORDER[a.status.label]??5)-(UTIL_STATUS_ORDER[b.status.label]??5));
+    }
+  },[employees,allocs,selMonth,selDept,allowedDepts,rangeMode,fromMonth,toMonth,rangeMonths,selLocation]);
 
   const totalAlloc = utilRows.reduce((s,r)=>s+r.allocated,0);
   const onLeaveCount = utilRows.filter(r=>r.onLeave).length;
@@ -3337,9 +3504,13 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
   const deptLabel = DEPT_LABELS[selDept]||selDept;
 
   const handleExcelDownload = () => {
-    const filteredEmps = employees.filter(e=>(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=selMonth))&&(!allowedDepts||allowedDepts.includes(e.department))&&(selDept==="all"||e.department===selDept));
+    const filteredEmps = employees.filter(e=>(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=selMonth))&&(!allowedDepts||allowedDepts.includes(e.department))&&(selDept==="all"||e.department===selDept)&&(selLocation==="all"||e.location===selLocation));
     if(selReport==="utilization"){
-      exportMonthlyUtilization(filteredEmps, allocs, selMonth, deptLabel, HPM);
+      if(rangeMode){
+        exportMonthlyUtilization(filteredEmps, allocs, selMonth, deptLabel, HPM, rangeMonths, fromMonth, toMonth);
+      } else {
+        exportMonthlyUtilization(filteredEmps, allocs, selMonth, deptLabel, HPM);
+      }
     } else if(selReport==="capacity"){
       exportTeamCapacity(employees, allocs, selMonth, deptLabel, HPM, allowedDepts);
     } else if(selReport==="client"){
@@ -3415,9 +3586,23 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
       <div style={{flex:1,display:"flex",flexDirection:"column",gap:14,minWidth:0}}>
         {/* Filters + download */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <Sel value={selMonth} onChange={setSelMonth} options={MONTHS.map(m=>({v:m,l:fmtLong(m)}))} style={{width:155}}/>
-            <Sel value={selDept} onChange={setSelDept} options={availDepts.map(d=>({v:d,l:DEPT_LABELS[d]||d}))} style={{width:180}}/>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            {selReport==="utilization"&&(
+              <button onClick={()=>setRangeMode(v=>!v)} style={{padding:"7px 12px",borderRadius:8,border:`1.5px solid ${rangeMode?"#008A57":"#e2e8f0"}`,background:rangeMode?"#f0fdf4":"#fff",color:rangeMode?"#008A57":"#64748b",fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>
+                <Calendar size={12} strokeWidth={2}/>{rangeMode?"Range Mode":"Single Month"}
+              </button>
+            )}
+            {(!rangeMode||selReport!=="utilization")&&(
+              <Sel value={selMonth} onChange={setSelMonth} options={MONTHS.map(m=>({v:m,l:fmtLong(m)}))} style={{width:155}}/>
+            )}
+            {rangeMode&&selReport==="utilization"&&(<>
+              <Sel value={fromMonth} onChange={setFromMonth} options={MONTHS.map(m=>({v:m,l:fmtLong(m)}))} style={{width:145}}/>
+              <span style={{fontSize:12,color:"#64748b",fontWeight:500}}>to</span>
+              <Sel value={toMonth} onChange={setToMonth} options={MONTHS.filter(m=>m>=fromMonth).map(m=>({v:m,l:fmtLong(m)}))} style={{width:145}}/>
+              {rangeMonths.length>0&&<span style={{fontSize:11,color:"#008A57",fontWeight:700,whiteSpace:"nowrap",padding:"4px 10px",background:"#f0fdf4",borderRadius:6}}>{rangeMonths.length} month avg</span>}
+            </>)}
+            <Sel value={selDept} onChange={setSelDept} options={availDepts.map(d=>({v:d,l:DEPT_LABELS[d]||d}))} style={{width:175}}/>
+            <Sel value={selLocation} onChange={setSelLocation} options={[{v:"all",l:"All Locations"},{v:"Jeddah",l:"Jeddah"},{v:"Riyadh",l:"Riyadh"},{v:"Cairo",l:"Cairo"}]} style={{width:140}}/>
           </div>
           <div style={{display:"flex",gap:8}}>
             <Btn variant="outline" size="sm" onClick={handleExcelDownload} style={{gap:6}}>
@@ -3707,14 +3892,15 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
             </div>
           </div>
           {/* KPI summary */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",borderBottom:"1px solid #f1f5f9"}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",borderBottom:"1px solid #f1f5f9"}}>
             {[
               {label:"Total Employees",  value:utilRows.length,      color:"#0f172a"},
               {label:"Total Allocated",  value:totalAlloc+"h",       color:"#0f172a"},
-              {label:"On Leave",         value:onLeaveCount,         color:"#d97706"},
+              {label:"On Leave",         value:rangeMode?utilRows.filter(r=>r.isRange).length+"emp":onLeaveCount, color:"#d97706"},
               {label:"Avg Utilization",  value:avgUtil+"%",          color:avgUtil>=90?"#059669":avgUtil>=70?"#0891b2":"#ef4444"},
+              {label:rangeMode?"Period":"Month", value:rangeMode?rangeMonths.length+" months":fmtLong(selMonth), color:"#0f172a"},
             ].map((s,i)=>(
-              <div key={i} style={{padding:"13px 18px",borderRight:i<3?"1px solid #f1f5f9":"none"}}>
+              <div key={i} style={{padding:"13px 18px",borderRight:i<4?"1px solid #f1f5f9":"none"}}>
                 <p style={{margin:0,fontSize:11,fontWeight:600,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".05em"}}>{s.label}</p>
                 <p style={{margin:"3px 0 0",fontSize:20,fontWeight:800,color:s.color,lineHeight:1}}>{s.value}</p>
               </div>
@@ -3725,7 +3911,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead>
                 <tr style={{background:"#f8fafc"}}>
-                  {["Employee","Department","Position","Allocated","Capacity","Free","Util %","Status","Leave Days","Hrs Deducted"].map((h,i)=>(
+                  {(rangeMode?["Employee","Department","Designation","Avg Allocated","Avg Capacity","Avg Free","Avg Util %","Status","Months","Total Hrs"]:["Employee","Department","Designation","Allocated","Capacity","Free","Util %","Status","Leave Days","Hrs Deducted"]).map((h,i)=>(
                     <th key={h} style={{padding:"9px 13px",textAlign:i>=3?"center":"left",fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".04em",borderBottom:"1px solid #e2e8f0",whiteSpace:"nowrap"}}>{h}</th>
                   ))}
                 </tr>
@@ -3757,8 +3943,8 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
                     <td style={{padding:"10px 13px",textAlign:"center"}}>
                       <span style={{padding:"2px 9px",borderRadius:999,fontSize:11,fontWeight:700,color:"#"+r.status.fgRGB,background:"#"+r.status.bgRGB}}>{r.status.label}</span>
                     </td>
-                    <td style={{padding:"10px 13px",textAlign:"center",fontSize:12,fontWeight:r.onLeave?700:400,color:r.onLeave?"#d97706":"#64748b"}}>{r.leavedays||"—"}</td>
-                    <td style={{padding:"10px 13px",textAlign:"center",fontSize:12,fontWeight:r.onLeave?700:400,color:r.onLeave?"#d97706":"#64748b"}}>{r.leaveDeduction||"—"}</td>
+                    <td style={{padding:"10px 13px",textAlign:"center",fontSize:12,fontWeight:700,color:r.isRange?"#008A57":r.onLeave?"#d97706":"#64748b"}}>{r.isRange?r.n+"mo":r.leavedays||"—"}</td>
+                    <td style={{padding:"10px 13px",textAlign:"center",fontSize:12,fontWeight:700,color:r.isRange?"#008A57":r.onLeave?"#d97706":"#64748b"}}>{r.isRange?r.totalAlloc+"h":r.leaveDeduction||"—"}</td>
                   </tr>
                 ))}
               </tbody>
