@@ -2946,7 +2946,8 @@ const exportMonthlyUtilization = (employees, allocs, month, dept, HPM, rangeMont
 
     // KPI row — 5 boxes across cols 0-9
     const kpiRow = Array(cols).fill(cell("",{noBorder:true}));
-    [[0,"Total Employees",rows.length],[2,"Total Allocated",totalAlloc+"h"],[4,"On Leave",onLeaveCount],[6,"Avg Utilization",avgUtil+"%"],[8,"Month",month]].forEach(([ci,lbl,val])=>{
+    const monthLabel=isRange?(fromM&&toM?fromM+" to "+toM:rangeMonthsArg.length+" months"):month;
+    [[0,"Total Employees",rows.length],[2,"Total Allocated",totalAlloc+"h"],[4,"On Leave",isRange?"—":onLeaveCount],[6,"Avg Utilization",avgUtil+"%"],[8,isRange?"Period":"Month",monthLabel]].forEach(([ci,lbl,val])=>{
       kpiRow[ci]=cell(`${lbl}
 ${val}`,{bold:true,sz:11,bg:"F8FAFC",align:"center",wrap:true});
     });
