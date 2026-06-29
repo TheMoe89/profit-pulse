@@ -3462,7 +3462,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
       (e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=activeMonth))&&
       (!allowedDepts||allowedDepts.includes(e.department))&&
       (selDept==="all"||e.department===selDept)&&
-      (selLocation==="all"||e.location===selLocation)
+      (selLocation==="all"||(selLocation==="KSA"&&(e.location==="Jeddah"||e.location==="Riyadh"))||(selLocation==="EGY"&&e.location==="Cairo"))
     );
     if(!rangeMode){
       return emps.map(e=>{
@@ -3504,7 +3504,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
   const deptLabel = DEPT_LABELS[selDept]||selDept;
 
   const handleExcelDownload = () => {
-    const filteredEmps = employees.filter(e=>(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=selMonth))&&(!allowedDepts||allowedDepts.includes(e.department))&&(selDept==="all"||e.department===selDept)&&(selLocation==="all"||e.location===selLocation));
+    const filteredEmps = employees.filter(e=>(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=selMonth))&&(!allowedDepts||allowedDepts.includes(e.department))&&(selDept==="all"||e.department===selDept)&&(selLocation==="all"||(selLocation==="KSA"&&(e.location==="Jeddah"||e.location==="Riyadh"))||(selLocation==="EGY"&&e.location==="Cairo")));
     if(selReport==="utilization"){
       if(rangeMode){
         exportMonthlyUtilization(filteredEmps, allocs, selMonth, deptLabel, HPM, rangeMonths, fromMonth, toMonth);
@@ -3602,7 +3602,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
               {rangeMonths.length>0&&<span style={{fontSize:11,color:"#008A57",fontWeight:700,whiteSpace:"nowrap",padding:"4px 10px",background:"#f0fdf4",borderRadius:6}}>{rangeMonths.length} month avg</span>}
             </>)}
             <Sel value={selDept} onChange={setSelDept} options={availDepts.map(d=>({v:d,l:DEPT_LABELS[d]||d}))} style={{width:175}}/>
-            <Sel value={selLocation} onChange={setSelLocation} options={[{v:"all",l:"All Locations"},{v:"Jeddah",l:"Jeddah"},{v:"Riyadh",l:"Riyadh"},{v:"Cairo",l:"Cairo"}]} style={{width:140}}/>
+            <Sel value={selLocation} onChange={setSelLocation} options={[{v:"all",l:"All Locations"},{v:"KSA",l:"KSA"},{v:"EGY",l:"EGY"}]} style={{width:140}}/>
           </div>
           <div style={{display:"flex",gap:8}}>
             <Btn variant="outline" size="sm" onClick={handleExcelDownload} style={{gap:6}}>
