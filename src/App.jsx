@@ -3896,7 +3896,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
             {[
               {label:"Total Employees",  value:utilRows.length,      color:"#0f172a"},
               {label:"Total Allocated",  value:totalAlloc+"h",       color:"#0f172a"},
-              {label:"On Leave",         value:rangeMode?utilRows.filter(r=>r.isRange).length+"emp":onLeaveCount, color:"#d97706"},
+              {label:"On Leave",         value:rangeMode?"—":onLeaveCount, color:"#d97706"},
               {label:"Avg Utilization",  value:avgUtil+"%",          color:avgUtil>=90?"#059669":avgUtil>=70?"#0891b2":"#ef4444"},
               {label:rangeMode?"Period":"Month", value:rangeMode?rangeMonths.length+" months":fmtLong(selMonth), color:"#0f172a"},
             ].map((s,i)=>(
