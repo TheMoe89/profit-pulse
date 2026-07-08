@@ -953,7 +953,7 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
         ))}
       </div>
       {/* Cards grid */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:10}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:10,minHeight:300,alignContent:"start"}}>
         {visible.map(emp=>{
           const effCap = emp.effectiveHPM||HPM;
           const pct    = Math.round((emp.h/effCap)*100);
@@ -2703,7 +2703,7 @@ function AllocationsPage(){
       </div>
 
       {/* Capacity cards — all active employees for chartMonth (mirrors Base44) */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:10}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:10,minHeight:300,alignContent:"start"}}>
         {(realEmps).filter(e=>isEmpActiveForMonth(e,chartMonth)).map(emp=>{
           const u=utilMap[emp.id]||{totalHours:0,availableHours:HPM,percentage:0,effectiveHPM:HPM,leaveDeduction:0,onLeave:false};
           return <AllocEmpCard key={emp.id} emp={emp} u={u} allocs={allocs} chartMonth={chartMonth} HPM={HPM} fmtH={fmtH} fmtLong={fmtLong}/>;
