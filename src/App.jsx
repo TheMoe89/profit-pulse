@@ -2571,7 +2571,7 @@ function AllocationsPage(){
       </div>
 
       {/* Capacity cards — all active employees for chartMonth (mirrors Base44) */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
         {(realEmps).filter(e=>isEmpActiveForMonth(e,chartMonth)).map(emp=>{
           const u=utilMap[emp.id]||{totalHours:0,availableHours:HPM,percentage:0};
           const ov=u.percentage>100,ok=u.percentage>=70&&u.percentage<=100;
