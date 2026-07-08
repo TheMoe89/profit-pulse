@@ -858,7 +858,6 @@ const DEPT_COLORS={
 };
 function getCapTheme(pct,hours,cap,onLeave){
   const rpct=Math.round(pct);
-  if(onLeave)    return{border:"#fde68a",cardBg:"#fffbeb",barColor:"#f59e0b",badgeBg:"#fef9c3",badgeColor:"#d97706",label:"On Leave"};
   if(hours===0)  return{border:"#e2e8f0",cardBg:"#fafafa",barColor:"#cbd5e1",badgeBg:"#f1f5f9",badgeColor:"#94a3b8",label:"Unallocated"};
   if(rpct>=90)   return{border:"#a7f3d0",cardBg:"#f0fdf4",barColor:"#008A57",badgeBg:"#d1fae5",badgeColor:"#059669",label:"Fully Utilized"};
   if(rpct>=70)   return{border:"#bae6fd",cardBg:"#f0f9ff",barColor:"#0891b2",badgeBg:"#e0f7fa",badgeColor:"#0891b2",label:"Optimal"};
@@ -882,10 +881,10 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
   },[openId]);
 
   const sortOrder=e=>{
-    if(e.onLeave) return 4;
     if(e.h===0)   return 5;
-    if(e.h>158)   return 0;
-    if(e.h>=123)  return 1;
+    const epct=Math.round((e.h/(e.effectiveHPM||HPM))*100);
+    if(epct>=90)  return 0;
+    if(epct>=70)  return 1;
     return 2;
   };
 
@@ -897,11 +896,11 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
     return th.label===capStatus;
   }).slice().sort((a,b)=>sortOrder(a)-sortOrder(b)||(b.h-a.h));
 
-  const fullyCount =empSearchFiltered.filter(e=>!e.onLeave&&e.h>158).length;
-  const optCount   =empSearchFiltered.filter(e=>!e.onLeave&&e.h>=123&&e.h<=158).length;
-  const underCount =empSearchFiltered.filter(e=>!e.onLeave&&e.h>0&&e.h<123).length;
+  const fullyCount =empSearchFiltered.filter(e=>e.h>0&&Math.round((e.h/(e.effectiveHPM||HPM))*100)>=90).length;
+  const optCount   =empSearchFiltered.filter(e=>e.h>0&&Math.round((e.h/(e.effectiveHPM||HPM))*100)>=70&&Math.round((e.h/(e.effectiveHPM||HPM))*100)<90).length;
+  const underCount =empSearchFiltered.filter(e=>e.h>0&&Math.round((e.h/(e.effectiveHPM||HPM))*100)<70).length;
   const leaveCount =empSearchFiltered.filter(e=>e.onLeave).length;
-  const unallocCount=empSearchFiltered.filter(e=>!e.onLeave&&e.h===0).length;
+  const unallocCount=empSearchFiltered.filter(e=>e.h===0).length;
 
   const selStyle={padding:"7px 12px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:11,fontWeight:600,color:"#0f172a",background:"#fff",cursor:"pointer",outline:"none",appearance:"none",backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,backgroundRepeat:"no-repeat",backgroundPosition:"right 9px center",paddingRight:26};
 
@@ -956,12 +955,14 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
       {/* Cards grid */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:10}}>
         {visible.map(emp=>{
-          const pct    = Math.round((emp.h/HPM)*100);
+          const effCap = emp.effectiveHPM||HPM;
+          const pct    = Math.round((emp.h/effCap)*100);
           const theme  = getCapTheme(pct,emp.h,HPM,emp.onLeave);
           const meta   = DEPT_COLORS[emp.department]||{color:"#475569",bg:"#f1f5f9"};
-          const over   = emp.h>HPM;
+          const over   = emp.h>effCap;
           const open   = openId===emp.id;
           const toggle = ()=>setOpenId(open?null:emp.id);
+          const hasClients = emp.clients&&emp.clients.length>0;
 
           return(
             <div key={emp.id}
@@ -983,7 +984,7 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
                     <p style={{margin:0,fontSize:10,color:"#94a3b8",lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{emp.designation||emp.department?.replace(" Department","")}</p>
                   </div>
                 </div>
-                {!emp.onLeave&&emp.clients&&emp.clients.length>0&&(
+                {(hasClients||emp.onLeave)&&(
                   <button onClick={toggle} style={{padding:"4px",borderRadius:5,border:`1px solid ${open?meta.color:"#e2e8f0"}`,background:open?meta.bg:"#fff",cursor:"pointer",display:"flex",alignItems:"center",flexShrink:0,marginLeft:4,transition:"all .15s"}}>
                     <Eye size={11} strokeWidth={1.75} color={open?meta.color:"#94a3b8"}/>
                   </button>
@@ -995,49 +996,45 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
                   {emp.department?.replace(" Department","")}
                 </span>
               )}
-              {/* Progress bar */}
-              {emp.onLeave?(
-                <div style={{height:6,borderRadius:99,overflow:"hidden",marginBottom:6}}>
-                  <div style={{height:"100%",width:"100%",background:"repeating-linear-gradient(45deg,#fde68a,#fde68a 3px,#fef9c3 3px,#fef9c3 6px)"}}/>
-                </div>
-              ):(
-                <div style={{height:6,borderRadius:99,background:"rgba(0,0,0,.07)",overflow:"hidden",marginBottom:6}}>
-                  <div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:theme.barColor,borderRadius:99,transition:"width .4s ease"}}/>
-                </div>
-              )}
-              {/* Hours + badge */}
+              {/* Progress bar — always real utilization */}
+              <div style={{height:6,borderRadius:99,background:"rgba(0,0,0,.07)",overflow:"hidden",marginBottom:6}}>
+                <div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:theme.barColor,borderRadius:99,transition:"width .4s ease"}}/>
+              </div>
+              {/* Hours + leave pill + badge — all inline */}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{fontSize:10,color:"#64748b",lineHeight:1.4}}>
-                  {emp.h===0&&!emp.onLeave
+                <span style={{fontSize:10,color:"#64748b",lineHeight:1.4,display:"flex",alignItems:"center",gap:5}}>
+                  {emp.h===0
                     ?<span style={{color:"#94a3b8"}}>0h</span>
-                    :<><strong style={{color:"#0f172a"}}>{fmtH(emp.h)}h</strong> · {fmtH(Math.max(0,(emp.effectiveHPM||HPM)-emp.h))}h free</>
+                    :<><strong style={{color:"#0f172a"}}>{fmtH(emp.h)}h</strong> · {fmtH(Math.max(0,effCap-emp.h))}h free</>
                   }
+                  {emp.onLeave&&emp.leaveDeduction>0&&(
+                    <span style={{display:"inline-flex",alignItems:"center",gap:2,padding:"1px 5px",borderRadius:999,background:"#fef9c3",border:"1px solid #fde68a",fontSize:9,fontWeight:600,color:"#d97706",flexShrink:0}}>
+                      <Calendar size={8} strokeWidth={2}/>{emp.leaveDeduction}h
+                    </span>
+                  )}
                 </span>
-                {!emp.onLeave&&(
-                  <span style={{padding:"1px 7px",borderRadius:999,background:theme.badgeBg,color:theme.badgeColor,fontSize:9,fontWeight:700}}>{emp.h===0?"Unallocated":theme.label}</span>
-                )}
+                <span style={{padding:"1px 7px",borderRadius:999,background:theme.badgeBg,color:theme.badgeColor,fontSize:9,fontWeight:700}}>{emp.h===0?"Unallocated":theme.label}</span>
               </div>
               {/* Over warning */}
               {over&&(
                 <div style={{marginTop:6,display:"flex",alignItems:"center",gap:4,padding:"3px 7px",background:"#fee2e2",borderRadius:5,border:"1px solid #fca5a5"}}>
                   <AlertTriangle size={9} strokeWidth={2} color="#ef4444"/>
-                  <span style={{fontSize:9,color:"#ef4444",fontWeight:600}}>Over by {fmtH(emp.h-HPM)}h</span>
+                  <span style={{fontSize:9,color:"#ef4444",fontWeight:600}}>Over by {fmtH(emp.h-effCap)}h</span>
                 </div>
               )}
-              {/* Eye dropdown — client breakdown */}
-              {!emp.onLeave&&(
-                <div style={{
-                  position:"absolute",top:"calc(100% + 6px)",left:0,
-                  width:"100%",minWidth:200,background:"#fff",
-                  border:`1.5px solid ${meta.color}`,
-                  borderRadius:12,padding:"11px 13px",
-                  boxShadow:"0 8px 28px rgba(0,0,0,.15)",
-                  opacity:open?1:0,
-                  transform:open?"translateY(0)":"translateY(-6px)",
-                  transition:"opacity .18s ease,transform .18s ease",
-                  pointerEvents:open?"auto":"none",
-                  zIndex:50,
-                }}>
+              {/* Eye dropdown — client breakdown + leave details */}
+              <div style={{
+                position:"absolute",top:"calc(100% + 6px)",left:0,
+                width:"100%",minWidth:200,background:"#fff",
+                border:`1.5px solid ${meta.color}`,
+                borderRadius:12,padding:"11px 13px",
+                boxShadow:"0 8px 28px rgba(0,0,0,.15)",
+                opacity:open?1:0,
+                transform:open?"translateY(0)":"translateY(-6px)",
+                transition:"opacity .18s ease,transform .18s ease",
+                pointerEvents:open?"auto":"none",
+                zIndex:50,
+              }}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}>
                     <div>
                       <p style={{margin:0,fontWeight:700,fontSize:11,color:"#0f172a"}}>{emp.name}</p>
@@ -1047,6 +1044,14 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
                       <X size={10} strokeWidth={2} color="#94a3b8"/>
                     </button>
                   </div>
+                  {emp.onLeave&&emp.leaveDeduction>0&&(
+                    <div style={{marginBottom:9,padding:"7px 9px",background:"#fef9c3",borderRadius:7,border:"1px solid #fde68a"}}>
+                      <p style={{margin:"0 0 2px",fontSize:8,fontWeight:700,color:"#d97706",textTransform:"uppercase",letterSpacing:".06em"}}>On Leave This Month</p>
+                      <p style={{margin:0,fontSize:10,color:"#92400e",lineHeight:1.5}}>
+                        <strong>{emp.leaveDeduction}h</strong> deducted · Effective cap: <strong>{fmtH(emp.effectiveHPM||HPM)}h</strong> of {HPM}h
+                      </p>
+                    </div>
+                  )}
                   <p style={{margin:"0 0 6px",fontSize:8,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".06em"}}>Client breakdown</p>
                   {(emp.clients||[]).length===0
                     ?<p style={{margin:0,fontSize:11,color:"#94a3b8"}}>No allocations this month</p>
@@ -1071,7 +1076,6 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
                     )
                   }
                 </div>
-              )}
             </div>
           );
         })}
