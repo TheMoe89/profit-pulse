@@ -186,10 +186,14 @@ function AuthProvider({children}){
       if(session) loadProfile(session.user.id);
       else setPermsLoaded(true); // no session = show login immediately
     });
-    const {data:{subscription}} = sb.auth.onAuthStateChange((_,session)=>{
-      setSession(session);
-      if(session){ setPermsLoaded(false); loadProfile(session.user.id); }
-      else { setProfile(null); setUserPerms(null); setPermsLoaded(true); }
+    const {data:{subscription}} = sb.auth.onAuthStateChange((event,session)=>{
+      // Only act on real auth changes, not tab focus token refresh
+      if(event==="SIGNED_IN"||event==="SIGNED_OUT"||event==="USER_UPDATED"||event==="TOKEN_REFRESHED"){
+        if(event==="TOKEN_REFRESHED") return; // ignore silent token refresh
+        setSession(session);
+        if(session){ setPermsLoaded(false); loadProfile(session.user.id); }
+        else { setProfile(null); setUserPerms(null); setPermsLoaded(true); }
+      }
     });
     return ()=>subscription.unsubscribe();
   },[sb]);
@@ -706,7 +710,7 @@ function Modal({open,onClose,title,children}){
   if(!open)return null;
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:600,maxHeight:"90vh",overflowY:"auto",border:"1px solid #e2e8f0",boxShadow:"0 25px 50px rgba(0,0,0,.15)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:600,maxHeight:"90vh",overflowY:"auto",border:"1px solid #e2e8f0",boxShadow:"0 25px 50px rgba(0,0,0,.15)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 22px",borderBottom:"1px solid #e2e8f0"}}>
           <h3 style={{margin:0,fontSize:16,fontWeight:700,color:"#0f172a"}}>{title}</h3>
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#64748b",lineHeight:1,padding:"0 4px"}}>&times;</button>
