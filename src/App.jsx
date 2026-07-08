@@ -3065,7 +3065,7 @@ const exportMonthlyUtilization = (employees, allocs, month, dept, HPM, rangeMont
       })
       .sort((a,b)=>(STATUS_ORDER_MAP[a.status.label]??5)-(STATUS_ORDER_MAP[b.status.label]??5));
 
-    const totalAlloc = rows.reduce((s,r)=>s+r.allocated,0);
+    const totalAlloc = Math.round(rows.reduce((s,r)=>s+r.allocated,0)*100)/100;
     const onLeaveCount = rows.filter(r=>r.onLeave).length;
     const nonLeave = rows.filter(r=>!r.onLeave&&r.effectiveHPM>0);
     const avgUtil = Math.round(nonLeave.reduce((s,r)=>s+r.pct,0)/Math.max(1,nonLeave.length));
