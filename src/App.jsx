@@ -2306,7 +2306,9 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
 }
 
 function AllocEmpCard({emp,u,allocs,chartMonth,HPM,fmtH}){
-  const theme=getCapTheme(Math.round(u.percentage),u.totalHours,HPM,u.onLeave);
+  const effCap=u.effectiveHPM||HPM;
+  const pct=Math.round(u.percentage);
+  const theme=getCapTheme(pct,u.totalHours,HPM,u.onLeave);
   const meta=DEPT_COLORS[emp.department]||{color:"#475569",bg:"#f1f5f9"};
   const clients=allocs.filter(a=>a.employee_id===emp.id&&a.month===chartMonth&&a.status!=="On Leave"&&(a.allocated_hours||0)>0).map(a=>({name:a.client_name||"",hours:a.allocated_hours||0}));
   const [open,setOpen]=useState(false);
@@ -2317,26 +2319,53 @@ function AllocEmpCard({emp,u,allocs,chartMonth,HPM,fmtH}){
     document.addEventListener("mousedown",h);
     return()=>document.removeEventListener("mousedown",h);
   },[open]);
-  const pct=Math.round(u.percentage);
+  const toggle=()=>setOpen(v=>!v);
+  const over=u.totalHours>effCap;
   return(
-    <div ref={ref} style={{position:"relative",background:theme.cardBg,border:`1.5px solid ${theme.border}`,borderRadius:12,padding:14,boxShadow:"0 1px 3px rgba(0,0,0,.04)"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:7}}>
+    <div ref={ref} style={{position:"relative",padding:"12px 14px",borderRadius:12,border:`1.5px solid ${open?meta.color:theme.border}`,background:theme.cardBg,boxShadow:open?"0 4px 12px rgba(0,0,0,.08)":"0 1px 3px rgba(0,0,0,.04)",transition:"all .15s ease"}}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:8}}>
         <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
-          <div style={{width:30,height:30,borderRadius:8,background:`linear-gradient(135deg,${meta.color},${meta.color}88)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff",flexShrink:0}}>{emp.name.slice(0,2).toUpperCase()}</div>
-          <div style={{minWidth:0}}><p style={{margin:0,fontWeight:600,fontSize:12,color:"#0f172a",lineHeight:1.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{emp.name}</p><p style={{margin:0,fontSize:10,color:"#64748b",lineHeight:1.5}}>{emp.designation}</p></div>
+          <div style={{width:32,height:32,borderRadius:8,background:`linear-gradient(135deg,${meta.color},${meta.color}88)`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:11,color:"#fff",flexShrink:0}}>
+            {emp.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}
+          </div>
+          <div style={{minWidth:0}}>
+            <p style={{margin:0,fontWeight:700,fontSize:11,color:"#0f172a",lineHeight:1.4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{emp.name}</p>
+            <p style={{margin:0,fontSize:10,color:"#94a3b8",lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{emp.designation||emp.department?.replace(" Department","")}</p>
+          </div>
         </div>
         {(clients.length>0||u.onLeave)&&(
-          <button onClick={()=>setOpen(v=>!v)} style={{padding:"4px",borderRadius:5,border:`1px solid ${open?meta.color:"#e2e8f0"}`,background:open?meta.bg:"#fff",cursor:"pointer",display:"flex",alignItems:"center",flexShrink:0,marginLeft:4,transition:"all .15s"}}>
+          <button onClick={toggle} style={{padding:"4px",borderRadius:5,border:`1px solid ${open?meta.color:"#e2e8f0"}`,background:open?meta.bg:"#fff",cursor:"pointer",display:"flex",alignItems:"center",flexShrink:0,marginLeft:4,transition:"all .15s"}}>
             <Eye size={11} strokeWidth={1.75} color={open?meta.color:"#94a3b8"}/>
           </button>
         )}
       </div>
-      <PBar val={Math.min(pct,100)} color={theme.barColor}/>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11,color:"#64748b",lineHeight:1.5,marginTop:4}}>
-        <span>{fmtH(u.totalHours)}h allocated</span>
-        <span style={{padding:"1px 7px",borderRadius:999,background:theme.badgeBg,color:theme.badgeColor,fontSize:9,fontWeight:700}}>{u.totalHours===0?"Unallocated":theme.label}</span>
-        <span>{fmtH(u.availableHours)}h available</span>
+      {/* Dept badge */}
+      <span style={{padding:"2px 7px",borderRadius:999,background:meta.bg,color:meta.color,fontSize:9,fontWeight:600,display:"inline-block",marginBottom:8}}>
+        {emp.department?.replace(" Department","")}
+      </span>
+      {/* Progress bar */}
+      <div style={{height:6,borderRadius:99,background:"rgba(0,0,0,.07)",overflow:"hidden",marginBottom:6}}>
+        <div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:theme.barColor,borderRadius:99,transition:"width .4s ease"}}/>
       </div>
+      {/* Hours + badge */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:10,color:"#64748b",lineHeight:1.4}}>
+          {u.totalHours===0&&!u.onLeave
+            ?<span style={{color:"#94a3b8"}}>0h</span>
+            :<><strong style={{color:"#0f172a"}}>{fmtH(u.totalHours)}h</strong> · {fmtH(Math.max(0,effCap-u.totalHours))}h free</>
+          }
+        </span>
+        <span style={{padding:"1px 7px",borderRadius:999,background:theme.badgeBg,color:theme.badgeColor,fontSize:9,fontWeight:700}}>{u.totalHours===0?"Unallocated":theme.label}</span>
+      </div>
+      {/* Over warning */}
+      {over&&!u.onLeave&&(
+        <div style={{marginTop:6,display:"flex",alignItems:"center",gap:4,padding:"3px 7px",background:"#fee2e2",borderRadius:5,border:"1px solid #fca5a5"}}>
+          <AlertTriangle size={9} strokeWidth={2} color="#ef4444"/>
+          <span style={{fontSize:9,color:"#ef4444",fontWeight:600}}>Over by {fmtH(u.totalHours-effCap)}h</span>
+        </div>
+      )}
+      {/* Eye dropdown */}
       {(clients.length>0||u.onLeave)&&(
         <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,width:"100%",minWidth:200,background:"#fff",border:`1.5px solid ${meta.color}`,borderRadius:12,padding:"11px 13px",boxShadow:"0 8px 28px rgba(0,0,0,.15)",opacity:open?1:0,transform:open?"translateY(0)":"translateY(-6px)",transition:"opacity .18s ease,transform .18s ease",pointerEvents:open?"auto":"none",zIndex:50}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}>
@@ -2349,7 +2378,11 @@ function AllocEmpCard({emp,u,allocs,chartMonth,HPM,fmtH}){
           {u.onLeave&&u.leaveDeduction>0&&(
             <div style={{marginBottom:9,padding:"8px 10px",background:"#fef9c3",borderRadius:7,border:"1px solid #fde68a"}}>
               <p style={{margin:"0 0 4px",fontSize:8,fontWeight:700,color:"#d97706",textTransform:"uppercase",letterSpacing:".06em"}}>On Leave This Month</p>
-              <p style={{margin:0,fontSize:10,color:"#92400e",lineHeight:1.5}}><strong>{u.leaveDeduction}h</strong> deducted · Effective cap: <strong>{fmtH(u.effectiveHPM)}h</strong> of {HPM}h</p>
+              <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                <p style={{margin:0,fontSize:10,color:"#92400e",lineHeight:1.5}}><strong>{u.leaveDeduction}h</strong> capacity deducted</p>
+                <p style={{margin:0,fontSize:10,color:"#92400e",lineHeight:1.5}}>Effective cap: <strong>{fmtH(effCap)}h</strong> <span style={{color:"#b45309"}}>of {HPM}h</span></p>
+                <p style={{margin:0,fontSize:10,color:"#92400e",lineHeight:1.5}}>Allocated: <strong>{fmtH(u.totalHours)}h</strong> · Free: <strong>{fmtH(Math.max(0,effCap-u.totalHours))}h</strong></p>
+              </div>
             </div>
           )}
           {clients.length>0&&(
@@ -2362,7 +2395,7 @@ function AllocEmpCard({emp,u,allocs,chartMonth,HPM,fmtH}){
                     <div key={i} style={{marginBottom:7}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:2}}>
                         <span style={{fontSize:11,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,marginRight:8,lineHeight:1.4}}>{c.name}</span>
-                        <span style={{fontSize:11,fontWeight:700,color:"#008A57",flexShrink:0}}>{fmtH(c.hours)}h</span>
+                        <span style={{fontSize:11,fontWeight:700,color:"#008A57",flexShrink:0,fontVariantNumeric:"tabular-nums"}}>{fmtH(c.hours)}h</span>
                       </div>
                       <div style={{height:4,borderRadius:99,background:"#f1f5f9",overflow:"hidden"}}>
                         <div style={{height:"100%",width:`${share}%`,background:meta.color,borderRadius:99,opacity:.6}}/>
@@ -2653,7 +2686,7 @@ function AllocationsPage(){
       </div>
 
       {/* Capacity cards — all active employees for chartMonth (mirrors Base44) */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:10}}>
         {(realEmps).filter(e=>isEmpActiveForMonth(e,chartMonth)).map(emp=>{
           const u=utilMap[emp.id]||{totalHours:0,availableHours:HPM,percentage:0,effectiveHPM:HPM,leaveDeduction:0,onLeave:false};
           return <AllocEmpCard key={emp.id} emp={emp} u={u} allocs={allocs} chartMonth={chartMonth} HPM={HPM} fmtH={fmtH}/>;
