@@ -2580,10 +2580,7 @@ function AllocationsPage(){
               </div>
               <PBar val={u.percentage} color={clr}/>
               <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#64748b",lineHeight:1.5,marginTop:3}}>
-                {u.onLeave
-                  ?<><span style={{color:"#d97706",fontWeight:700}}>On Leave</span><span style={{color:"#d97706",fontWeight:700}}>{fmtH(u.leaveDeduction||0)}h deducted</span></>
-                  :<><span>{fmtH(u.totalHours)}h allocated</span><span>{fmtH(u.availableHours)}h available</span></>
-                }
+                <span>{fmtH(u.totalHours)}h allocated</span><span>{fmtH(u.availableHours)}h available</span>
               </div>
             </Card>
           );
