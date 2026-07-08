@@ -989,11 +989,23 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
                   </button>
                 )}
               </div>
-              {/* Dept badge */}
+              {/* Dept badge + month pill */}
               {capDept==="all"&&(
-                <span style={{padding:"2px 7px",borderRadius:999,background:meta.bg,color:meta.color,fontSize:9,fontWeight:600,display:"inline-block",marginBottom:8}}>
-                  {emp.department?.replace(" Department","")}
-                </span>
+                <div style={{display:"flex",gap:5,alignItems:"center",marginBottom:8}}>
+                  <span style={{padding:"2px 7px",borderRadius:999,background:meta.bg,color:meta.color,fontSize:9,fontWeight:600}}>
+                    {emp.department?.replace(" Department","")}
+                  </span>
+                  <span style={{padding:"2px 7px",borderRadius:999,background:"#f1f5f9",color:"#475569",fontSize:9,fontWeight:600}}>
+                    {fmtLong(month)}
+                  </span>
+                </div>
+              )}
+              {capDept!=="all"&&(
+                <div style={{display:"flex",gap:5,alignItems:"center",marginBottom:8}}>
+                  <span style={{padding:"2px 7px",borderRadius:999,background:"#f1f5f9",color:"#475569",fontSize:9,fontWeight:600}}>
+                    {fmtLong(month)}
+                  </span>
+                </div>
               )}
               {/* Progress bar — always real utilization */}
               <div style={{height:6,borderRadius:99,background:"rgba(0,0,0,.07)",overflow:"hidden",marginBottom:6}}>
@@ -2305,7 +2317,7 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
   );
 }
 
-function AllocEmpCard({emp,u,allocs,chartMonth,HPM,fmtH}){
+function AllocEmpCard({emp,u,allocs,chartMonth,HPM,fmtH,fmtLong}){
   const effCap=u.effectiveHPM||HPM;
   const pct=Math.round(u.percentage);
   const theme=getCapTheme(pct,u.totalHours,HPM,u.onLeave);
@@ -2340,10 +2352,15 @@ function AllocEmpCard({emp,u,allocs,chartMonth,HPM,fmtH}){
           </button>
         )}
       </div>
-      {/* Dept badge */}
-      <span style={{padding:"2px 7px",borderRadius:999,background:meta.bg,color:meta.color,fontSize:9,fontWeight:600,display:"inline-block",marginBottom:8}}>
-        {emp.department?.replace(" Department","")}
-      </span>
+      {/* Dept badge + month pill */}
+      <div style={{display:"flex",gap:5,alignItems:"center",marginBottom:8}}>
+        <span style={{padding:"2px 7px",borderRadius:999,background:meta.bg,color:meta.color,fontSize:9,fontWeight:600}}>
+          {emp.department?.replace(" Department","")}
+        </span>
+        <span style={{padding:"2px 7px",borderRadius:999,background:"#f1f5f9",color:"#475569",fontSize:9,fontWeight:600}}>
+          {fmtLong(chartMonth)}
+        </span>
+      </div>
       {/* Progress bar */}
       <div style={{height:6,borderRadius:99,background:"rgba(0,0,0,.07)",overflow:"hidden",marginBottom:6}}>
         <div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:theme.barColor,borderRadius:99,transition:"width .4s ease"}}/>
@@ -2689,7 +2706,7 @@ function AllocationsPage(){
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:10}}>
         {(realEmps).filter(e=>isEmpActiveForMonth(e,chartMonth)).map(emp=>{
           const u=utilMap[emp.id]||{totalHours:0,availableHours:HPM,percentage:0,effectiveHPM:HPM,leaveDeduction:0,onLeave:false};
-          return <AllocEmpCard key={emp.id} emp={emp} u={u} allocs={allocs} chartMonth={chartMonth} HPM={HPM} fmtH={fmtH}/>;
+          return <AllocEmpCard key={emp.id} emp={emp} u={u} allocs={allocs} chartMonth={chartMonth} HPM={HPM} fmtH={fmtH} fmtLong={fmtLong}/>;
         })}
       </div>
 
