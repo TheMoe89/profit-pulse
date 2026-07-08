@@ -1005,10 +1005,10 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <span style={{fontSize:10,color:"#64748b",lineHeight:1.4}}>
                   {emp.onLeave
-                    ?<span style={{fontWeight:700,color:"#d97706"}}>On Leave · <strong>{fmtH(emp.leaveDeduction||0)}h</strong> deducted</span>
+                    ?<span style={{fontWeight:700,color:"#d97706"}}>On Leave</span>
                     :emp.h===0
                       ?<span style={{color:"#94a3b8"}}>0h</span>
-                      :<><strong style={{color:"#0f172a"}}>{fmtH(emp.h)}h</strong> · {fmtH(Math.max(0,emp.effectiveHPM||HPM-emp.h))}h free</>
+                      :<><strong style={{color:"#0f172a"}}>{fmtH(emp.h)}h</strong> · {fmtH(Math.max(0,(emp.effectiveHPM||HPM)-emp.h))}h free</>
                   }
                 </span>
                 {!emp.onLeave&&(
