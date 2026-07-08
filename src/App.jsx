@@ -144,13 +144,15 @@ const adminFetch = async (path, method='GET', body=null) => {
 // Count working days between two dates (excl Fri=5, Sat=6 for KSA)
 const countWorkingDays = (fromStr, toStr) => {
   if(!fromStr||!toStr) return 0;
-  const from = new Date(fromStr);
-  const to   = new Date(toStr);
+  // Parse as local date to avoid timezone offset issues with YYYY-MM-DD format
+  const parseLocal = s => { const [y,m,d]=s.split("-").map(Number); return new Date(y,m-1,d); };
+  const from = parseLocal(fromStr);
+  const to   = parseLocal(toStr);
   if(from>to) return 0;
   let count = 0;
   const cur = new Date(from);
   while(cur<=to){
-    const day = cur.getDay();
+    const day = cur.getDay(); // 0=Sun,5=Fri,6=Sat
     if(day!==5&&day!==6) count++;
     cur.setDate(cur.getDate()+1);
   }
@@ -2790,7 +2792,16 @@ function AllocationsPage(){
                 <div>
                   <Lbl>Hours/Month *</Lbl>
                   <Inp type="number" min="0" value={editForm.allocated_hours} onChange={e=>setEditForm(p=>({...p,allocated_hours:e.target.value}))} required/>
-                  <p style={{margin:"3px 0 0",fontSize:10,color:"#64748b",lineHeight:1.5}}>{fmtH(getRemainingHours(editing.employee_id,editForm.month,editing.id)+editing.allocated_hours)}h available</p>
+                  {(()=>{
+                    // Total remaining if we remove this allocation (to know how much space there is)
+                    const remWithout=getRemainingHours(editing.employee_id,editForm.month,editing.id);
+                    // Remaining after keeping current allocation
+                    const remWith=remWithout-parseFloat(editing.allocated_hours||0);
+                    const overAlloc=remWith<0;
+                    return <p style={{margin:"3px 0 0",fontSize:10,color:overAlloc?"#ef4444":"#64748b",lineHeight:1.5,fontWeight:overAlloc?700:400}}>
+                      {overAlloc?"⚠ Over-allocated by "+fmtH(Math.abs(remWith))+"h":fmtH(remWith)+"h available"}
+                    </p>;
+                  })()}
                 </div>
                 <div><Lbl>Month *</Lbl><Sel value={editForm.month} onChange={v=>setEditForm(p=>({...p,month:v}))} options={ALLOC_MONTHS}/></div>
               </div>
