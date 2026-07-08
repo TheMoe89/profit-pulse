@@ -2305,6 +2305,81 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
   );
 }
 
+function AllocEmpCard({emp,u,allocs,chartMonth,HPM,fmtH}){
+  const theme=getCapTheme(Math.round(u.percentage),u.totalHours,HPM,u.onLeave);
+  const meta=DEPT_COLORS[emp.department]||{color:"#475569",bg:"#f1f5f9"};
+  const clients=allocs.filter(a=>a.employee_id===emp.id&&a.month===chartMonth&&a.status!=="On Leave"&&(a.allocated_hours||0)>0).map(a=>({name:a.client_name||"",hours:a.allocated_hours||0}));
+  const [open,setOpen]=useState(false);
+  const ref=React.useRef(null);
+  React.useEffect(()=>{
+    if(!open) return;
+    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
+    document.addEventListener("mousedown",h);
+    return()=>document.removeEventListener("mousedown",h);
+  },[open]);
+  const pct=Math.round(u.percentage);
+  return(
+    <div ref={ref} style={{position:"relative",background:theme.cardBg,border:`1.5px solid ${theme.border}`,borderRadius:12,padding:14,boxShadow:"0 1px 3px rgba(0,0,0,.04)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:7}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
+          <div style={{width:30,height:30,borderRadius:8,background:`linear-gradient(135deg,${meta.color},${meta.color}88)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff",flexShrink:0}}>{emp.name.slice(0,2).toUpperCase()}</div>
+          <div style={{minWidth:0}}><p style={{margin:0,fontWeight:600,fontSize:12,color:"#0f172a",lineHeight:1.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{emp.name}</p><p style={{margin:0,fontSize:10,color:"#64748b",lineHeight:1.5}}>{emp.designation}</p></div>
+        </div>
+        {(clients.length>0||u.onLeave)&&(
+          <button onClick={()=>setOpen(v=>!v)} style={{padding:"4px",borderRadius:5,border:`1px solid ${open?meta.color:"#e2e8f0"}`,background:open?meta.bg:"#fff",cursor:"pointer",display:"flex",alignItems:"center",flexShrink:0,marginLeft:4,transition:"all .15s"}}>
+            <Eye size={11} strokeWidth={1.75} color={open?meta.color:"#94a3b8"}/>
+          </button>
+        )}
+      </div>
+      <PBar val={Math.min(pct,100)} color={theme.barColor}/>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11,color:"#64748b",lineHeight:1.5,marginTop:4}}>
+        <span>{fmtH(u.totalHours)}h allocated</span>
+        <span style={{padding:"1px 7px",borderRadius:999,background:theme.badgeBg,color:theme.badgeColor,fontSize:9,fontWeight:700}}>{u.totalHours===0?"Unallocated":theme.label}</span>
+        <span>{fmtH(u.availableHours)}h available</span>
+      </div>
+      {(clients.length>0||u.onLeave)&&(
+        <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,width:"100%",minWidth:200,background:"#fff",border:`1.5px solid ${meta.color}`,borderRadius:12,padding:"11px 13px",boxShadow:"0 8px 28px rgba(0,0,0,.15)",opacity:open?1:0,transform:open?"translateY(0)":"translateY(-6px)",transition:"opacity .18s ease,transform .18s ease",pointerEvents:open?"auto":"none",zIndex:50}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}>
+            <div>
+              <p style={{margin:0,fontWeight:700,fontSize:11,color:"#0f172a"}}>{emp.name}</p>
+              <p style={{margin:"1px 0 0",fontSize:9,color:"#94a3b8"}}>{clients.length} client{clients.length!==1?"s":""} · {fmtH(u.totalHours)}h total</p>
+            </div>
+            <button onClick={()=>setOpen(false)} style={{padding:3,borderRadius:5,border:"1px solid #e2e8f0",background:"#fff",cursor:"pointer",display:"flex"}}><X size={10} strokeWidth={2} color="#94a3b8"/></button>
+          </div>
+          {u.onLeave&&u.leaveDeduction>0&&(
+            <div style={{marginBottom:9,padding:"8px 10px",background:"#fef9c3",borderRadius:7,border:"1px solid #fde68a"}}>
+              <p style={{margin:"0 0 4px",fontSize:8,fontWeight:700,color:"#d97706",textTransform:"uppercase",letterSpacing:".06em"}}>On Leave This Month</p>
+              <p style={{margin:0,fontSize:10,color:"#92400e",lineHeight:1.5}}><strong>{u.leaveDeduction}h</strong> deducted · Effective cap: <strong>{fmtH(u.effectiveHPM)}h</strong> of {HPM}h</p>
+            </div>
+          )}
+          {clients.length>0&&(
+            <>
+              <p style={{margin:"0 0 6px",fontSize:8,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".06em"}}>Client breakdown</p>
+              <div style={{overflowY:"auto",maxHeight:200,overscrollBehavior:"contain"}}>
+                {clients.map((c,i)=>{
+                  const share=u.totalHours>0?Math.round((c.hours/u.totalHours)*100):0;
+                  return(
+                    <div key={i} style={{marginBottom:7}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:2}}>
+                        <span style={{fontSize:11,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,marginRight:8,lineHeight:1.4}}>{c.name}</span>
+                        <span style={{fontSize:11,fontWeight:700,color:"#008A57",flexShrink:0}}>{fmtH(c.hours)}h</span>
+                      </div>
+                      <div style={{height:4,borderRadius:99,background:"#f1f5f9",overflow:"hidden"}}>
+                        <div style={{height:"100%",width:`${share}%`,background:meta.color,borderRadius:99,opacity:.6}}/>
+                      </div>
+                      <p style={{margin:"1px 0 0",fontSize:9,color:"#94a3b8"}}>{share}% of total</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AllocationsPage(){
   const {sb,allowedDepts}=useAuth();
   const toast=useToast();
@@ -2580,26 +2655,8 @@ function AllocationsPage(){
       {/* Capacity cards — all active employees for chartMonth (mirrors Base44) */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
         {(realEmps).filter(e=>isEmpActiveForMonth(e,chartMonth)).map(emp=>{
-          const u=utilMap[emp.id]||{totalHours:0,availableHours:HPM,percentage:0};
-          const ov=u.percentage>100,ok=u.percentage>=70&&u.percentage<=100;
-          const border=ov?"#fecaca":ok?"#a7f3d0":"#fde68a";
-          const bg2=ov?"#fff5f5":ok?"#f0fdf4":"#fffbeb";
-          const clr=ov?"#EF4444":ok?"#10b981":"#d97706";
-          return(
-            <Card key={emp.id} style={{background:bg2,borderColor:border,padding:14}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:7}}>
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{width:30,height:30,borderRadius:8,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:clr,flexShrink:0}}>{emp.name.slice(0,2).toUpperCase()}</div>
-                  <div><p style={{margin:0,fontWeight:600,fontSize:12,color:"#0f172a",lineHeight:1.5}}>{emp.name}</p><p style={{margin:0,fontSize:10,color:"#64748b",lineHeight:1.5}}>{emp.designation}</p></div>
-                </div>
-                {ov&&<AlertTriangle size={12} strokeWidth={2} style={{color:"#ef4444",flexShrink:0}}/>}
-              </div>
-              <PBar val={u.percentage} color={clr}/>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#64748b",lineHeight:1.5,marginTop:3}}>
-                <span>{fmtH(u.totalHours)}h allocated</span><span>{fmtH(u.availableHours)}h available</span>
-              </div>
-            </Card>
-          );
+          const u=utilMap[emp.id]||{totalHours:0,availableHours:HPM,percentage:0,effectiveHPM:HPM,leaveDeduction:0,onLeave:false};
+          return <AllocEmpCard key={emp.id} emp={emp} u={u} allocs={allocs} chartMonth={chartMonth} HPM={HPM} fmtH={fmtH}/>;
         })}
       </div>
 
