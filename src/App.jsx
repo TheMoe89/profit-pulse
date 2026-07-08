@@ -863,6 +863,7 @@ function getCapTheme(pct,hours,cap,onLeave){
 function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
   const [capDept,setCapDept]=useState("all");
   const [capStatus,setCapStatus]=useState("All Statuses");
+  const [capEmpSearch,setCapEmpSearch]=useState("");
   const [openId,setOpenId]=useState(null);
   const cardRefs=React.useRef({});
 
@@ -885,17 +886,18 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
   };
 
   const deptFiltered=capDept==="all"?eu:eu.filter(e=>e.department===capDept);
-  const visible=deptFiltered.filter(e=>{
+  const empSearchFiltered=capEmpSearch?deptFiltered.filter(e=>e.name.toLowerCase().includes(capEmpSearch.toLowerCase())):deptFiltered;
+  const visible=empSearchFiltered.filter(e=>{
     if(capStatus==="All Statuses") return true;
     const th=getCapTheme(Math.round((e.h/HPM)*100),e.h,HPM,e.onLeave);
     return th.label===capStatus;
   }).slice().sort((a,b)=>sortOrder(a)-sortOrder(b)||(b.h-a.h));
 
-  const fullyCount =deptFiltered.filter(e=>!e.onLeave&&e.h>158).length;
-  const optCount   =deptFiltered.filter(e=>!e.onLeave&&e.h>=123&&e.h<=158).length;
-  const underCount =deptFiltered.filter(e=>!e.onLeave&&e.h>0&&e.h<123).length;
-  const leaveCount =deptFiltered.filter(e=>e.onLeave).length;
-  const unallocCount=deptFiltered.filter(e=>!e.onLeave&&e.h===0).length;
+  const fullyCount =empSearchFiltered.filter(e=>!e.onLeave&&e.h>158).length;
+  const optCount   =empSearchFiltered.filter(e=>!e.onLeave&&e.h>=123&&e.h<=158).length;
+  const underCount =empSearchFiltered.filter(e=>!e.onLeave&&e.h>0&&e.h<123).length;
+  const leaveCount =empSearchFiltered.filter(e=>e.onLeave).length;
+  const unallocCount=empSearchFiltered.filter(e=>!e.onLeave&&e.h===0).length;
 
   const selStyle={padding:"7px 12px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:11,fontWeight:600,color:"#0f172a",background:"#fff",cursor:"pointer",outline:"none",appearance:"none",backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,backgroundRepeat:"no-repeat",backgroundPosition:"right 9px center",paddingRight:26};
 
@@ -908,7 +910,12 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
           <p style={{margin:"1px 0 0",fontSize:10,color:"#64748b",lineHeight:1.5}}>{fmtLong(month)} · {HPM}h/person</p>
         </div>
         {/* Dropdowns */}
-        <div style={{display:"flex",gap:8}}>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <div style={{position:"relative",display:"flex",alignItems:"center"}}>
+            <Search size={12} strokeWidth={1.75} style={{position:"absolute",left:8,color:"#94a3b8",pointerEvents:"none"}}/>
+            <input value={capEmpSearch} onChange={e=>setCapEmpSearch(e.target.value)} placeholder="Search employee..." style={{...selStyle,paddingLeft:26,minWidth:160}}/>
+            {capEmpSearch&&<button onClick={()=>setCapEmpSearch("")} style={{position:"absolute",right:6,background:"none",border:"none",cursor:"pointer",color:"#94a3b8",padding:0,display:"flex",alignItems:"center"}}><X size={11} strokeWidth={2}/></button>}
+          </div>
           <select value={capDept} onChange={e=>{setCapDept(e.target.value);setOpenId(null);}} style={selStyle}>
             <option value="all">All Departments</option>
             {(!allowedDepts||allowedDepts.includes("Creative Department"))&&<option value="Creative Department">Creative</option>}
