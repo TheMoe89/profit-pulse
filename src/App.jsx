@@ -4093,7 +4093,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
                       )}
                     </td>
                     <td style={{padding:"10px 13px",textAlign:"center"}}>
-                      <span style={{padding:"2px 9px",borderRadius:999,fontSize:11,fontWeight:700,color:"#"+r.status.fgRGB,background:"#"+r.status.bgRGB}}>{r.status.label}</span>
+                      <span style={{padding:"2px 9px",borderRadius:999,fontSize:11,fontWeight:700,color:"#"+r.status.fgRGB,background:"#"+r.status.bgRGB,whiteSpace:"nowrap"}}>{r.status.label}</span>
                     </td>
                     <td style={{padding:"10px 13px",textAlign:"center",fontSize:12,fontWeight:700,color:r.isRange?"#008A57":r.onLeave?"#d97706":"#64748b"}}>{r.isRange?r.n+"mo":r.leavedays||"—"}</td>
                     <td style={{padding:"10px 13px",textAlign:"center",fontSize:12,fontWeight:700,color:r.isRange?"#008A57":r.onLeave?"#d97706":"#64748b"}}>{r.isRange?r.totalAlloc+"h":r.leaveDeduction||"—"}</td>
