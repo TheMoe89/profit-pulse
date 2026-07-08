@@ -995,16 +995,10 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
                   {emp.department?.replace(" Department","")}
                 </span>
               )}
-              {/* Progress bar */}
-              {emp.onLeave?(
-                <div style={{height:6,borderRadius:99,overflow:"hidden",marginBottom:6}}>
-                  <div style={{height:"100%",width:"100%",background:"repeating-linear-gradient(45deg,#fde68a,#fde68a 3px,#fef9c3 3px,#fef9c3 6px)"}}/>
-                </div>
-              ):(
-                <div style={{height:6,borderRadius:99,background:"rgba(0,0,0,.07)",overflow:"hidden",marginBottom:6}}>
-                  <div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:theme.barColor,borderRadius:99,transition:"width .4s ease"}}/>
-                </div>
-              )}
+              {/* Progress bar — always real utilization */}
+              <div style={{height:6,borderRadius:99,background:"rgba(0,0,0,.07)",overflow:"hidden",marginBottom:6}}>
+                <div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:theme.barColor,borderRadius:99,transition:"width .4s ease"}}/>
+              </div>
               {/* Hours + badge */}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <span style={{fontSize:10,color:"#64748b",lineHeight:1.4}}>
@@ -1013,15 +1007,10 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
                     :<><strong style={{color:"#0f172a"}}>{fmtH(emp.h)}h</strong> · {fmtH(Math.max(0,effCap-emp.h))}h free</>
                   }
                 </span>
-                {!emp.onLeave&&(
-                  <span style={{padding:"1px 7px",borderRadius:999,background:theme.badgeBg,color:theme.badgeColor,fontSize:9,fontWeight:700}}>{emp.h===0?"Unallocated":theme.label}</span>
-                )}
-                {emp.onLeave&&(
-                  <span style={{padding:"1px 7px",borderRadius:999,background:"#fef9c3",color:"#d97706",fontSize:9,fontWeight:700}}>On Leave</span>
-                )}
+                <span style={{padding:"1px 7px",borderRadius:999,background:theme.badgeBg,color:theme.badgeColor,fontSize:9,fontWeight:700}}>{emp.h===0?"Unallocated":theme.label}</span>
               </div>
-              {/* Over warning */}
-              {over&&(
+              {/* Over warning — only for non-leave employees */}
+              {over&&!emp.onLeave&&(
                 <div style={{marginTop:6,display:"flex",alignItems:"center",gap:4,padding:"3px 7px",background:"#fee2e2",borderRadius:5,border:"1px solid #fca5a5"}}>
                   <AlertTriangle size={9} strokeWidth={2} color="#ef4444"/>
                   <span style={{fontSize:9,color:"#ef4444",fontWeight:600}}>Over by {fmtH(emp.h-effCap)}h</span>
