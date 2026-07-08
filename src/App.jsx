@@ -2358,7 +2358,8 @@ function AllocationsPage(){
       const h=empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
       const leaveDeduction=empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
       const effectiveHPM=Math.max(0,HPM-leaveDeduction);
-      map[emp.id]={totalHours:h,availableHours:Math.max(0,effectiveHPM-h),percentage:effectiveHPM>0?(h/effectiveHPM)*100:0,effectiveHPM};
+      const onLeave=empAllocs.some(a=>a.status==='On Leave');
+      map[emp.id]={totalHours:h,availableHours:Math.max(0,effectiveHPM-h),percentage:effectiveHPM>0?(h/effectiveHPM)*100:0,effectiveHPM,leaveDeduction,onLeave};
     });
     return map;
   },[allocs]);
@@ -2579,7 +2580,10 @@ function AllocationsPage(){
               </div>
               <PBar val={u.percentage} color={clr}/>
               <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#64748b",lineHeight:1.5,marginTop:3}}>
-                <span>{fmtH(u.totalHours)}h allocated</span><span>{fmtH(u.availableHours)}h available</span>
+                {u.onLeave
+                  ?<><span style={{color:"#d97706",fontWeight:700}}>On Leave</span><span style={{color:"#d97706",fontWeight:700}}>{fmtH(u.leaveDeduction||0)}h deducted</span></>
+                  :<><span>{fmtH(u.totalHours)}h allocated</span><span>{fmtH(u.availableHours)}h available</span></>
+                }
               </div>
             </Card>
           );
