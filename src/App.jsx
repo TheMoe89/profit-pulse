@@ -6115,6 +6115,172 @@ function ContractExpensesPage(){
 
 
 
+function PublicHolidaysTab({sb}){
+  const toast=useToast();
+  const confirm=useConfirm();
+  const [holidays,setHolidays]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [modalOpen,setModalOpen]=useState(false);
+  const [editing,setEditing]=useState(null);
+  const EMPTY={name:"",from_date:"",to_date:"",country:"Both"};
+  const [form,setForm]=useState(EMPTY);
+  const [saving,setSaving]=useState(false);
+
+  useEffect(()=>{
+    sb.from('public_holidays').select('*').order('from_date').then(({data})=>{
+      if(data) setHolidays(data);
+      setLoading(false);
+    });
+  },[sb]);
+
+  const workingDays=(from,to)=>{
+    if(!from||!to) return 0;
+    let count=0,cur=new Date(from);
+    const end=new Date(to);
+    while(cur<=end){const d=cur.getDay();if(d!==5&&d!==6)count++;cur.setDate(cur.getDate()+1);}
+    return count;
+  };
+
+  const openAdd=()=>{setEditing(null);setForm(EMPTY);setModalOpen(true);};
+  const openEdit=h=>{setEditing(h);setForm({name:h.name,from_date:h.from_date,to_date:h.to_date,country:h.country});setModalOpen(true);};
+
+  const handleSave=async()=>{
+    if(!form.name||!form.from_date||!form.to_date){toast("Please fill all fields","warning");return;}
+    setSaving(true);
+    try{
+      const days=workingDays(form.from_date,form.to_date);
+      const payload={name:form.name,from_date:form.from_date,to_date:form.to_date,country:form.country,working_days:days};
+      if(editing){
+        const{data,error}=await sb.from('public_holidays').update(payload).eq('id',editing.id).select().single();
+        if(error)throw new Error(error.message);
+        if(data)setHolidays(p=>p.map(h=>h.id===editing.id?data:h));
+        toast("Holiday updated","success");
+      } else {
+        const{data,error}=await sb.from('public_holidays').insert([payload]).select().single();
+        if(error)throw new Error(error.message);
+        if(data)setHolidays(p=>[...p,data].sort((a,b)=>a.from_date.localeCompare(b.from_date)));
+        toast("Holiday added","success");
+      }
+      setModalOpen(false);
+    }catch(err){toast(err.message||"Failed to save","error");}
+    finally{setSaving(false);}
+  };
+
+  const handleDelete=async h=>{
+    const ok=await confirm({title:"Delete holiday?",message:`"${h.name}" will be permanently removed.`,danger:true,confirmLabel:"Delete"});
+    if(!ok) return;
+    await sb.from('public_holidays').delete().eq('id',h.id);
+    setHolidays(p=>p.filter(x=>x.id!==h.id));
+    toast("Holiday deleted","success");
+  };
+
+  const fmtDate=d=>d?new Date(d+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"—";
+  const countryBadge=c=>c==="KSA"?{bg:"#dbeafe",color:"#1d4ed8"}:c==="EGY"?{bg:"#fef9c3",color:"#d97706"}:{bg:"#f1f5f9",color:"#475569"};
+
+  const days=workingDays(form.from_date,form.to_date);
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <Card style={{overflow:"hidden",padding:0}}>
+        <div style={{padding:"14px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <Calendar size={15} strokeWidth={1.75} color="#008A57"/>
+            <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>Public Holiday Library</p>
+          </div>
+          <Btn variant="primary" size="sm" onClick={openAdd}><Plus size={13} strokeWidth={2}/>Add Holiday</Btn>
+        </div>
+        {loading?(
+          <div style={{padding:24}}><Skeleton h={14} mb={10}/><Skeleton h={14} mb={10}/><Skeleton h={14}/></div>
+        ):holidays.length===0?(
+          <div style={{padding:40,textAlign:"center"}}>
+            <Calendar size={32} color="#cbd5e1" style={{marginBottom:12}}/>
+            <p style={{margin:0,fontSize:14,color:"#94a3b8",fontWeight:600}}>No holidays defined yet</p>
+            <p style={{margin:"4px 0 0",fontSize:12,color:"#cbd5e1"}}>Add public holidays to use them in mass allocation</p>
+          </div>
+        ):(
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead>
+              <tr style={{background:"#f8fafc"}}>
+                {["Holiday Name","From","To","Working Days","Country","Actions"].map((h,i)=>(
+                  <th key={h} style={{padding:"9px 14px",textAlign:i>=3?"center":"left",fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".04em",borderBottom:"1px solid #e2e8f0",whiteSpace:"nowrap"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {holidays.map((h,i)=>{
+                const cb=countryBadge(h.country);
+                return(
+                  <tr key={h.id} style={{borderBottom:"1px solid #f1f5f9",background:i%2===0?"#fff":"#fafafa"}}>
+                    <td style={{padding:"10px 14px",fontWeight:600,fontSize:13,color:"#0f172a"}}>{h.name}</td>
+                    <td style={{padding:"10px 14px",fontSize:13,color:"#475569"}}>{fmtDate(h.from_date)}</td>
+                    <td style={{padding:"10px 14px",fontSize:13,color:"#475569"}}>{fmtDate(h.to_date)}</td>
+                    <td style={{padding:"10px 14px",textAlign:"center"}}>
+                      <span style={{padding:"2px 10px",borderRadius:999,background:"#f0fdf4",color:"#059669",fontSize:12,fontWeight:700}}>{h.working_days||workingDays(h.from_date,h.to_date)} days</span>
+                    </td>
+                    <td style={{padding:"10px 14px",textAlign:"center"}}>
+                      <span style={{padding:"2px 10px",borderRadius:999,background:cb.bg,color:cb.color,fontSize:11,fontWeight:700}}>{h.country}</span>
+                    </td>
+                    <td style={{padding:"10px 14px",textAlign:"right"}}>
+                      <div style={{display:"flex",justifyContent:"flex-end",gap:4}}>
+                        <Btn variant="ghost" size="sm" onClick={()=>openEdit(h)}><Pencil size={14} strokeWidth={1.75}/></Btn>
+                        <Btn variant="danger" size="sm" onClick={()=>handleDelete(h)}><Trash2 size={14} strokeWidth={1.75}/></Btn>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
+      {/* Add/Edit Modal */}
+      <Modal open={modalOpen} onClose={()=>setModalOpen(false)} title={editing?"Edit Holiday":"Add Public Holiday"}>
+        <div style={{display:"flex",flexDirection:"column",gap:13}}>
+          <div>
+            <Lbl>Holiday Name *</Lbl>
+            <Inp value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} placeholder="e.g. Eid Al-Fitr"/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div>
+              <Lbl>From Date *</Lbl>
+              <Inp type="date" value={form.from_date} onChange={e=>setForm(p=>({...p,from_date:e.target.value}))}/>
+            </div>
+            <div>
+              <Lbl>To Date *</Lbl>
+              <Inp type="date" value={form.to_date} onChange={e=>setForm(p=>({...p,to_date:e.target.value}))}/>
+            </div>
+          </div>
+          {form.from_date&&form.to_date&&(
+            <div style={{padding:"8px 12px",background:"#f0fdf4",borderRadius:8,border:"1px solid #a7f3d0"}}>
+              <p style={{margin:0,fontSize:12,color:"#059669",fontWeight:600}}>{days} working day{days!==1?"s":""} · {days*8}h capacity deduction per employee</p>
+            </div>
+          )}
+          <div>
+            <Lbl>Applies To *</Lbl>
+            <div style={{display:"flex",gap:8}}>
+              {["KSA","EGY","Both"].map(c=>{
+                const cb=countryBadge(c);
+                const sel=form.country===c;
+                return(
+                  <button key={c} onClick={()=>setForm(p=>({...p,country:c}))}
+                    style={{flex:1,padding:"8px 12px",borderRadius:8,border:`1.5px solid ${sel?cb.color:"#e2e8f0"}`,background:sel?cb.bg:"#fff",color:sel?cb.color:"#64748b",fontSize:12,fontWeight:sel?700:500,cursor:"pointer",transition:"all .15s"}}>
+                    {c==="KSA"?"🇸🇦 KSA":c==="EGY"?"🇪🇬 Egypt":"🌍 Both"}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:4}}>
+            <Btn variant="outline" onClick={()=>setModalOpen(false)}>Cancel</Btn>
+            <Btn variant="primary" onClick={handleSave} disabled={saving}>{saving?"Saving...":"Save Holiday"}</Btn>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
 function SystemUsersPage(){
   const {sb,profile:currentProfile,startImpersonate}=useAuth();
   const toast=useToast();
@@ -6407,20 +6573,30 @@ function SystemUsersPage(){
     <div style={{display:"flex",flexDirection:"column",gap:18}}>
       {/* Header */}
       <div>
-        <h1 style={{fontSize:26,fontWeight:800,color:"#0f172a",margin:0}}>System Users</h1>
-        <p style={{fontSize:13,color:"#64748b",lineHeight:1.5,marginTop:3}}>Manage users and role permissions</p>
+        <h1 style={{fontSize:26,fontWeight:800,color:"#0f172a",margin:0}}>System Settings</h1>
+        <p style={{fontSize:13,color:"#64748b",lineHeight:1.5,marginTop:3}}>Manage users, roles, and system configuration</p>
       </div>
 
-      {/* Tab bar */}
-      <div style={{display:"flex",gap:4,background:"#f1f5f9",borderRadius:10,padding:4,maxWidth:340}}>
-        {[["users",Users,"Users"],["roles",ShieldCheck,"Role Permissions"]].map(([v,Ic,l])=>(
+      {/* Top-level sub-tabs */}
+      <div style={{display:"flex",gap:4,background:"#f1f5f9",borderRadius:10,padding:4,maxWidth:400}}>
+        {[["system_users",UserCog,"System Users"],["public_holidays",Calendar,"Public Holidays"]].map(([v,Ic,l])=>(
           <button key={v} onClick={()=>setTab(v)} style={{flex:1,padding:"8px 12px",borderRadius:8,border:"none",background:tab===v?"#fff":"transparent",fontWeight:tab===v?700:500,fontSize:13,color:tab===v?"#0f172a":"#64748b",cursor:"pointer",boxShadow:tab===v?"0 1px 3px rgba(0,0,0,.1)":"none",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}><Ic size={14} strokeWidth={1.75}/>{l}</button>
         ))}
       </div>
 
-      {/* ── USERS TAB ── */}
-      {tab==="users"&&(
+      {/* ── PUBLIC HOLIDAYS TAB ── */}
+      {tab==="public_holidays"&&<PublicHolidaysTab sb={sb}/>}
+
+      {/* ── SYSTEM USERS TAB ── */}
+      {(tab==="users"||tab==="system_users")&&(
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
+
+          {/* Inner sub-tabs: Users / Role Permissions */}
+          <div style={{display:"flex",gap:4,background:"#f1f5f9",borderRadius:10,padding:4,maxWidth:340}}>
+            {[["users",Users,"Users"],["roles",ShieldCheck,"Role Permissions"]].map(([v,Ic,l])=>(
+              <button key={v} onClick={()=>setTab(v)} style={{flex:1,padding:"8px 12px",borderRadius:8,border:"none",background:tab===v?"#fff":"transparent",fontWeight:tab===v?700:500,fontSize:13,color:tab===v?"#0f172a":"#64748b",cursor:"pointer",boxShadow:tab===v?"0 1px 3px rgba(0,0,0,.1)":"none",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}><Ic size={14} strokeWidth={1.75}/>{l}</button>
+            ))}
+          </div>
 
           {/* ── Add New User card — tabbed ─────────────────────── */}
           <Card style={{overflow:"hidden",padding:0}}>
@@ -6624,7 +6800,7 @@ function SystemUsersPage(){
       )}
 
       {/* ── ROLES TAB ── */}
-      {tab==="roles"&&(
+      {(tab==="roles")&&(
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div><p style={{margin:0,fontWeight:700,fontSize:15,color:"#0f172a",lineHeight:1.5}}>Role Permissions</p><p style={{margin:"2px 0 0",fontSize:12,color:"#64748b",lineHeight:1.5}}>Define what each role can access</p></div>
