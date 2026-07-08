@@ -2434,7 +2434,7 @@ function AllocationsPage(){
 
   const closeModal=()=>{setModalOpen(false);setEditing(null);setFormStep(1);setSelMonth("");setSelEmpIds([]);setEmpAllocs({});setEmpSearch("");setConfirmOpen(false);setNewForm({month:"",empStatus:"in_duty",clientId:"",clientCat:"all",notes:"",rows:[{id:1,empId:"",hours:""}],leaveFrom:"",leaveTo:""});};
   const openAdd=()=>{setEditing(null);setFormStep(1);setSelMonth("");setSelEmpIds([]);setEmpAllocs({});setNewForm({month:"",empStatus:"in_duty",clientId:"",clientCat:"all",notes:"",rows:[{id:1,empId:"",hours:""}],leaveFrom:"",leaveTo:""});setModalOpen(true);};
-  const openEdit=a=>{setEditing(a);setEditForm({allocated_hours:a.allocated_hours,month:a.month,notes:a.notes||""});setModalOpen(true);};
+  const openEdit=a=>{setEditing(a);setEditForm({allocated_hours:a.allocated_hours,month:a.month,notes:a.notes||"",leave_from:a.leave_from||"",leave_to:a.leave_to||""});setModalOpen(true);};
 
   const handleEmpToggle=(id,checked)=>{
     if(checked){setSelEmpIds(p=>[...p,id]);setEmpAllocs(p=>({...p,[id]:{hours:"",notes:"",client_id:""}}));}
@@ -2503,9 +2503,15 @@ function AllocationsPage(){
 
   const handleEditSubmit=async e=>{
     e.preventDefault();
-    const rem=getRemainingHours(editing.employee_id,editForm.month,editing.id);
-    if(parseFloat(editForm.allocated_hours)>rem+editing.allocated_hours){toast(`Only ${rem+editing.allocated_hours}h available.`);return;}
-    await dbUpdate(editing.id,{allocated_hours:parseFloat(editForm.allocated_hours),month:editForm.month,notes:editForm.notes});
+    if(editing.status==="On Leave"){
+      const lDays=countWorkingDays(editForm.leave_from,editForm.leave_to);
+      const capDed=Math.round(lDays*(176/22));
+      await dbUpdate(editing.id,{leave_from:editForm.leave_from,leave_to:editForm.leave_to,leave_days:lDays,capacity_deduction:capDed,notes:editForm.notes});
+    } else {
+      const rem=getRemainingHours(editing.employee_id,editForm.month,editing.id);
+      if(parseFloat(editForm.allocated_hours)>rem+editing.allocated_hours){toast(`Only ${rem+editing.allocated_hours}h available.`);return;}
+      await dbUpdate(editing.id,{allocated_hours:parseFloat(editForm.allocated_hours),month:editForm.month,notes:editForm.notes});
+    }
     closeModal();
   };
 
@@ -2723,8 +2729,8 @@ function AllocationsPage(){
                                 </td>
                                 <td style={{padding:"10px 13px",color:"#0f172a"}}>{a.status==="On Leave"?<span style={{fontSize:11,fontWeight:600,color:"#d97706",background:"#fef9c3",padding:"2px 8px",borderRadius:999}}>On Leave</span>:(a.client_name||"—")}</td>
                                 <td style={{padding:"10px 13px",textAlign:"center"}}>
-                                  <span style={{display:"inline-flex",alignItems:"center",gap:5,background:"#f1f5f9",padding:"3px 10px",borderRadius:999,fontSize:12}}>
-                                    <span style={{display:"inline-flex",alignItems:"center",gap:4}}><Clock size={11} strokeWidth={1.75}/>{a.allocated_hours} hrs</span>
+                                  <span style={{display:"inline-flex",alignItems:"center",gap:5,background:a.status==="On Leave"?"#fef9c3":"#f1f5f9",padding:"3px 10px",borderRadius:999,fontSize:12}}>
+                                    <span style={{display:"inline-flex",alignItems:"center",gap:4,color:a.status==="On Leave"?"#d97706":"inherit"}}><Clock size={11} strokeWidth={1.75}/>{a.status==="On Leave"?`${a.capacity_deduction||0}h deducted`:`${a.allocated_hours} hrs`}</span>
                                   </span>
                                 </td>
                                 <td style={{padding:"10px 13px",textAlign:"center"}}>
@@ -2796,25 +2802,41 @@ function AllocationsPage(){
             <div style={{display:"flex",flexDirection:"column",gap:13}}>
               <div style={{padding:"8px 12px",background:"#f8fafc",borderRadius:8,border:"1px solid #e2e8f0"}}>
                 <p style={{margin:0,fontSize:12,color:"#475569",lineHeight:1.5}}>Employee: <strong style={{color:"#0f172a"}}>{editing.employee_name}</strong></p>
-                <p style={{margin:"2px 0 0",fontSize:12,color:"#475569",lineHeight:1.5}}>Client: <strong style={{color:"#0f172a"}}>{editing.client_name}</strong></p>
+                <p style={{margin:"2px 0 0",fontSize:12,color:"#475569",lineHeight:1.5}}>{editing.status==="On Leave"?<span style={{color:"#d97706",fontWeight:600}}>On Leave</span>:<>Client: <strong style={{color:"#0f172a"}}>{editing.client_name}</strong></>}</p>
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <div>
-                  <Lbl>Hours/Month *</Lbl>
-                  <Inp type="number" min="0" value={editForm.allocated_hours} onChange={e=>setEditForm(p=>({...p,allocated_hours:e.target.value}))} required/>
-                  {(()=>{
-                    // Total remaining if we remove this allocation (to know how much space there is)
-                    const remWithout=getRemainingHours(editing.employee_id,editForm.month,editing.id);
-                    // Remaining after keeping current allocation
-                    const remWith=remWithout-parseFloat(editing.allocated_hours||0);
-                    const overAlloc=remWith<0;
-                    return <p style={{margin:"3px 0 0",fontSize:10,color:overAlloc?"#ef4444":"#64748b",lineHeight:1.5,fontWeight:overAlloc?700:400}}>
-                      {overAlloc?"⚠ Over-allocated by "+fmtH(Math.abs(remWith))+"h":fmtH(remWith)+"h available"}
-                    </p>;
+              {editing.status==="On Leave"?(
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                  <div>
+                    <Lbl>From Date *</Lbl>
+                    <Inp type="date" value={editForm.leave_from} onChange={e=>setEditForm(p=>({...p,leave_from:e.target.value}))} required/>
+                  </div>
+                  <div>
+                    <Lbl>To Date *</Lbl>
+                    <Inp type="date" value={editForm.leave_to} onChange={e=>setEditForm(p=>({...p,leave_to:e.target.value}))} required/>
+                  </div>
+                  {editForm.leave_from&&editForm.leave_to&&(()=>{
+                    const days=countWorkingDays(editForm.leave_from,editForm.leave_to);
+                    const hrs=Math.round(days*(176/22));
+                    return <p style={{margin:"0",fontSize:11,color:"#d97706",gridColumn:"1/-1",lineHeight:1.5,fontWeight:600}}>{days} working day(s) — {hrs}h capacity deducted</p>;
                   })()}
                 </div>
-                <div><Lbl>Month *</Lbl><Sel value={editForm.month} onChange={v=>setEditForm(p=>({...p,month:v}))} options={ALLOC_MONTHS}/></div>
-              </div>
+              ):(
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                  <div>
+                    <Lbl>Hours/Month *</Lbl>
+                    <Inp type="number" min="0" value={editForm.allocated_hours} onChange={e=>setEditForm(p=>({...p,allocated_hours:e.target.value}))} required/>
+                    {(()=>{
+                      const remWithout=getRemainingHours(editing.employee_id,editForm.month,editing.id);
+                      const remWith=remWithout-parseFloat(editing.allocated_hours||0);
+                      const overAlloc=remWith<0;
+                      return <p style={{margin:"3px 0 0",fontSize:10,color:overAlloc?"#ef4444":"#64748b",lineHeight:1.5,fontWeight:overAlloc?700:400}}>
+                        {overAlloc?"⚠ Over-allocated by "+fmtH(Math.abs(remWith))+"h":fmtH(remWith)+"h available"}
+                      </p>;
+                    })()}
+                  </div>
+                  <div><Lbl>Month *</Lbl><Sel value={editForm.month} onChange={v=>setEditForm(p=>({...p,month:v}))} options={ALLOC_MONTHS}/></div>
+                </div>
+              )}
               <div><Lbl>Notes</Lbl><Inp value={editForm.notes} onChange={e=>setEditForm(p=>({...p,notes:e.target.value}))} placeholder="Allocation notes..."/></div>
               <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:4}}><Btn variant="outline" onClick={closeModal}>Cancel</Btn><Btn variant="primary" type="submit">Update</Btn></div>
             </div>
