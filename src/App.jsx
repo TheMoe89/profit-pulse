@@ -2344,10 +2344,6 @@ function AllocEmpCard({emp,u,allocs,chartMonth,HPM,fmtH,fmtLong}){
   const toggle=()=>setOpen(v=>!v);
   const over=u.totalHours>effCap;
   const fmtD=d=>d?new Date(d+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"}):"—";
-
-  // Pure leave card (only leave records, no client allocation)
-  const isPureLeave=u.onLeave&&clients.length===0;
-
   return(
     <div ref={ref} style={{position:"relative",padding:"12px 14px",borderRadius:12,border:`1.5px solid ${open?meta.color:theme.border}`,background:theme.cardBg,boxShadow:open?"0 4px 12px rgba(0,0,0,.08)":"0 1px 3px rgba(0,0,0,.04)",transition:"all .15s ease"}}>
       {/* Header */}
@@ -2372,34 +2368,20 @@ function AllocEmpCard({emp,u,allocs,chartMonth,HPM,fmtH,fmtLong}){
         <span style={{padding:"2px 7px",borderRadius:999,background:meta.bg,color:meta.color,fontSize:9,fontWeight:600}}>{emp.department?.replace(" Department","")}</span>
         <span style={{padding:"2px 7px",borderRadius:999,background:"#f1f5f9",color:"#475569",fontSize:9,fontWeight:600}}>{fmtLong(chartMonth)}</span>
       </div>
-      {/* Progress bar — hide for pure leave cards */}
-      {!isPureLeave&&(
-        <div style={{height:6,borderRadius:99,background:"rgba(0,0,0,.07)",overflow:"hidden",marginBottom:6}}>
-          <div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:theme.barColor,borderRadius:99,transition:"width .4s ease"}}/>
-        </div>
-      )}
-      {/* Bottom row */}
-      {isPureLeave?(
-        // Leave-only card: show each leave record as a pill
-        <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:2}}>
-          {leaveRecords.map((lr,i)=>(
-            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 8px",background:"#fef9c3",borderRadius:7,border:"1px solid #fde68a"}}>
-              <span style={{fontSize:9,fontWeight:700,color:"#d97706",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1,marginRight:6}}>{lr.status}</span>
-              <span style={{fontSize:9,color:"#92400e",fontWeight:600,flexShrink:0}}>{lr.capacity_deduction||0}h deducted</span>
-            </div>
-          ))}
-        </div>
-      ):(
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <span style={{fontSize:10,color:"#64748b",lineHeight:1.4}}>
-            {u.totalHours===0&&!u.onLeave
-              ?<span style={{color:"#94a3b8"}}>0h</span>
-              :<><strong style={{color:"#0f172a"}}>{fmtH(u.totalHours)}h</strong> · {fmtH(Math.max(0,effCap-u.totalHours))}h free</>
-            }
-          </span>
-          <span style={{padding:"1px 7px",borderRadius:999,background:theme.badgeBg,color:theme.badgeColor,fontSize:9,fontWeight:700}}>{u.totalHours===0?"Unallocated":theme.label}</span>
-        </div>
-      )}
+      {/* Progress bar */}
+      <div style={{height:6,borderRadius:99,background:"rgba(0,0,0,.07)",overflow:"hidden",marginBottom:6}}>
+        <div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:theme.barColor,borderRadius:99,transition:"width .4s ease"}}/>
+      </div>
+      {/* Hours + badge */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:10,color:"#64748b",lineHeight:1.4}}>
+          {u.totalHours===0&&!u.onLeave
+            ?<span style={{color:"#94a3b8"}}>0h</span>
+            :<><strong style={{color:"#0f172a"}}>{fmtH(u.totalHours)}h</strong> · {fmtH(Math.max(0,effCap-u.totalHours))}h free</>
+          }
+        </span>
+        <span style={{padding:"1px 7px",borderRadius:999,background:theme.badgeBg,color:theme.badgeColor,fontSize:9,fontWeight:700}}>{u.totalHours===0?"Unallocated":theme.label}</span>
+      </div>
       {/* Over warning */}
       {over&&!u.onLeave&&(
         <div style={{marginTop:6,display:"flex",alignItems:"center",gap:4,padding:"3px 7px",background:"#fee2e2",borderRadius:5,border:"1px solid #fca5a5"}}>
@@ -2417,7 +2399,6 @@ function AllocEmpCard({emp,u,allocs,chartMonth,HPM,fmtH,fmtLong}){
             </div>
             <button onClick={()=>setOpen(false)} style={{padding:3,borderRadius:5,border:"1px solid #e2e8f0",background:"#fff",cursor:"pointer",display:"flex"}}><X size={10} strokeWidth={2} color="#94a3b8"/></button>
           </div>
-          {/* Each leave record separately */}
           {leaveRecords.length>0&&(
             <div style={{marginBottom:9,display:"flex",flexDirection:"column",gap:5}}>
               <p style={{margin:"0 0 4px",fontSize:8,fontWeight:700,color:"#d97706",textTransform:"uppercase",letterSpacing:".06em"}}>Leave This Month</p>
@@ -2899,8 +2880,9 @@ function AllocationsPage(){
                           const pct=Math.min(100,util.percentage||0);
                           const clr=pct>100?"#ef4444":pct>=70?"#10b981":"#d97706";
                           const sb2=statusBadge(a.status);
+                          const aIsLeave=isLeave(a.status);
                           return(
-                            <div key={a.id} style={{border:"1px solid #e2e8f0",borderRadius:10,padding:12,background:"#fff",display:"flex",flexDirection:"column",gap:8}}>
+                            <div key={a.id} style={{border:`1px solid ${aIsLeave?"#fde68a":"#e2e8f0"}`,borderRadius:10,padding:12,background:aIsLeave?"#fffbeb":"#fff",display:"flex",flexDirection:"column",gap:8}}>
                               <div style={{display:"flex",alignItems:"center",gap:8}}>
                                 <div style={{width:36,height:36,borderRadius:9,background:"linear-gradient(135deg,#3b82f6,#008A57)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:12,fontWeight:700,flexShrink:0}}>{(a.employee_name||"?").split(" ").map(n=>n[0]).join("").slice(0,2)}</div>
                                 <div style={{flex:1,minWidth:0}}>
@@ -2911,15 +2893,29 @@ function AllocationsPage(){
                                   ?<Lock size={13} strokeWidth={1.75} title="Closed" style={{opacity:0.4,color:"#64748b"}}/>
                                   :<Btn variant="ghost" size="sm" onClick={()=>openEdit(a)}><Pencil size={14} strokeWidth={1.75}/></Btn>}
                               </div>
-                              <p style={{margin:0,fontSize:12,color:"#475569",lineHeight:1.5,fontWeight:500}}>{a.client_name||"—"}</p>
-                              <div style={{background:"#e2e8f0",borderRadius:99,height:6,overflow:"hidden"}}>
-                                <div style={{width:`${pct}%`,height:"100%",background:clr,borderRadius:99,transition:"width .3s"}}/>
-                              </div>
-                              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#64748b",lineHeight:1.5}}>
-                                <span>{fmtH(a.allocated_hours)}h allocated</span>
-                                <span>{fmtH(util.availableHours)}h free</span>
-                              </div>
-                              <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:600,background:sb2.bg,color:sb2.color,alignSelf:"flex-start"}}>{a.status}</span>
+                              {aIsLeave?(
+                                <>
+                                  <div style={{padding:"6px 10px",background:"#fef9c3",borderRadius:7,border:"1px solid #fde68a"}}>
+                                    <p style={{margin:"0 0 2px",fontSize:11,fontWeight:700,color:"#d97706"}}>{a.status}</p>
+                                    {a.leave_from&&a.leave_to&&(
+                                      <p style={{margin:0,fontSize:10,color:"#92400e"}}>{new Date(a.leave_from+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})} → {new Date(a.leave_to+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})} · {a.leave_days||0} days</p>
+                                    )}
+                                  </div>
+                                  <span style={{fontSize:12,fontWeight:700,color:"#92400e"}}>{a.capacity_deduction||0}h capacity deducted</span>
+                                </>
+                              ):(
+                                <>
+                                  <p style={{margin:0,fontSize:12,color:"#475569",lineHeight:1.5,fontWeight:500}}>{a.client_name||"—"}</p>
+                                  <div style={{background:"#e2e8f0",borderRadius:99,height:6,overflow:"hidden"}}>
+                                    <div style={{width:`${pct}%`,height:"100%",background:clr,borderRadius:99,transition:"width .3s"}}/>
+                                  </div>
+                                  <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#64748b",lineHeight:1.5}}>
+                                    <span>{fmtH(a.allocated_hours)}h allocated</span>
+                                    <span>{fmtH(util.availableHours)}h free</span>
+                                  </div>
+                                  <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:600,background:sb2.bg,color:sb2.color,alignSelf:"flex-start"}}>{a.status}</span>
+                                </>
+                              )}
                             </div>
                           );
                         })}
