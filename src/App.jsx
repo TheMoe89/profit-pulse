@@ -343,7 +343,7 @@ class ErrBoundary extends React.Component {
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const HPM = 176;
-const LEAVE_STATUSES=new Set(["On Leave","On Leave (Annual)","On Leave (Public H.)"]);
+const LEAVE_STATUSES=new Set(["On Leave","On Leave (Annual Vacation)","On Leave (Annual)","On Leave (Public H.)"]);
 const isLeave=s=>LEAVE_STATUSES.has(s);
 const SAR = (v) => `SAR ${(v||0).toLocaleString("en-US",{maximumFractionDigits:0})}`;
 const fmtH = h => Math.round(parseFloat(h)||0).toLocaleString("en-US");
@@ -1054,13 +1054,20 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
                     </button>
                   </div>
                   {emp.onLeave&&emp.leaveDeduction>0&&(
-                    <div style={{marginBottom:9,padding:"8px 10px",background:"#fef9c3",borderRadius:7,border:"1px solid #fde68a"}}>
-                      <p style={{margin:"0 0 4px",fontSize:8,fontWeight:700,color:"#d97706",textTransform:"uppercase",letterSpacing:".06em"}}>On Leave This Month</p>
-                      <div style={{display:"flex",flexDirection:"column",gap:2}}>
-                        <p style={{margin:0,fontSize:10,color:"#92400e",lineHeight:1.5}}><strong>{emp.leaveDeduction}h</strong> capacity deducted</p>
-                        <p style={{margin:0,fontSize:10,color:"#92400e",lineHeight:1.5}}>Effective cap: <strong>{fmtH(emp.effectiveHPM||HPM)}h</strong> <span style={{color:"#b45309"}}>of {HPM}h</span></p>
-                        <p style={{margin:0,fontSize:10,color:"#92400e",lineHeight:1.5}}>Allocated: <strong>{fmtH(emp.h)}h</strong> · Free: <strong>{fmtH(Math.max(0,(emp.effectiveHPM||HPM)-emp.h))}h</strong></p>
-                      </div>
+                    <div style={{marginBottom:9,display:"flex",flexDirection:"column",gap:5}}>
+                      <p style={{margin:"0 0 2px",fontSize:8,fontWeight:700,color:"#d97706",textTransform:"uppercase",letterSpacing:".06em"}}>Leave This Month</p>
+                      {(emp.leaveRecords||[]).map((lr,i)=>(
+                        <div key={i} style={{padding:"6px 10px",background:"#fef9c3",borderRadius:7,border:"1px solid #fde68a"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
+                            <span style={{fontSize:10,fontWeight:700,color:"#d97706"}}>{lr.status}</span>
+                            <span style={{fontSize:10,fontWeight:700,color:"#92400e"}}>{lr.capacity_deduction||0}h deducted</span>
+                          </div>
+                          {lr.leave_from&&lr.leave_to&&(
+                            <p style={{margin:0,fontSize:9,color:"#92400e"}}>{new Date(lr.leave_from+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})} → {new Date(lr.leave_to+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})} · {lr.leave_days||0} days</p>
+                          )}
+                        </div>
+                      ))}
+                      <p style={{margin:"2px 0 0",fontSize:9,color:"#92400e",fontWeight:600}}>Total: {emp.leaveDeduction}h deducted · Effective cap: {fmtH(emp.effectiveHPM||HPM)}h of {HPM}h</p>
                     </div>
                   )}
                   {(emp.clients||[]).length>0&&(
@@ -1159,7 +1166,7 @@ function DashboardPage(){
     };
     const da=bld(ac,als);
     const dbc=id=>id==="all"?da:bld(ac.filter(c=>c.cid===id),als.filter(a=>a.cid===id));
-    const eu=dbEmployees.filter(e=>(!allowedDepts||allowedDepts.includes(e.department))&&(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=month))).map(e=>{const empAls=als.filter(a=>(a.eid||a.employee_id)===e.id);const h=empAls.reduce((s,a)=>s+(parseFloat(a.h||a.allocated_hours)||0),0);const leaveDeduction=empAls.filter(a=>isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);const effectiveHPM=Math.max(0,HPM-leaveDeduction);const clients=empAls.filter(a=>!isLeave(a.status)&&parseFloat(a.h||a.allocated_hours)>0).map(a=>({name:a.client_name||a.cn||'',hours:parseFloat(a.h||a.allocated_hours)||0}));const rawPct=effectiveHPM>0?(h/effectiveHPM)*100:0;const onLeave=empAls.some(a=>isLeave(a.status));return{...e,h,u:Math.round(rawPct),av:Math.max(0,effectiveHPM-h),effectiveHPM,leaveDeduction,onLeave,clients};});
+    const eu=dbEmployees.filter(e=>(!allowedDepts||allowedDepts.includes(e.department))&&(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=month))).map(e=>{const empAls=als.filter(a=>(a.eid||a.employee_id)===e.id);const h=empAls.filter(a=>!isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.h||a.allocated_hours)||0),0);const leaveDeduction=empAls.filter(a=>isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);const effectiveHPM=Math.max(0,HPM-leaveDeduction);const clients=empAls.filter(a=>!isLeave(a.status)&&parseFloat(a.h||a.allocated_hours)>0).map(a=>({name:a.client_name||a.cn||'',hours:parseFloat(a.h||a.allocated_hours)||0}));const leaveRecords=empAls.filter(a=>isLeave(a.status));const rawPct=effectiveHPM>0?(h/effectiveHPM)*100:0;const onLeave=leaveRecords.length>0;return{...e,h,u:Math.round(rawPct),av:Math.max(0,effectiveHPM-h),effectiveHPM,leaveDeduction,onLeave,clients,leaveRecords};});
     const fullyUtil=eu.filter(e=>!e.onLeave&&e.h>158);
     const optimal=eu.filter(e=>!e.onLeave&&e.h>=123&&e.h<=158);
     const underUtil=eu.filter(e=>!e.onLeave&&e.h>0&&e.h<123);
@@ -2325,6 +2332,7 @@ function AllocEmpCard({emp,u,allocs,chartMonth,HPM,fmtH,fmtLong}){
   const theme=getCapTheme(pct,u.totalHours,HPM,u.onLeave);
   const meta=DEPT_COLORS[emp.department]||{color:"#475569",bg:"#f1f5f9"};
   const clients=allocs.filter(a=>a.employee_id===emp.id&&a.month===chartMonth&&!isLeave(a.status)&&(a.allocated_hours||0)>0).map(a=>({name:a.client_name||"",hours:a.allocated_hours||0}));
+  const leaveRecords=allocs.filter(a=>a.employee_id===emp.id&&a.month===chartMonth&&isLeave(a.status));
   const [open,setOpen]=useState(false);
   const ref=React.useRef(null);
   React.useEffect(()=>{
@@ -2335,6 +2343,11 @@ function AllocEmpCard({emp,u,allocs,chartMonth,HPM,fmtH,fmtLong}){
   },[open]);
   const toggle=()=>setOpen(v=>!v);
   const over=u.totalHours>effCap;
+  const fmtD=d=>d?new Date(d+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"}):"—";
+
+  // Pure leave card (only leave records, no client allocation)
+  const isPureLeave=u.onLeave&&clients.length===0;
+
   return(
     <div ref={ref} style={{position:"relative",padding:"12px 14px",borderRadius:12,border:`1.5px solid ${open?meta.color:theme.border}`,background:theme.cardBg,boxShadow:open?"0 4px 12px rgba(0,0,0,.08)":"0 1px 3px rgba(0,0,0,.04)",transition:"all .15s ease"}}>
       {/* Header */}
@@ -2356,27 +2369,37 @@ function AllocEmpCard({emp,u,allocs,chartMonth,HPM,fmtH,fmtLong}){
       </div>
       {/* Dept badge + month pill */}
       <div style={{display:"flex",gap:5,alignItems:"center",marginBottom:8}}>
-        <span style={{padding:"2px 7px",borderRadius:999,background:meta.bg,color:meta.color,fontSize:9,fontWeight:600}}>
-          {emp.department?.replace(" Department","")}
-        </span>
-        <span style={{padding:"2px 7px",borderRadius:999,background:"#f1f5f9",color:"#475569",fontSize:9,fontWeight:600}}>
-          {fmtLong(chartMonth)}
-        </span>
+        <span style={{padding:"2px 7px",borderRadius:999,background:meta.bg,color:meta.color,fontSize:9,fontWeight:600}}>{emp.department?.replace(" Department","")}</span>
+        <span style={{padding:"2px 7px",borderRadius:999,background:"#f1f5f9",color:"#475569",fontSize:9,fontWeight:600}}>{fmtLong(chartMonth)}</span>
       </div>
-      {/* Progress bar */}
-      <div style={{height:6,borderRadius:99,background:"rgba(0,0,0,.07)",overflow:"hidden",marginBottom:6}}>
-        <div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:theme.barColor,borderRadius:99,transition:"width .4s ease"}}/>
-      </div>
-      {/* Hours + badge */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <span style={{fontSize:10,color:"#64748b",lineHeight:1.4}}>
-          {u.totalHours===0&&!u.onLeave
-            ?<span style={{color:"#94a3b8"}}>0h</span>
-            :<><strong style={{color:"#0f172a"}}>{fmtH(u.totalHours)}h</strong> · {fmtH(Math.max(0,effCap-u.totalHours))}h free</>
-          }
-        </span>
-        <span style={{padding:"1px 7px",borderRadius:999,background:theme.badgeBg,color:theme.badgeColor,fontSize:9,fontWeight:700}}>{u.totalHours===0?"Unallocated":theme.label}</span>
-      </div>
+      {/* Progress bar — hide for pure leave cards */}
+      {!isPureLeave&&(
+        <div style={{height:6,borderRadius:99,background:"rgba(0,0,0,.07)",overflow:"hidden",marginBottom:6}}>
+          <div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:theme.barColor,borderRadius:99,transition:"width .4s ease"}}/>
+        </div>
+      )}
+      {/* Bottom row */}
+      {isPureLeave?(
+        // Leave-only card: show each leave record as a pill
+        <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:2}}>
+          {leaveRecords.map((lr,i)=>(
+            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 8px",background:"#fef9c3",borderRadius:7,border:"1px solid #fde68a"}}>
+              <span style={{fontSize:9,fontWeight:700,color:"#d97706",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1,marginRight:6}}>{lr.status}</span>
+              <span style={{fontSize:9,color:"#92400e",fontWeight:600,flexShrink:0}}>{lr.capacity_deduction||0}h deducted</span>
+            </div>
+          ))}
+        </div>
+      ):(
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:10,color:"#64748b",lineHeight:1.4}}>
+            {u.totalHours===0&&!u.onLeave
+              ?<span style={{color:"#94a3b8"}}>0h</span>
+              :<><strong style={{color:"#0f172a"}}>{fmtH(u.totalHours)}h</strong> · {fmtH(Math.max(0,effCap-u.totalHours))}h free</>
+            }
+          </span>
+          <span style={{padding:"1px 7px",borderRadius:999,background:theme.badgeBg,color:theme.badgeColor,fontSize:9,fontWeight:700}}>{u.totalHours===0?"Unallocated":theme.label}</span>
+        </div>
+      )}
       {/* Over warning */}
       {over&&!u.onLeave&&(
         <div style={{marginTop:6,display:"flex",alignItems:"center",gap:4,padding:"3px 7px",background:"#fee2e2",borderRadius:5,border:"1px solid #fca5a5"}}>
@@ -2390,18 +2413,26 @@ function AllocEmpCard({emp,u,allocs,chartMonth,HPM,fmtH,fmtLong}){
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}>
             <div>
               <p style={{margin:0,fontWeight:700,fontSize:11,color:"#0f172a"}}>{emp.name}</p>
-              <p style={{margin:"1px 0 0",fontSize:9,color:"#94a3b8"}}>{clients.length} client{clients.length!==1?"s":""} · {fmtH(u.totalHours)}h total</p>
+              <p style={{margin:"1px 0 0",fontSize:9,color:"#94a3b8"}}>{clients.length} client{clients.length!==1?"s":""} · {fmtH(u.totalHours)}h total · Effective cap: {fmtH(effCap)}h</p>
             </div>
             <button onClick={()=>setOpen(false)} style={{padding:3,borderRadius:5,border:"1px solid #e2e8f0",background:"#fff",cursor:"pointer",display:"flex"}}><X size={10} strokeWidth={2} color="#94a3b8"/></button>
           </div>
-          {u.onLeave&&u.leaveDeduction>0&&(
-            <div style={{marginBottom:9,padding:"8px 10px",background:"#fef9c3",borderRadius:7,border:"1px solid #fde68a"}}>
-              <p style={{margin:"0 0 4px",fontSize:8,fontWeight:700,color:"#d97706",textTransform:"uppercase",letterSpacing:".06em"}}>On Leave This Month</p>
-              <div style={{display:"flex",flexDirection:"column",gap:2}}>
-                <p style={{margin:0,fontSize:10,color:"#92400e",lineHeight:1.5}}><strong>{u.leaveDeduction}h</strong> capacity deducted</p>
-                <p style={{margin:0,fontSize:10,color:"#92400e",lineHeight:1.5}}>Effective cap: <strong>{fmtH(effCap)}h</strong> <span style={{color:"#b45309"}}>of {HPM}h</span></p>
-                <p style={{margin:0,fontSize:10,color:"#92400e",lineHeight:1.5}}>Allocated: <strong>{fmtH(u.totalHours)}h</strong> · Free: <strong>{fmtH(Math.max(0,effCap-u.totalHours))}h</strong></p>
-              </div>
+          {/* Each leave record separately */}
+          {leaveRecords.length>0&&(
+            <div style={{marginBottom:9,display:"flex",flexDirection:"column",gap:5}}>
+              <p style={{margin:"0 0 4px",fontSize:8,fontWeight:700,color:"#d97706",textTransform:"uppercase",letterSpacing:".06em"}}>Leave This Month</p>
+              {leaveRecords.map((lr,i)=>(
+                <div key={i} style={{padding:"6px 10px",background:"#fef9c3",borderRadius:7,border:"1px solid #fde68a"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
+                    <span style={{fontSize:10,fontWeight:700,color:"#d97706"}}>{lr.status}</span>
+                    <span style={{fontSize:10,fontWeight:700,color:"#92400e"}}>{lr.capacity_deduction||0}h deducted</span>
+                  </div>
+                  {lr.leave_from&&lr.leave_to&&(
+                    <p style={{margin:0,fontSize:9,color:"#92400e"}}>{fmtD(lr.leave_from)} → {fmtD(lr.leave_to)} · {lr.leave_days||0} days</p>
+                  )}
+                </div>
+              ))}
+              <p style={{margin:"2px 0 0",fontSize:9,color:"#92400e",fontWeight:600}}>Total: {u.leaveDeduction}h deducted · Effective cap: {fmtH(effCap)}h of {HPM}h</p>
             </div>
           )}
           {clients.length>0&&(
@@ -2585,7 +2616,7 @@ function AllocationsPage(){
           const emp=realEmps.find(e=>e.id===r.empId);
           return{employee_id:r.empId,employee_name:emp?.name||"",employee_monthly_cost:emp?.mc||0,
                  client_id:null,client_name:"",contract_id:null,
-                 allocated_hours:0,month,status:"On Leave",notes:notes||"",
+                 allocated_hours:0,month,status:"On Leave (Annual Vacation)",notes:notes||"",
                  leave_from:leaveFrom,leave_to:leaveTo,leave_days:lDays,capacity_deduction:capDed};
         });
         if(onLeaveRows.length) await dbBulkAdd(onLeaveRows);
@@ -2644,7 +2675,7 @@ function AllocationsPage(){
   };
 
   const del=async id=>{const ok=await confirm({title:'Delete allocation?',message:'This allocation will be permanently removed.',danger:true,confirmLabel:'Delete'});if(ok){dbDelete(id);toast('Allocation deleted','success');}};
-  const statusBadge=s=>s==="Assigned"?{bg:"#d1fae5",col:"#10b981"}:s==="On Leave"?{bg:"#fef9c3",col:"#d97706"}:{bg:"#f1f5f9",col:"#64748b"};
+  const statusBadge=s=>s==="Assigned"?{bg:"#d1fae5",col:"#10b981"}:isLeave(s)?{bg:"#fef9c3",col:"#d97706"}:{bg:"#f1f5f9",col:"#64748b"};
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:18}}>
