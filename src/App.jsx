@@ -187,12 +187,27 @@ function AuthProvider({children}){
       else setPermsLoaded(true); // no session = show login immediately
     });
     const {data:{subscription}} = sb.auth.onAuthStateChange((event,session)=>{
-      // Only act on real auth changes, not tab focus token refresh
-      if(event==="SIGNED_IN"||event==="SIGNED_OUT"||event==="USER_UPDATED"||event==="TOKEN_REFRESHED"){
-        if(event==="TOKEN_REFRESHED") return; // ignore silent token refresh
+      // Ignore token refresh entirely
+      if(event==="TOKEN_REFRESHED") return;
+      // Ignore SIGNED_IN when user is already logged in (happens on browser tab focus)
+      if(event==="SIGNED_IN"){
+        setSession(s=>{
+          // If we already have a session for the same user, do nothing
+          if(s?.user?.id&&s.user.id===session?.user?.id) return s;
+          // New login
+          if(session) loadProfile(session.user.id);
+          return session;
+        });
+        return;
+      }
+      if(event==="SIGNED_OUT"){
+        setSession(null);
+        setProfile(null); setUserPerms(null); setPermsLoaded(true);
+        return;
+      }
+      if(event==="USER_UPDATED"){
         setSession(session);
         if(session){ setPermsLoaded(false); loadProfile(session.user.id); }
-        else { setProfile(null); setUserPerms(null); setPermsLoaded(true); }
       }
     });
     return ()=>subscription.unsubscribe();
