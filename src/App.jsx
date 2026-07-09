@@ -1122,7 +1122,7 @@ function DashboardPage(){
     Promise.all([
       sb.from('employees').select('*'),
       sb.from('contracts').select('*'),
-      sb.from('allocations').select('*'),
+      sb.from('allocations').select('*').limit(5000),
       sb.from('monthly_snapshots').select('*'),
     ]).then(([{data:e},{data:ct},{data:al},{data:sn}])=>{
       if(e)  setDbEmployees(e.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0,id:x.id,name:x.name,designation:x.designation,department:x.department,status:x.status})));
@@ -1168,7 +1168,7 @@ function DashboardPage(){
     };
     const da=bld(ac,als);
     const dbc=id=>id==="all"?da:bld(ac.filter(c=>c.cid===id),als.filter(a=>a.cid===id));
-    const eu=dbEmployees.filter(e=>(!allowedDepts||allowedDepts.includes(e.department))&&(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=month))).map(e=>{const empAls=als.filter(a=>(a.eid||a.employee_id)===e.id);const h=empAls.filter(a=>!isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.h||a.allocated_hours)||0),0);const leaveDeduction=empAls.filter(a=>isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);const effectiveHPM=Math.max(0,HPM-leaveDeduction);const clients=empAls.filter(a=>!isLeave(a.status)&&parseFloat(a.h||a.allocated_hours)>0).map(a=>({name:a.client_name||a.cn||'',hours:parseFloat(a.h||a.allocated_hours)||0}));const leaveRecords=empAls.filter(a=>isLeave(a.status));const rawPct=effectiveHPM>0?(h/effectiveHPM)*100:0;const onLeave=leaveRecords.length>0;if(e.name&&e.name.includes("Bader"))console.log("DEBUG Bader:",{h,leaveDeduction,effectiveHPM,rawPct,leaveRecords:leaveRecords.map(l=>({status:l.status,cap:l.capacity_deduction})),empAlsCount:empAls.length});return{...e,h,u:Math.round(rawPct),av:Math.max(0,effectiveHPM-h),effectiveHPM,leaveDeduction,onLeave,clients,leaveRecords};});
+    const eu=dbEmployees.filter(e=>(!allowedDepts||allowedDepts.includes(e.department))&&(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=month))).map(e=>{const empAls=als.filter(a=>(a.eid||a.employee_id)===e.id);const h=empAls.filter(a=>!isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.h||a.allocated_hours)||0),0);const leaveDeduction=empAls.filter(a=>isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);const effectiveHPM=Math.max(0,HPM-leaveDeduction);const clients=empAls.filter(a=>!isLeave(a.status)&&parseFloat(a.h||a.allocated_hours)>0).map(a=>({name:a.client_name||a.cn||'',hours:parseFloat(a.h||a.allocated_hours)||0}));const leaveRecords=empAls.filter(a=>isLeave(a.status));const rawPct=effectiveHPM>0?(h/effectiveHPM)*100:0;const onLeave=leaveRecords.length>0;return{...e,h,u:Math.round(rawPct),av:Math.max(0,effectiveHPM-h),effectiveHPM,leaveDeduction,onLeave,clients,leaveRecords};});
     const fullyUtil=eu.filter(e=>e.h>0&&Math.round((e.h/(e.effectiveHPM||HPM))*100)>=90);
     const optimal=eu.filter(e=>e.h>0&&Math.round((e.h/(e.effectiveHPM||HPM))*100)>=70&&Math.round((e.h/(e.effectiveHPM||HPM))*100)<90);
     const underUtil=eu.filter(e=>e.h>0&&Math.round((e.h/(e.effectiveHPM||HPM))*100)<70);
@@ -2454,7 +2454,7 @@ function AllocationsPage(){
   const [loading,setLoading]=useState(true);
   const mapA=a=>({...a,eid:a.employee_id,cid:a.client_id,h:a.allocated_hours});
   useEffect(()=>{
-    sb.from('allocations').select('*').order('month',{ascending:false}).then(({data})=>{if(data)setAllocs(data.map(mapA));setLoading(false);});
+    sb.from('allocations').select('*').limit(5000).order('month',{ascending:false}).then(({data})=>{if(data)setAllocs(data.map(mapA));setLoading(false);});
   },[sb]);
   const dbBulkAdd=async items=>{const rows=items.map(a=>({employee_id:a.employee_id,employee_name:a.employee_name,employee_monthly_cost:a.employee_monthly_cost||0,client_id:a.client_id||null,client_name:a.client_name||'',contract_id:a.contract_id||null,allocated_hours:a.allocated_hours||0,month:a.month,status:a.status||'Assigned',notes:a.notes||'',leave_from:a.leave_from||null,leave_to:a.leave_to||null,leave_days:a.leave_days||0,capacity_deduction:a.capacity_deduction||0}));const{data,error}=await sb.from('allocations').insert(rows).select();if(error)throw new Error(error.message);if(data)setAllocs(p=>[...p,...data.map(mapA)]);};
   const dbUpdate=async(id,p)=>{const{data}=await sb.from('allocations').update({allocated_hours:p.allocated_hours,month:p.month,notes:p.notes}).eq('id',id).select().single();if(data)setAllocs(x=>x.map(a=>a.id===id?mapA(data):a));};
@@ -4192,7 +4192,7 @@ function ReportsPage(){
       sb.from('employees').select('*'),
       sb.from('contracts').select('*'),
       sb.from('clients').select('*'),
-      sb.from('allocations').select('*'),
+      sb.from('allocations').select('*').limit(5000),
       sb.from('monthly_snapshots').select('*'),
     ]).then(([{data:e},{data:ct},{data:cl},{data:al},{data:sn}])=>{
       if(e)  setRealEmployees(e.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0,id:x.id})));
@@ -5161,7 +5161,7 @@ function MonthlyClosePage(){
       sb.from('monthly_snapshots').select('*').order('month',{ascending:false}),
       sb.from('contracts').select('*'),
       sb.from('employees').select('*'),
-      sb.from('allocations').select('*'),
+      sb.from('allocations').select('*').limit(5000),
     ]).then(([{data:sn},{data:ct},{data:em},{data:al}])=>{
       if(sn) setSnapshots(sn);
       if(ct) setRealContracts(ct.map(x=>({...x,cid:x.client_id,cn:x.client_name,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status})));
