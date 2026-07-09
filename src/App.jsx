@@ -7346,13 +7346,16 @@ function PlatformApp(){
     if(activePage==="Employees")         return <EmployeesPage/>;
     if(activePage==="Clients")           return <ClientsPage/>;
     if(activePage==="Contracts")         return <ContractsPage/>;
-    if(activePage==="Allocations")       return <AllocationsPage/>;
     if(activePage==="Reports")           return <ReportsPage/>;
     if(activePage==="MonthlyClose")      return <MonthlyClosePage/>;
     if(activePage==="ContractExpenses")  return <ContractExpensesPage/>;
     if(activePage==="Settings")          return <SystemUsersPage/>;
     return <ComingSoon page={NAV.find(n=>n.id===activePage)?.label||activePage}/>;
   };
+
+  // AllocationsPage is always mounted to preserve modal state across tab switches
+  const allocPerms=PAGE_PERM_KEY["Allocations"];
+  const canViewAlloc=!allocPerms||can(allocPerms,"view");
 
   return(
     <div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"'Inter',system-ui,sans-serif",background:"#f8fafc",overflow:"hidden"}}>
@@ -7431,7 +7434,13 @@ function PlatformApp(){
 
       {/* Main content */}
       <main style={{flex:1,overflowY:"auto",padding:24}}>
-        {renderPage()}
+        {/* AllocationsPage always mounted to preserve modal state */}
+        {canViewAlloc&&(
+          <div style={{display:activePage==="Allocations"?"block":"none"}}>
+            <AllocationsPage/>
+          </div>
+        )}
+        {activePage!=="Allocations"&&renderPage()}
       </main>
       </div>
     </div>
