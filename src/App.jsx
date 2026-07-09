@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect, useContext, createCon
 import { createClient } from "@supabase/supabase-js";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend, PieChart, Pie, LineChart, Line } from "recharts";
 import {
-  LayoutDashboard, Users, Building2, FileText, FolderKanban, TrendingUp, Calendar, Receipt, UserCog,
+  LayoutDashboard, Users, Building2, FileText, FolderKanban, TrendingUp, Calendar, Receipt, UserCog, Zap,
   Wallet, Coins, BarChart3, ClipboardList, FileCheck,
   AlertTriangle, TrendingDown, CalendarClock, UserPlus,
   Search, Pencil, Trash2, Eye, X, Check, ChevronRight,
@@ -642,7 +642,7 @@ const NAV=[
   {id:"Reports",          label:"Reports",                   Icon:TrendingUp},
   {id:"MonthlyClose",     label:"Monthly Close",             Icon:Calendar},
   {id:"ContractExpenses", label:"Contract/Project Expenses", Icon:Receipt},
-  {id:"Settings",         label:"System Users",              Icon:UserCog},
+  {id:"Settings",         label:"System Settings",              Icon:UserCog},
 ];
 const PAGE_PERM_KEY = {
   Dashboard:         "dashboard",
@@ -6126,6 +6126,17 @@ function PublicHolidaysTab({sb}){
   const [form,setForm]=useState(EMPTY);
   const [saving,setSaving]=useState(false);
 
+  // Mass action state
+  const [applyHoliday,setApplyHoliday]=useState(null);
+  const [applyStep,setApplyStep]=useState(1);
+  const [applyMonth,setApplyMonth]=useState("");
+  const [applyEmployees,setApplyEmployees]=useState([]);
+  const [applySnapshots,setApplySnapshots]=useState([]);
+  const [applyAllocs,setApplyAllocs]=useState([]);
+  const [applyLoading,setApplyLoading]=useState(false);
+  const [applyModal,setApplyModal]=useState(false);
+  const [applying,setApplying]=useState(false);
+
   useEffect(()=>{
     sb.from('public_holidays').select('*').order('from_date').then(({data})=>{
       if(data) setHolidays(data);
@@ -6174,10 +6185,98 @@ function PublicHolidaysTab({sb}){
     toast("Holiday deleted","success");
   };
 
+  // Open Apply modal for a holiday
+  const openApply=async(h)=>{
+    setApplyHoliday(h);
+    setApplyStep(1);
+    // Auto-detect month from from_date
+    const m=h.from_date.slice(0,7);
+    setApplyMonth(m);
+    setApplyLoading(true);
+    setApplyModal(true);
+    // Load employees, snapshots, existing allocs
+    const[{data:emps},{data:snaps},{data:allocs}]=await Promise.all([
+      sb.from('employees').select('*').eq('status','Active'),
+      sb.from('monthly_snapshots').select('*'),
+      sb.from('allocations').select('*').eq('month',m)
+    ]);
+    setApplyEmployees(emps||[]);
+    setApplySnapshots(snaps||[]);
+    setApplyAllocs(allocs||[]);
+    setApplyLoading(false);
+  };
+
+  // When month changes in step 1, reload allocs for that month
+  const changeApplyMonth=async(m)=>{
+    setApplyMonth(m);
+    setApplyLoading(true);
+    const{data:allocs}=await sb.from('allocations').select('*').eq('month',m);
+    setApplyAllocs(allocs||[]);
+    setApplyLoading(false);
+  };
+
+  // Compute preview data
+  const getPreview=()=>{
+    if(!applyHoliday||!applyMonth) return{affected:[],skipped:[]};
+    const isClosed=m=>applySnapshots.some(s=>s.month===m&&s.is_closed);
+    const locationMatch=emp=>{
+      const c=applyHoliday.country;
+      if(c==="Both") return ["Jeddah","Riyadh","Cairo"].includes(emp.location);
+      if(c==="KSA")  return ["Jeddah","Riyadh"].includes(emp.location);
+      if(c==="EGY")  return emp.location==="Cairo";
+      return false;
+    };
+    const days=workingDays(applyHoliday.from_date,applyHoliday.to_date);
+    const capDed=Math.round(days*(176/22));
+    const closed=isClosed(applyMonth);
+    const affected=[];
+    const skipped=[];
+    applyEmployees.filter(locationMatch).forEach(emp=>{
+      if(closed){skipped.push({...emp,reason:"Closed month"});return;}
+      affected.push({...emp,days,capDed});
+    });
+    return{affected,skipped};
+  };
+
+  const handleApply=async()=>{
+    const{affected}=getPreview();
+    if(affected.length===0){toast("No employees to apply to","warning");return;}
+    setApplying(true);
+    try{
+      const days=workingDays(applyHoliday.from_date,applyHoliday.to_date);
+      const capDed=Math.round(days*(176/22));
+      const records=affected.map(emp=>({
+        employee_id:emp.id,
+        employee_name:emp.name,
+        month:applyMonth,
+        status:"On Leave (Public H.)",
+        allocated_hours:0,
+        leave_from:applyHoliday.from_date,
+        leave_to:applyHoliday.to_date,
+        leave_days:days,
+        capacity_deduction:capDed,
+        notes:`Public Holiday: ${applyHoliday.name}`,
+        client_id:null,
+        client_name:null,
+      }));
+      const{error}=await sb.from('allocations').insert(records);
+      if(error) throw new Error(error.message);
+      toast(`✓ ${records.length} On Leave (Public H.) records created`,"success");
+      setApplyModal(false);
+    }catch(err){toast(err.message||"Failed to apply","error");}
+    finally{setApplying(false);}
+  };
+
   const fmtDate=d=>d?new Date(d+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"—";
   const countryBadge=c=>c==="KSA"?{bg:"#dbeafe",color:"#1d4ed8"}:c==="EGY"?{bg:"#fef9c3",color:"#d97706"}:{bg:"#f1f5f9",color:"#475569"};
-
   const days=workingDays(form.from_date,form.to_date);
+  const {affected,skipped}=applyModal?getPreview():{affected:[],skipped:[]};
+
+  // Group affected by location
+  const ksaEmps=affected.filter(e=>["Jeddah","Riyadh"].includes(e.location));
+  const egyEmps=affected.filter(e=>e.location==="Cairo");
+
+  const APPLY_MONTHS=ALLOC_MONTHS||[];
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -6222,6 +6321,7 @@ function PublicHolidaysTab({sb}){
                     </td>
                     <td style={{padding:"10px 14px",textAlign:"right"}}>
                       <div style={{display:"flex",justifyContent:"flex-end",gap:4}}>
+                        <Btn variant="outline" size="sm" onClick={()=>openApply(h)}><Zap size={13} strokeWidth={1.75}/>Apply to Team</Btn>
                         <Btn variant="ghost" size="sm" onClick={()=>openEdit(h)}><Pencil size={14} strokeWidth={1.75}/></Btn>
                         <Btn variant="danger" size="sm" onClick={()=>handleDelete(h)}><Trash2 size={14} strokeWidth={1.75}/></Btn>
                       </div>
@@ -6276,6 +6376,155 @@ function PublicHolidaysTab({sb}){
             <Btn variant="primary" onClick={handleSave} disabled={saving}>{saving?"Saving...":"Save Holiday"}</Btn>
           </div>
         </div>
+      </Modal>
+
+      {/* Apply to Team Modal */}
+      <Modal open={applyModal} onClose={()=>!applying&&setApplyModal(false)} title={`Apply: ${applyHoliday?.name||""}`} width={560}>
+        {/* Step indicators */}
+        <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:20}}>
+          {[1,2,3].map((s,i)=>(
+            <React.Fragment key={s}>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <div style={{width:24,height:24,borderRadius:999,background:applyStep>=s?"#008A57":"#e2e8f0",color:applyStep>=s?"#fff":"#94a3b8",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700}}>{s}</div>
+                <span style={{fontSize:11,fontWeight:600,color:applyStep>=s?"#008A57":"#94a3b8",whiteSpace:"nowrap"}}>{["Review & Month","Preview","Confirm"][i]}</span>
+              </div>
+              {i<2&&<div style={{flex:1,height:1,background:"#e2e8f0",margin:"0 8px"}}/>}
+            </React.Fragment>
+          ))}
+        </div>
+
+        {/* Step 1 — Review & Select Month */}
+        {applyStep===1&&applyHoliday&&(
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{padding:"12px 14px",background:"#f8fafc",borderRadius:10,border:"1px solid #e2e8f0"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>{applyHoliday.name}</p>
+                <span style={{padding:"2px 8px",borderRadius:999,background:countryBadge(applyHoliday.country).bg,color:countryBadge(applyHoliday.country).color,fontSize:11,fontWeight:700}}>{applyHoliday.country}</span>
+              </div>
+              <div style={{display:"flex",gap:16,fontSize:12,color:"#64748b"}}>
+                <span>📅 {fmtDate(applyHoliday.from_date)} → {fmtDate(applyHoliday.to_date)}</span>
+                <span>🗓 {applyHoliday.working_days} working days</span>
+                <span>⏱ {Math.round(applyHoliday.working_days*(176/22))}h deducted</span>
+              </div>
+            </div>
+            <div>
+              <Lbl>Apply to Month *</Lbl>
+              <Sel value={applyMonth} onChange={changeApplyMonth} options={ALLOC_MONTHS}/>
+              <p style={{margin:"5px 0 0",fontSize:11,color:"#64748b"}}>Month is auto-detected from the holiday dates but can be changed.</p>
+            </div>
+            <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:4}}>
+              <Btn variant="outline" onClick={()=>setApplyModal(false)}>Cancel</Btn>
+              <Btn variant="primary" onClick={()=>setApplyStep(2)} disabled={applyLoading||!applyMonth}>
+                {applyLoading?"Loading...":"Preview →"}
+              </Btn>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2 — Preview */}
+        {applyStep===2&&(
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            {applyLoading?(
+              <div style={{padding:24}}><Skeleton h={14} mb={10}/><Skeleton h={14} mb={10}/><Skeleton h={14}/></div>
+            ):(
+              <>
+                {/* Summary bar */}
+                <div style={{display:"flex",gap:8}}>
+                  <div style={{flex:1,padding:"10px 14px",background:"#f0fdf4",borderRadius:10,border:"1px solid #a7f3d0",textAlign:"center"}}>
+                    <p style={{margin:0,fontSize:20,fontWeight:800,color:"#059669"}}>{affected.length}</p>
+                    <p style={{margin:0,fontSize:11,color:"#059669",fontWeight:600}}>Will be applied</p>
+                  </div>
+                  {skipped.length>0&&(
+                    <div style={{flex:1,padding:"10px 14px",background:"#f8fafc",borderRadius:10,border:"1px solid #e2e8f0",textAlign:"center"}}>
+                      <p style={{margin:0,fontSize:20,fontWeight:800,color:"#94a3b8"}}>{skipped.length}</p>
+                      <p style={{margin:0,fontSize:11,color:"#94a3b8",fontWeight:600}}>Skipped (closed month)</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* KSA group */}
+                {ksaEmps.length>0&&(
+                  <div>
+                    <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#1d4ed8",textTransform:"uppercase",letterSpacing:".05em"}}>🇸🇦 KSA — {ksaEmps.length} employees</p>
+                    <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:160,overflowY:"auto"}}>
+                      {ksaEmps.map(e=>(
+                        <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",background:"#eff6ff",borderRadius:7,border:"1px solid #bfdbfe"}}>
+                          <span style={{fontSize:12,fontWeight:600,color:"#0f172a"}}>{e.name}</span>
+                          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                            <span style={{fontSize:11,color:"#64748b"}}>{e.location}</span>
+                            <span style={{fontSize:11,fontWeight:700,color:"#1d4ed8"}}>{e.capDed}h deducted</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* EGY group */}
+                {egyEmps.length>0&&(
+                  <div>
+                    <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#d97706",textTransform:"uppercase",letterSpacing:".05em"}}>🇪🇬 Egypt — {egyEmps.length} employees</p>
+                    <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:160,overflowY:"auto"}}>
+                      {egyEmps.map(e=>(
+                        <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",background:"#fefce8",borderRadius:7,border:"1px solid #fde68a"}}>
+                          <span style={{fontSize:12,fontWeight:600,color:"#0f172a"}}>{e.name}</span>
+                          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                            <span style={{fontSize:11,color:"#64748b"}}>{e.location}</span>
+                            <span style={{fontSize:11,fontWeight:700,color:"#d97706"}}>{e.capDed}h deducted</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Skipped */}
+                {skipped.length>0&&(
+                  <div style={{padding:"8px 12px",background:"#f8fafc",borderRadius:8,border:"1px solid #e2e8f0"}}>
+                    <p style={{margin:"0 0 4px",fontSize:11,fontWeight:700,color:"#94a3b8"}}>⚠ {skipped.length} skipped — closed month</p>
+                    <p style={{margin:0,fontSize:11,color:"#94a3b8"}}>{skipped.map(e=>e.name).join(", ")}</p>
+                  </div>
+                )}
+
+                {affected.length===0&&(
+                  <div style={{padding:"20px",textAlign:"center",color:"#94a3b8",fontSize:13}}>No eligible employees found for this selection.</div>
+                )}
+              </>
+            )}
+            <div style={{display:"flex",justifyContent:"space-between",gap:8,marginTop:4}}>
+              <Btn variant="outline" onClick={()=>setApplyStep(1)}>← Back</Btn>
+              <Btn variant="primary" onClick={()=>setApplyStep(3)} disabled={affected.length===0}>Confirm →</Btn>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3 — Confirm */}
+        {applyStep===3&&(
+          <div style={{display:"flex",flexDirection:"column",gap:16}}>
+            <div style={{padding:"16px",background:"#f0fdf4",borderRadius:12,border:"1px solid #a7f3d0",textAlign:"center"}}>
+              <p style={{margin:"0 0 4px",fontSize:28,fontWeight:800,color:"#059669"}}>{affected.length}</p>
+              <p style={{margin:"0 0 8px",fontSize:13,fontWeight:700,color:"#059669"}}>employees will receive</p>
+              <span style={{padding:"4px 14px",borderRadius:999,background:"#fef9c3",color:"#d97706",fontSize:13,fontWeight:700,border:"1px solid #fde68a"}}>On Leave (Public H.)</span>
+              <p style={{margin:"10px 0 0",fontSize:12,color:"#059669"}}>
+                {applyHoliday?.name} · {fmtDate(applyHoliday?.from_date)} → {fmtDate(applyHoliday?.to_date)}
+              </p>
+              <p style={{margin:"2px 0 0",fontSize:12,color:"#059669"}}>
+                Month: <strong>{fmtLong(applyMonth)}</strong> · {applyHoliday?.working_days} days · {Math.round((applyHoliday?.working_days||0)*(176/22))}h deducted per person
+              </p>
+            </div>
+            {skipped.length>0&&(
+              <div style={{padding:"8px 12px",background:"#f8fafc",borderRadius:8,border:"1px solid #e2e8f0",fontSize:11,color:"#94a3b8"}}>
+                ⚠ {skipped.length} employee{skipped.length!==1?"s":""} will be skipped (closed month)
+              </div>
+            )}
+            <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
+              <Btn variant="outline" onClick={()=>setApplyStep(2)} disabled={applying}>← Back</Btn>
+              <Btn variant="primary" onClick={handleApply} disabled={applying}>
+                {applying?"Applying...":"✓ Apply to Team"}
+              </Btn>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );
