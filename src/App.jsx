@@ -10,7 +10,7 @@ import {
   Clock, Building, Plus, Save, ShieldCheck, AlertCircle, Send,
   ShieldAlert, ShieldOff, Construction, FileWarning, User,
   Upload, Download, Paperclip, FileSpreadsheet,
-  CheckCircle, Info, Loader, Copy, KeyRound, RefreshCw, EyeOff
+  CheckCircle, Info, Loader, Copy, KeyRound, RefreshCw, EyeOff, History, RotateCcw
 } from "lucide-react";
 
 // ─── TOAST SYSTEM ─────────────────────────────────────────────────────────────
@@ -6116,6 +6116,471 @@ function ContractExpensesPage(){
 
 
 function PublicHolidaysTab({sb}){
+  const toast=useToast();
+  const confirm=useConfirm();
+  const [holidays,setHolidays]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [modalOpen,setModalOpen]=useState(false);
+  const [editing,setEditing]=useState(null);
+  const EMPTY={name:"",from_date:"",to_date:"",country:"Both"};
+  const [form,setForm]=useState(EMPTY);
+  const [saving,setSaving]=useState(false);
+
+  // Application history
+  const [logs,setLogs]=useState([]);
+  const [logsLoading,setLogsLoading]=useState(true);
+  const [snapshots,setSnapshots]=useState([]);
+
+  // Mass action state
+  const [applyHoliday,setApplyHoliday]=useState(null);
+  const [applyStep,setApplyStep]=useState(1);
+  const [applyMonth,setApplyMonth]=useState("");
+  const [applyEmployees,setApplyEmployees]=useState([]);
+  const [applySnapshots,setApplySnapshots]=useState([]);
+  const [applyAllocs,setApplyAllocs]=useState([]);
+  const [applyLoading,setApplyLoading]=useState(false);
+  const [applyModal,setApplyModal]=useState(false);
+  const [applying,setApplying]=useState(false);
+
+  useEffect(()=>{
+    Promise.all([
+      sb.from('public_holidays').select('*').order('from_date'),
+      sb.from('holiday_applications').select('*').order('created_at',{ascending:false}),
+      sb.from('monthly_snapshots').select('*'),
+    ]).then(([{data:h},{data:l},{data:s}])=>{
+      if(h) setHolidays(h);
+      if(l) setLogs(l);
+      if(s) setSnapshots(s);
+      setLoading(false);
+      setLogsLoading(false);
+    });
+  },[sb]);
+
+  const workingDays=(from,to)=>{
+    if(!from||!to) return 0;
+    let count=0,cur=new Date(from);
+    const end=new Date(to);
+    while(cur<=end){const d=cur.getDay();if(d!==5&&d!==6)count++;cur.setDate(cur.getDate()+1);}
+    return count;
+  };
+
+  const isClosed=m=>snapshots.some(s=>s.month===m&&s.is_closed);
+
+  const openAdd=()=>{setEditing(null);setForm(EMPTY);setModalOpen(true);};
+  const openEdit=h=>{setEditing(h);setForm({name:h.name,from_date:h.from_date,to_date:h.to_date,country:h.country});setModalOpen(true);};
+
+  const handleSave=async()=>{
+    if(!form.name||!form.from_date||!form.to_date){toast("Please fill all fields","warning");return;}
+    setSaving(true);
+    try{
+      const days=workingDays(form.from_date,form.to_date);
+      const payload={name:form.name,from_date:form.from_date,to_date:form.to_date,country:form.country,working_days:days};
+      if(editing){
+        const{data,error}=await sb.from('public_holidays').update(payload).eq('id',editing.id).select().single();
+        if(error)throw new Error(error.message);
+        if(data)setHolidays(p=>p.map(h=>h.id===editing.id?data:h));
+        toast("Holiday updated","success");
+      } else {
+        const{data,error}=await sb.from('public_holidays').insert([payload]).select().single();
+        if(error)throw new Error(error.message);
+        if(data)setHolidays(p=>[...p,data].sort((a,b)=>a.from_date.localeCompare(b.from_date)));
+        toast("Holiday added","success");
+      }
+      setModalOpen(false);
+    }catch(err){toast(err.message||"Failed to save","error");}
+    finally{setSaving(false);}
+  };
+
+  const handleDelete=async h=>{
+    const ok=await confirm({title:"Delete holiday?",message:`"${h.name}" will be permanently removed.`,danger:true,confirmLabel:"Delete"});
+    if(!ok) return;
+    await sb.from('public_holidays').delete().eq('id',h.id);
+    setHolidays(p=>p.filter(x=>x.id!==h.id));
+    toast("Holiday deleted","success");
+  };
+
+  // Open Apply modal
+  const openApply=async(h)=>{
+    setApplyHoliday(h);
+    setApplyStep(1);
+    const m=h.from_date.slice(0,7);
+    setApplyMonth(m);
+    setApplyLoading(true);
+    setApplyModal(true);
+    const[{data:emps},{data:snaps},{data:allocs}]=await Promise.all([
+      sb.from('employees').select('*').eq('status','Active'),
+      sb.from('monthly_snapshots').select('*'),
+      sb.from('allocations').select('*').eq('month',m)
+    ]);
+    setApplyEmployees(emps||[]);
+    setApplySnapshots(snaps||[]);
+    setApplyAllocs(allocs||[]);
+    setApplyLoading(false);
+  };
+
+  const changeApplyMonth=async(m)=>{
+    setApplyMonth(m);
+    setApplyLoading(true);
+    const{data:allocs}=await sb.from('allocations').select('*').eq('month',m);
+    setApplyAllocs(allocs||[]);
+    setApplyLoading(false);
+  };
+
+  const getPreview=()=>{
+    if(!applyHoliday||!applyMonth) return{affected:[],skipped:[]};
+    const isMonthClosed=m=>applySnapshots.some(s=>s.month===m&&s.is_closed);
+    const locationMatch=emp=>{
+      const c=applyHoliday.country;
+      if(c==="Both") return ["Jeddah","Riyadh","Cairo"].includes(emp.location);
+      if(c==="KSA")  return ["Jeddah","Riyadh"].includes(emp.location);
+      if(c==="EGY")  return emp.location==="Cairo";
+      return false;
+    };
+    const days=workingDays(applyHoliday.from_date,applyHoliday.to_date);
+    const capDed=Math.round(days*(176/22));
+    const closed=isMonthClosed(applyMonth);
+    const affected=[],skipped=[];
+    applyEmployees.filter(locationMatch).forEach(emp=>{
+      if(closed){skipped.push({...emp,reason:"Closed month"});return;}
+      affected.push({...emp,days,capDed});
+    });
+    return{affected,skipped};
+  };
+
+  const handleApply=async()=>{
+    const{affected}=getPreview();
+    if(affected.length===0){toast("No employees to apply to","warning");return;}
+    setApplying(true);
+    try{
+      const days=workingDays(applyHoliday.from_date,applyHoliday.to_date);
+      const capDed=Math.round(days*(176/22));
+      const batchId=crypto.randomUUID();
+      const records=affected.map(emp=>({
+        employee_id:emp.id,
+        employee_name:emp.name,
+        month:applyMonth,
+        status:"On Leave (Public H.)",
+        allocated_hours:0,
+        leave_from:applyHoliday.from_date,
+        leave_to:applyHoliday.to_date,
+        leave_days:days,
+        capacity_deduction:capDed,
+        notes:`Public Holiday: ${applyHoliday.name}`,
+        batch_id:batchId,
+        client_id:null,
+        client_name:null,
+      }));
+      const{error}=await sb.from('allocations').insert(records);
+      if(error) throw new Error(error.message);
+      // Save log
+      const logPayload={
+        holiday_id:applyHoliday.id,
+        holiday_name:applyHoliday.name,
+        month:applyMonth,
+        country:applyHoliday.country,
+        records_count:records.length,
+        batch_id:batchId,
+      };
+      const{data:logData}=await sb.from('holiday_applications').insert([logPayload]).select().single();
+      if(logData) setLogs(p=>[logData,...p]);
+      toast(`✓ ${records.length} On Leave (Public H.) records created`,"success");
+      setApplyModal(false);
+    }catch(err){toast(err.message||"Failed to apply","error");}
+    finally{setApplying(false);}
+  };
+
+  const handleUndo=async(log)=>{
+    if(isClosed(log.month)){toast("Cannot undo — month is closed","warning");return;}
+    const ok=await confirm({title:"Undo holiday application?",message:`This will delete all ${log.records_count} On Leave (Public H.) records created for "${log.holiday_name}" in ${fmtLong(log.month)}.`,danger:true,confirmLabel:"Undo"});
+    if(!ok) return;
+    const{error}=await sb.from('allocations').delete().eq('batch_id',log.batch_id);
+    if(error){toast(error.message||"Failed to undo","error");return;}
+    await sb.from('holiday_applications').delete().eq('id',log.id);
+    setLogs(p=>p.filter(l=>l.id!==log.id));
+    toast(`✓ ${log.records_count} records removed`,"success");
+  };
+
+  const fmtDate=d=>d?new Date(d+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"—";
+  const fmtDateTime=d=>d?new Date(d).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}):"—";
+  const countryBadge=c=>c==="KSA"?{bg:"#dbeafe",color:"#1d4ed8"}:c==="EGY"?{bg:"#fef9c3",color:"#d97706"}:{bg:"#f1f5f9",color:"#475569"};
+  const days=workingDays(form.from_date,form.to_date);
+  const{affected,skipped}=applyModal?getPreview():{affected:[],skipped:[]};
+  const ksaEmps=affected.filter(e=>["Jeddah","Riyadh"].includes(e.location));
+  const egyEmps=affected.filter(e=>e.location==="Cairo");
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      {/* Holiday Library */}
+      <Card style={{overflow:"hidden",padding:0}}>
+        <div style={{padding:"14px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <Calendar size={15} strokeWidth={1.75} color="#008A57"/>
+            <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>Public Holiday Library</p>
+          </div>
+          <Btn variant="primary" size="sm" onClick={openAdd}><Plus size={13} strokeWidth={2}/>Add Holiday</Btn>
+        </div>
+        {loading?(
+          <div style={{padding:24}}><Skeleton h={14} mb={10}/><Skeleton h={14} mb={10}/><Skeleton h={14}/></div>
+        ):holidays.length===0?(
+          <div style={{padding:40,textAlign:"center"}}>
+            <Calendar size={32} color="#cbd5e1" style={{marginBottom:12}}/>
+            <p style={{margin:0,fontSize:14,color:"#94a3b8",fontWeight:600}}>No holidays defined yet</p>
+            <p style={{margin:"4px 0 0",fontSize:12,color:"#cbd5e1"}}>Add public holidays to use them in mass allocation</p>
+          </div>
+        ):(
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead>
+              <tr style={{background:"#f8fafc"}}>
+                {["Holiday Name","From","To","Working Days","Country","Actions"].map((h,i)=>(
+                  <th key={h} style={{padding:"9px 14px",textAlign:i>=3?"center":"left",fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".04em",borderBottom:"1px solid #e2e8f0",whiteSpace:"nowrap"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {holidays.map((h,i)=>{
+                const cb=countryBadge(h.country);
+                return(
+                  <tr key={h.id} style={{borderBottom:"1px solid #f1f5f9",background:i%2===0?"#fff":"#fafafa"}}>
+                    <td style={{padding:"10px 14px",fontWeight:600,fontSize:13,color:"#0f172a"}}>{h.name}</td>
+                    <td style={{padding:"10px 14px",fontSize:13,color:"#475569"}}>{fmtDate(h.from_date)}</td>
+                    <td style={{padding:"10px 14px",fontSize:13,color:"#475569"}}>{fmtDate(h.to_date)}</td>
+                    <td style={{padding:"10px 14px",textAlign:"center"}}>
+                      <span style={{padding:"2px 10px",borderRadius:999,background:"#f0fdf4",color:"#059669",fontSize:12,fontWeight:700}}>{h.working_days||workingDays(h.from_date,h.to_date)} days</span>
+                    </td>
+                    <td style={{padding:"10px 14px",textAlign:"center"}}>
+                      <span style={{padding:"2px 10px",borderRadius:999,background:cb.bg,color:cb.color,fontSize:11,fontWeight:700}}>{h.country}</span>
+                    </td>
+                    <td style={{padding:"10px 14px",textAlign:"right"}}>
+                      <div style={{display:"flex",justifyContent:"flex-end",gap:4}}>
+                        <Btn variant="outline" size="sm" onClick={()=>openApply(h)}><Zap size={13} strokeWidth={1.75}/>Apply to Team</Btn>
+                        <Btn variant="ghost" size="sm" onClick={()=>openEdit(h)}><Pencil size={14} strokeWidth={1.75}/></Btn>
+                        <Btn variant="danger" size="sm" onClick={()=>handleDelete(h)}><Trash2 size={14} strokeWidth={1.75}/></Btn>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
+      {/* Application History */}
+      <Card style={{overflow:"hidden",padding:0}}>
+        <div style={{padding:"14px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:8}}>
+          <History size={15} strokeWidth={1.75} color="#64748b"/>
+          <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>Application History</p>
+        </div>
+        {logsLoading?(
+          <div style={{padding:24}}><Skeleton h={14} mb={10}/><Skeleton h={14}/></div>
+        ):logs.length===0?(
+          <div style={{padding:32,textAlign:"center"}}>
+            <p style={{margin:0,fontSize:13,color:"#94a3b8"}}>No applications yet — apply a holiday to the team to see the log here.</p>
+          </div>
+        ):(
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead>
+              <tr style={{background:"#f8fafc"}}>
+                {["Holiday","Month","Country","Records","Applied At","Actions"].map((h,i)=>(
+                  <th key={h} style={{padding:"9px 14px",textAlign:i>=2?"center":"left",fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".04em",borderBottom:"1px solid #e2e8f0",whiteSpace:"nowrap"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((log,i)=>{
+                const closed=isClosed(log.month);
+                const cb=countryBadge(log.country);
+                return(
+                  <tr key={log.id} style={{borderBottom:"1px solid #f1f5f9",background:i%2===0?"#fff":"#fafafa"}}>
+                    <td style={{padding:"10px 14px",fontWeight:600,fontSize:13,color:"#0f172a"}}>{log.holiday_name}</td>
+                    <td style={{padding:"10px 14px",fontSize:13,color:"#475569"}}>{fmtLong(log.month)}</td>
+                    <td style={{padding:"10px 14px",textAlign:"center"}}>
+                      <span style={{padding:"2px 8px",borderRadius:999,background:cb.bg,color:cb.color,fontSize:11,fontWeight:700}}>{log.country}</span>
+                    </td>
+                    <td style={{padding:"10px 14px",textAlign:"center"}}>
+                      <span style={{padding:"2px 10px",borderRadius:999,background:"#f0fdf4",color:"#059669",fontSize:12,fontWeight:700}}>{log.records_count} employees</span>
+                    </td>
+                    <td style={{padding:"10px 14px",textAlign:"center",fontSize:12,color:"#64748b"}}>{fmtDateTime(log.created_at)}</td>
+                    <td style={{padding:"10px 14px",textAlign:"right"}}>
+                      {closed?(
+                        <span style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>🔒 Month closed</span>
+                      ):(
+                        <Btn variant="danger" size="sm" onClick={()=>handleUndo(log)}><RotateCcw size={13} strokeWidth={1.75}/>Undo</Btn>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
+      {/* Add/Edit Modal */}
+      <Modal open={modalOpen} onClose={()=>setModalOpen(false)} title={editing?"Edit Holiday":"Add Public Holiday"}>
+        <div style={{display:"flex",flexDirection:"column",gap:13}}>
+          <div>
+            <Lbl>Holiday Name *</Lbl>
+            <Inp value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} placeholder="e.g. Eid Al-Fitr"/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div><Lbl>From Date *</Lbl><Inp type="date" value={form.from_date} onChange={e=>setForm(p=>({...p,from_date:e.target.value}))}/></div>
+            <div><Lbl>To Date *</Lbl><Inp type="date" value={form.to_date} onChange={e=>setForm(p=>({...p,to_date:e.target.value}))}/></div>
+          </div>
+          {form.from_date&&form.to_date&&(
+            <div style={{padding:"8px 12px",background:"#f0fdf4",borderRadius:8,border:"1px solid #a7f3d0"}}>
+              <p style={{margin:0,fontSize:12,color:"#059669",fontWeight:600}}>{days} working day{days!==1?"s":""} · {days*8}h capacity deduction per employee</p>
+            </div>
+          )}
+          <div>
+            <Lbl>Applies To *</Lbl>
+            <div style={{display:"flex",gap:8}}>
+              {["KSA","EGY","Both"].map(c=>{
+                const cb=countryBadge(c);
+                const sel=form.country===c;
+                return(
+                  <button key={c} onClick={()=>setForm(p=>({...p,country:c}))}
+                    style={{flex:1,padding:"8px 12px",borderRadius:8,border:`1.5px solid ${sel?cb.color:"#e2e8f0"}`,background:sel?cb.bg:"#fff",color:sel?cb.color:"#64748b",fontSize:12,fontWeight:sel?700:500,cursor:"pointer",transition:"all .15s"}}>
+                    {c==="KSA"?"🇸🇦 KSA":c==="EGY"?"🇪🇬 Egypt":"🌍 Both"}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:4}}>
+            <Btn variant="outline" onClick={()=>setModalOpen(false)}>Cancel</Btn>
+            <Btn variant="primary" onClick={handleSave} disabled={saving}>{saving?"Saving...":"Save Holiday"}</Btn>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Apply to Team Modal */}
+      <Modal open={applyModal} onClose={()=>!applying&&setApplyModal(false)} title={`Apply: ${applyHoliday?.name||""}`} width={560}>
+        <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:20}}>
+          {[1,2,3].map((s,i)=>(
+            <React.Fragment key={s}>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <div style={{width:24,height:24,borderRadius:999,background:applyStep>=s?"#008A57":"#e2e8f0",color:applyStep>=s?"#fff":"#94a3b8",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700}}>{s}</div>
+                <span style={{fontSize:11,fontWeight:600,color:applyStep>=s?"#008A57":"#94a3b8",whiteSpace:"nowrap"}}>{["Review & Month","Preview","Confirm"][i]}</span>
+              </div>
+              {i<2&&<div style={{flex:1,height:1,background:"#e2e8f0",margin:"0 8px"}}/>}
+            </React.Fragment>
+          ))}
+        </div>
+
+        {applyStep===1&&applyHoliday&&(
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{padding:"12px 14px",background:"#f8fafc",borderRadius:10,border:"1px solid #e2e8f0"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>{applyHoliday.name}</p>
+                <span style={{padding:"2px 8px",borderRadius:999,background:countryBadge(applyHoliday.country).bg,color:countryBadge(applyHoliday.country).color,fontSize:11,fontWeight:700}}>{applyHoliday.country}</span>
+              </div>
+              <div style={{display:"flex",gap:16,fontSize:12,color:"#64748b",flexWrap:"wrap"}}>
+                <span>📅 {fmtDate(applyHoliday.from_date)} → {fmtDate(applyHoliday.to_date)}</span>
+                <span>🗓 {applyHoliday.working_days} working days</span>
+                <span>⏱ {Math.round(applyHoliday.working_days*(176/22))}h deducted</span>
+              </div>
+            </div>
+            <div>
+              <Lbl>Apply to Month *</Lbl>
+              <Sel value={applyMonth} onChange={changeApplyMonth} options={ALLOC_MONTHS}/>
+              <p style={{margin:"5px 0 0",fontSize:11,color:"#64748b"}}>Month is auto-detected from the holiday dates but can be changed.</p>
+            </div>
+            <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:4}}>
+              <Btn variant="outline" onClick={()=>setApplyModal(false)}>Cancel</Btn>
+              <Btn variant="primary" onClick={()=>setApplyStep(2)} disabled={applyLoading||!applyMonth}>{applyLoading?"Loading...":"Preview →"}</Btn>
+            </div>
+          </div>
+        )}
+
+        {applyStep===2&&(
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            {applyLoading?(<div style={{padding:24}}><Skeleton h={14} mb={10}/><Skeleton h={14} mb={10}/><Skeleton h={14}/></div>):(
+              <>
+                <div style={{display:"flex",gap:8}}>
+                  <div style={{flex:1,padding:"10px 14px",background:"#f0fdf4",borderRadius:10,border:"1px solid #a7f3d0",textAlign:"center"}}>
+                    <p style={{margin:0,fontSize:20,fontWeight:800,color:"#059669"}}>{affected.length}</p>
+                    <p style={{margin:0,fontSize:11,color:"#059669",fontWeight:600}}>Will be applied</p>
+                  </div>
+                  {skipped.length>0&&(
+                    <div style={{flex:1,padding:"10px 14px",background:"#f8fafc",borderRadius:10,border:"1px solid #e2e8f0",textAlign:"center"}}>
+                      <p style={{margin:0,fontSize:20,fontWeight:800,color:"#94a3b8"}}>{skipped.length}</p>
+                      <p style={{margin:0,fontSize:11,color:"#94a3b8",fontWeight:600}}>Skipped (closed month)</p>
+                    </div>
+                  )}
+                </div>
+                {ksaEmps.length>0&&(
+                  <div>
+                    <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#1d4ed8",textTransform:"uppercase",letterSpacing:".05em"}}>🇸🇦 KSA — {ksaEmps.length} employees</p>
+                    <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:160,overflowY:"auto"}}>
+                      {ksaEmps.map(e=>(
+                        <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",background:"#eff6ff",borderRadius:7,border:"1px solid #bfdbfe"}}>
+                          <span style={{fontSize:12,fontWeight:600,color:"#0f172a"}}>{e.name}</span>
+                          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                            <span style={{fontSize:11,color:"#64748b"}}>{e.location}</span>
+                            <span style={{fontSize:11,fontWeight:700,color:"#1d4ed8"}}>{e.capDed}h deducted</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {egyEmps.length>0&&(
+                  <div>
+                    <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#d97706",textTransform:"uppercase",letterSpacing:".05em"}}>🇪🇬 Egypt — {egyEmps.length} employees</p>
+                    <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:160,overflowY:"auto"}}>
+                      {egyEmps.map(e=>(
+                        <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",background:"#fefce8",borderRadius:7,border:"1px solid #fde68a"}}>
+                          <span style={{fontSize:12,fontWeight:600,color:"#0f172a"}}>{e.name}</span>
+                          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                            <span style={{fontSize:11,color:"#64748b"}}>{e.location}</span>
+                            <span style={{fontSize:11,fontWeight:700,color:"#d97706"}}>{e.capDed}h deducted</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {skipped.length>0&&(
+                  <div style={{padding:"8px 12px",background:"#f8fafc",borderRadius:8,border:"1px solid #e2e8f0"}}>
+                    <p style={{margin:"0 0 4px",fontSize:11,fontWeight:700,color:"#94a3b8"}}>⚠ {skipped.length} skipped — closed month</p>
+                    <p style={{margin:0,fontSize:11,color:"#94a3b8"}}>{skipped.map(e=>e.name).join(", ")}</p>
+                  </div>
+                )}
+                {affected.length===0&&(<div style={{padding:"20px",textAlign:"center",color:"#94a3b8",fontSize:13}}>No eligible employees found.</div>)}
+              </>
+            )}
+            <div style={{display:"flex",justifyContent:"space-between",gap:8,marginTop:4}}>
+              <Btn variant="outline" onClick={()=>setApplyStep(1)}>← Back</Btn>
+              <Btn variant="primary" onClick={()=>setApplyStep(3)} disabled={affected.length===0}>Confirm →</Btn>
+            </div>
+          </div>
+        )}
+
+        {applyStep===3&&(
+          <div style={{display:"flex",flexDirection:"column",gap:16}}>
+            <div style={{padding:"16px",background:"#f0fdf4",borderRadius:12,border:"1px solid #a7f3d0",textAlign:"center"}}>
+              <p style={{margin:"0 0 4px",fontSize:28,fontWeight:800,color:"#059669"}}>{affected.length}</p>
+              <p style={{margin:"0 0 8px",fontSize:13,fontWeight:700,color:"#059669"}}>employees will receive</p>
+              <span style={{padding:"4px 14px",borderRadius:999,background:"#fef9c3",color:"#d97706",fontSize:13,fontWeight:700,border:"1px solid #fde68a"}}>On Leave (Public H.)</span>
+              <p style={{margin:"10px 0 0",fontSize:12,color:"#059669"}}>{applyHoliday?.name} · {fmtDate(applyHoliday?.from_date)} → {fmtDate(applyHoliday?.to_date)}</p>
+              <p style={{margin:"2px 0 0",fontSize:12,color:"#059669"}}>Month: <strong>{fmtLong(applyMonth)}</strong> · {applyHoliday?.working_days} days · {Math.round((applyHoliday?.working_days||0)*(176/22))}h deducted per person</p>
+            </div>
+            {skipped.length>0&&(
+              <div style={{padding:"8px 12px",background:"#f8fafc",borderRadius:8,border:"1px solid #e2e8f0",fontSize:11,color:"#94a3b8"}}>
+                ⚠ {skipped.length} employee{skipped.length!==1?"s":""} will be skipped (closed month)
+              </div>
+            )}
+            <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
+              <Btn variant="outline" onClick={()=>setApplyStep(2)} disabled={applying}>← Back</Btn>
+              <Btn variant="primary" onClick={handleApply} disabled={applying}>{applying?"Applying...":"✓ Apply to Team"}</Btn>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
   const toast=useToast();
   const confirm=useConfirm();
   const [holidays,setHolidays]=useState([]);
