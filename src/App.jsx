@@ -883,26 +883,28 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
   },[openId]);
 
   const sortOrder=e=>{
-    if(e.onLeave) return 4;
-    if(e.h===0)   return 5;
-    if(e.h>158)   return 0;
-    if(e.h>=123)  return 1;
-    return 2;
+    if(e.h===0&&!e.onLeave) return 5;
+    const epct=Math.round((e.h/(e.effectiveHPM||HPM))*100);
+    if(epct>=90)  return 0;
+    if(epct>=70)  return 1;
+    if(e.h>0)     return 2;
+    if(e.onLeave) return 3;
+    return 4;
   };
 
   const deptFiltered=capDept==="all"?eu:eu.filter(e=>e.department===capDept);
   const empSearchFiltered=capEmpSearch?deptFiltered.filter(e=>e.name.toLowerCase().includes(capEmpSearch.toLowerCase())):deptFiltered;
   const visible=empSearchFiltered.filter(e=>{
     if(capStatus==="All Statuses") return true;
-    const th=getCapTheme(Math.round((e.h/HPM)*100),e.h,HPM,e.onLeave);
+    const th=getCapTheme(Math.round((e.h/(e.effectiveHPM||HPM))*100),e.h,HPM,e.onLeave);
     return th.label===capStatus;
   }).slice().sort((a,b)=>sortOrder(a)-sortOrder(b)||(b.h-a.h));
 
-  const fullyCount =empSearchFiltered.filter(e=>!e.onLeave&&e.h>158).length;
-  const optCount   =empSearchFiltered.filter(e=>!e.onLeave&&e.h>=123&&e.h<=158).length;
-  const underCount =empSearchFiltered.filter(e=>!e.onLeave&&e.h>0&&e.h<123).length;
-  const leaveCount =empSearchFiltered.filter(e=>e.onLeave).length;
-  const unallocCount=empSearchFiltered.filter(e=>!e.onLeave&&e.h===0).length;
+  const fullyCount =empSearchFiltered.filter(e=>e.h>0&&Math.round((e.h/(e.effectiveHPM||HPM))*100)>=90).length;
+  const optCount   =empSearchFiltered.filter(e=>e.h>0&&Math.round((e.h/(e.effectiveHPM||HPM))*100)>=70&&Math.round((e.h/(e.effectiveHPM||HPM))*100)<90).length;
+  const underCount =empSearchFiltered.filter(e=>e.h>0&&Math.round((e.h/(e.effectiveHPM||HPM))*100)<70).length;
+  const leaveCount =empSearchFiltered.filter(e=>e.onLeave&&e.h===0).length;
+  const unallocCount=empSearchFiltered.filter(e=>e.h===0&&!e.onLeave).length;
 
   const selStyle={padding:"7px 12px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:11,fontWeight:600,color:"#0f172a",background:"#fff",cursor:"pointer",outline:"none",appearance:"none",backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,backgroundRepeat:"no-repeat",backgroundPosition:"right 9px center",paddingRight:26};
 
@@ -1167,10 +1169,10 @@ function DashboardPage(){
     const da=bld(ac,als);
     const dbc=id=>id==="all"?da:bld(ac.filter(c=>c.cid===id),als.filter(a=>a.cid===id));
     const eu=dbEmployees.filter(e=>(!allowedDepts||allowedDepts.includes(e.department))&&(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=month))).map(e=>{const empAls=als.filter(a=>(a.eid||a.employee_id)===e.id);const h=empAls.filter(a=>!isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.h||a.allocated_hours)||0),0);const leaveDeduction=empAls.filter(a=>isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);const effectiveHPM=Math.max(0,HPM-leaveDeduction);const clients=empAls.filter(a=>!isLeave(a.status)&&parseFloat(a.h||a.allocated_hours)>0).map(a=>({name:a.client_name||a.cn||'',hours:parseFloat(a.h||a.allocated_hours)||0}));const leaveRecords=empAls.filter(a=>isLeave(a.status));const rawPct=effectiveHPM>0?(h/effectiveHPM)*100:0;const onLeave=leaveRecords.length>0;return{...e,h,u:Math.round(rawPct),av:Math.max(0,effectiveHPM-h),effectiveHPM,leaveDeduction,onLeave,clients,leaveRecords};});
-    const fullyUtil=eu.filter(e=>!e.onLeave&&e.h>158);
-    const optimal=eu.filter(e=>!e.onLeave&&e.h>=123&&e.h<=158);
-    const underUtil=eu.filter(e=>!e.onLeave&&e.h>0&&e.h<123);
-    const unallocated=eu.filter(e=>!e.onLeave&&e.h===0);
+    const fullyUtil=eu.filter(e=>e.h>0&&Math.round((e.h/(e.effectiveHPM||HPM))*100)>=90);
+    const optimal=eu.filter(e=>e.h>0&&Math.round((e.h/(e.effectiveHPM||HPM))*100)>=70&&Math.round((e.h/(e.effectiveHPM||HPM))*100)<90);
+    const underUtil=eu.filter(e=>e.h>0&&Math.round((e.h/(e.effectiveHPM||HPM))*100)<70);
+    const unallocated=eu.filter(e=>e.h===0&&!e.onLeave);
     const over=fullyUtil,under=underUtil; // keep aliases for backward compat
     const chart=eu.map(e=>({name:e.name.split(" ")[0],hours:e.h,available:e.av,u:e.u})).sort((a,b)=>b.u-a.u);
     const ren=allAc.filter(c=>{const d=diffDays(c.ed);return d>=0&&d<=60;}).sort((a,b)=>new Date(a.ed)-new Date(b.ed));
