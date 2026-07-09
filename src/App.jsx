@@ -2142,6 +2142,8 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
   const leaveDeduction=Math.round(leaveDays*(176/22));
   const adjustedCapacity=176-leaveDeduction;
 
+  const [pending,setPending]=useState([]);
+
   const monthContracts=month?realContracts.filter(c=>isActive(c,month)):realContracts;
   const catContracts=clientCat==="all"?monthContracts:monthContracts.filter(c=>(c.contract_category||"Retainer")===clientCat);
 
@@ -2157,7 +2159,61 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
   const removeRow=id=>setNewForm(p=>({...p,rows:p.rows.filter(r=>r.id!==id)}));
   const updRow=(id,k,v)=>setNewForm(p=>({...p,rows:p.rows.map(r=>r.id===id?{...r,[k]:v}:r)}));
 
-  const canSubmit=month&&(onLeave?(rows.some(r=>r.empId)&&leaveFrom&&leaveTo&&leaveDays>0):clientId&&rows.some(r=>r.empId&&parseFloat(r.hours)>0));
+  const canAdd=month&&(onLeave
+    ?(rows.some(r=>r.empId)&&leaveFrom&&leaveTo&&leaveDays>0)
+    :(clientId&&rows.some(r=>r.empId&&parseFloat(r.hours)>0)));
+
+  const handleAddToPending=()=>{
+    if(!canAdd) return;
+    const newEntries=[];
+    if(onLeave){
+      rows.filter(r=>r.empId).forEach(r=>{
+        const emp=realEmps.find(e=>e.id===r.empId);
+        newEntries.push({
+          id:Date.now()+Math.random(),
+          type:"leave",
+          employee_id:r.empId,
+          employee_name:emp?.name||"",
+          employee_monthly_cost:emp?.mc||0,
+          status:"On Leave (Annual Vacation)",
+          month,
+          leave_from:leaveFrom,
+          leave_to:leaveTo,
+          leave_days:leaveDays,
+          capacity_deduction:leaveDeduction,
+          notes:notes||"",
+          client_id:null,client_name:"",contract_id:null,allocated_hours:0,
+        });
+      });
+    } else {
+      const ct=realContracts.find(c=>c.id===clientId);
+      rows.filter(r=>r.empId&&parseFloat(r.hours)>0).forEach(r=>{
+        const emp=realEmps.find(e=>e.id===r.empId);
+        newEntries.push({
+          id:Date.now()+Math.random(),
+          type:"assigned",
+          employee_id:r.empId,
+          employee_name:emp?.name||"",
+          employee_monthly_cost:emp?.mc||0,
+          status:"Assigned",
+          month,
+          client_id:ct?.cid||ct?.client_id||"",
+          client_name:ct?.cn||ct?.client_name||"",
+          contract_id:clientId,
+          allocated_hours:parseFloat(r.hours),
+          notes:notes||"",
+          leave_from:null,leave_to:null,leave_days:0,capacity_deduction:0,
+        });
+      });
+    }
+    setPending(p=>[...p,...newEntries]);
+    // Reset form fields but keep month
+    setNewForm(p=>({...p,empStatus:"in_duty",clientId:"",clientCat:"all",notes:"",rows:[{id:Date.now(),empId:"",hours:""}],leaveFrom:"",leaveTo:""}));
+  };
+
+  const removePending=id=>setPending(p=>p.filter(x=>x.id!==id));
+
+  const fmtD=d=>d?new Date(d+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"}):"—";
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
@@ -2168,7 +2224,7 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
           <Lbl>Month *</Lbl>
           <Sel value={month} onChange={v=>{
             const closed=snapshots.some(s=>s.month===v&&s.is_closed);
-            if(closed)return; // prevent selecting closed month
+            if(closed)return;
             upd("month",v);
           }} options={[{v:"",l:"Select month"},...ALLOC_MONTHS.map(m=>{
             const closed=snapshots.some(s=>s.month===m.v&&s.is_closed);
@@ -2319,13 +2375,51 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
           style={{width:"100%",padding:"8px 12px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:12,outline:"none",resize:"none",lineHeight:1.5,fontFamily:"inherit",boxSizing:"border-box",color:"#0f172a"}}/>
       </div>
 
+      {/* Add to list button */}
+      <button type="button" onClick={handleAddToPending} disabled={!canAdd} style={{
+        width:"100%",padding:"9px",borderRadius:8,border:`1.5px dashed ${canAdd?"#008A57":"#e2e8f0"}`,
+        background:canAdd?"#f0fdf4":"#fafafa",color:canAdd?"#008A57":"#94a3b8",
+        cursor:canAdd?"pointer":"not-allowed",fontSize:12,fontWeight:700,
+        display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .15s"
+      }}>
+        <Plus size={13} strokeWidth={2}/>{onLeave?"Add Leave to List":"Add Allocation to List"}
+      </button>
+
+      {/* Pending records staging area */}
+      {pending.length>0&&(
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <p style={{margin:0,fontSize:11,fontWeight:700,color:"#0f172a",textTransform:"uppercase",letterSpacing:".05em"}}>Pending ({pending.length})</p>
+            <span style={{fontSize:11,color:"#64748b"}}>Will be saved together</span>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:5,maxHeight:200,overflowY:"auto"}}>
+            {pending.map(p=>(
+              <div key={p.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 11px",borderRadius:8,border:`1px solid ${p.type==="leave"?"#fde68a":"#a7f3d0"}`,background:p.type==="leave"?"#fffbeb":"#f0fdf4"}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <p style={{margin:0,fontSize:12,fontWeight:600,color:"#0f172a",lineHeight:1.4}}>{p.employee_name}</p>
+                  <p style={{margin:0,fontSize:10,color:"#64748b",lineHeight:1.4}}>
+                    {p.type==="leave"
+                      ?`On Leave (Annual Vacation) · ${fmtD(p.leave_from)} → ${fmtD(p.leave_to)} · ${p.capacity_deduction}h deducted`
+                      :`${p.client_name} · ${p.allocated_hours}h`
+                    }
+                  </p>
+                </div>
+                <button type="button" onClick={()=>removePending(p.id)} style={{padding:"4px",borderRadius:5,border:"1px solid #fecaca",background:"#fff",cursor:"pointer",display:"flex",flexShrink:0,marginLeft:8}}>
+                  <X size={11} strokeWidth={2} color="#ef4444"/>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Actions */}
       <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:4}}>
         <Btn variant="outline" onClick={onClose} disabled={saving}>Cancel</Btn>
-        <Btn variant="primary" onClick={onSubmit} disabled={!canSubmit||saving} style={{gap:6,minWidth:140,justifyContent:"center"}}>
+        <Btn variant="primary" onClick={()=>onSubmit(pending)} disabled={pending.length===0||saving} style={{gap:6,minWidth:140,justifyContent:"center"}}>
           {saving
             ? <><Loader size={13} style={{animation:"spin .8s linear infinite"}}/>Saving…</>
-            : <><Plus size={13} strokeWidth={2}/>{onLeave?"Save On Leave":"Create Allocations"}</>
+            : <><Plus size={13} strokeWidth={2}/>Save All ({pending.length})</>
           }
         </Btn>
       </div>
@@ -2599,42 +2693,33 @@ function AllocationsPage(){
   const updEmpAlloc=(id,k,v)=>setEmpAllocs(p=>({...p,[id]:{...p[id],[k]:v}}));
 
   const [newFormSaving,setNewFormSaving]=useState(false);
-  const handleNewSubmit=async()=>{
-    if(newFormSaving)return; // prevent double-submit
-    const{month,empStatus,clientId,notes,rows}=newForm;
-    if(!month)return;
+  const handleNewSubmit=async(pending)=>{
+    if(newFormSaving||!pending||pending.length===0)return;
     setNewFormSaving(true);
     try{
-      if(empStatus==="on_leave"){
-        const{leaveFrom,leaveTo}=newForm;
-        const lDays=countWorkingDays(leaveFrom,leaveTo);
-        const capDed=Math.round(lDays*(176/22));
-        const onLeaveRows=rows.filter(r=>r.empId).map(r=>{
-          const emp=realEmps.find(e=>e.id===r.empId);
-          return{employee_id:r.empId,employee_name:emp?.name||"",employee_monthly_cost:emp?.mc||0,
-                 client_id:null,client_name:"",contract_id:null,
-                 allocated_hours:0,month,status:"On Leave (Annual Vacation)",notes:notes||"",
-                 leave_from:leaveFrom,leave_to:leaveTo,leave_days:lDays,capacity_deduction:capDed};
-        });
-        if(onLeaveRows.length) await dbBulkAdd(onLeaveRows);
-        toast(`${onLeaveRows.length} On Leave allocation(s) saved - ${lDays} day(s), ${capDed}h deducted`,"success");
-      } else {
-        const ct=realContracts.find(c=>c.id===clientId);
-        const toCreate=rows.filter(r=>r.empId&&parseFloat(r.hours)>0).map(r=>{
-          const emp=realEmps.find(e=>e.id===r.empId);
-          return{employee_id:r.empId,employee_name:emp?.name||"",employee_monthly_cost:emp?.mc||0,
-                 client_id:ct?.cid||ct?.client_id||"",client_name:ct?.cn||ct?.client_name||"",
-                 contract_id:clientId,allocated_hours:parseFloat(r.hours),
-                 month,status:"Assigned",notes:notes||""};
-        });
-        if(toCreate.length) await dbBulkAdd(toCreate);
-        toast(`${toCreate.length} allocation(s) created`,"success");
-      }
+      const toSave=pending.map(p=>({
+        employee_id:p.employee_id,
+        employee_name:p.employee_name,
+        employee_monthly_cost:p.employee_monthly_cost||0,
+        client_id:p.client_id||null,
+        client_name:p.client_name||"",
+        contract_id:p.contract_id||null,
+        allocated_hours:p.allocated_hours||0,
+        month:p.month,
+        status:p.status,
+        notes:p.notes||"",
+        leave_from:p.leave_from||null,
+        leave_to:p.leave_to||null,
+        leave_days:p.leave_days||0,
+        capacity_deduction:p.capacity_deduction||0,
+      }));
+      await dbBulkAdd(toSave);
+      toast(`${toSave.length} allocation(s) saved`,"success");
       closeModal();
-    } catch(err){
+    }catch(err){
       console.error("Allocation save error:",err);
       toast("Failed to save allocations. Please try again.","error");
-    } finally{
+    }finally{
       setNewFormSaving(false);
     }
   };
