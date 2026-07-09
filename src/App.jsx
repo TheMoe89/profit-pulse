@@ -1119,17 +1119,23 @@ function DashboardPage(){
   const [dbSnapshots,setDbSnapshots]=useState([]);
 
   useEffect(()=>{
-    Promise.all([
-      sb.from('employees').select('*'),
-      sb.from('contracts').select('*'),
-      sb.from('allocations').select('*').limit(5000),
-      sb.from('monthly_snapshots').select('*'),
-    ]).then(([{data:e},{data:ct},{data:al},{data:sn}])=>{
-      if(e)  setDbEmployees(e.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0,id:x.id,name:x.name,designation:x.designation,department:x.department,status:x.status})));
-      if(ct) setDbContracts(ct.map(x=>({...x,cn:x.client_name,cid:x.client_id,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status,bcs:parseFloat(x.budget_client_servicing)||0,bp:parseFloat(x.budget_production)||0,bc:parseFloat(x.budget_creative)||0,bpl:parseFloat(x.budget_planning)||0})));
-      if(al) setDbAllocs(al.map(x=>({...x,eid:x.employee_id,cid:x.client_id,h:parseFloat(x.allocated_hours)||0})));
-      if(sn) setDbSnapshots(sn.map(x=>({...x,m:x.month,cn:x.client_name,r:parseFloat(x.monthly_retainer)||0,c:parseFloat(x.resource_cost)||0})));
-    });
+    const fetchAll=async()=>{
+      const [e,ct,sn]=await Promise.all([
+        sb.from('employees').select('*'),
+        sb.from('contracts').select('*'),
+        sb.from('monthly_snapshots').select('*'),
+      ]);
+      // Fetch allocations in batches to bypass 1000 row default limit
+      const batch1=await sb.from('allocations').select('*').range(0,999);
+      const batch2=await sb.from('allocations').select('*').range(1000,1999);
+      const batch3=await sb.from('allocations').select('*').range(2000,2999);
+      const al=[...(batch1.data||[]),...(batch2.data||[]),...(batch3.data||[])];
+      if(e.data)  setDbEmployees(e.data.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0,id:x.id,name:x.name,designation:x.designation,department:x.department,status:x.status})));
+      if(ct.data) setDbContracts(ct.data.map(x=>({...x,cn:x.client_name,cid:x.client_id,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status,bcs:parseFloat(x.budget_client_servicing)||0,bp:parseFloat(x.budget_production)||0,bc:parseFloat(x.budget_creative)||0,bpl:parseFloat(x.budget_planning)||0})));
+      if(al.length) setDbAllocs(al.map(x=>({...x,eid:x.employee_id,cid:x.client_id,h:parseFloat(x.allocated_hours)||0})));
+      if(sn.data) setDbSnapshots(sn.data.map(x=>({...x,m:x.month,cn:x.client_name,r:parseFloat(x.monthly_retainer)||0,c:parseFloat(x.resource_cost)||0})));
+    };
+    fetchAll();
   },[sb]);
 
   const dbAllocsByMonth=useMemo(()=>{const m={};dbAllocs.forEach(a=>{if(!m[a.month])m[a.month]=[];m[a.month].push(a);});return m;},[dbAllocs]);
@@ -2454,7 +2460,15 @@ function AllocationsPage(){
   const [loading,setLoading]=useState(true);
   const mapA=a=>({...a,eid:a.employee_id,cid:a.client_id,h:a.allocated_hours});
   useEffect(()=>{
-    sb.from('allocations').select('*').limit(5000).order('month',{ascending:false}).then(({data})=>{if(data)setAllocs(data.map(mapA));setLoading(false);});
+    const fetchAllocs=async()=>{
+      const b1=await sb.from('allocations').select('*').range(0,999).order('month',{ascending:false});
+      const b2=await sb.from('allocations').select('*').range(1000,1999).order('month',{ascending:false});
+      const b3=await sb.from('allocations').select('*').range(2000,2999).order('month',{ascending:false});
+      const all=[...(b1.data||[]),...(b2.data||[]),...(b3.data||[])];
+      if(all.length)setAllocs(all.map(mapA));
+      setLoading(false);
+    };
+    fetchAllocs();
   },[sb]);
   const dbBulkAdd=async items=>{const rows=items.map(a=>({employee_id:a.employee_id,employee_name:a.employee_name,employee_monthly_cost:a.employee_monthly_cost||0,client_id:a.client_id||null,client_name:a.client_name||'',contract_id:a.contract_id||null,allocated_hours:a.allocated_hours||0,month:a.month,status:a.status||'Assigned',notes:a.notes||'',leave_from:a.leave_from||null,leave_to:a.leave_to||null,leave_days:a.leave_days||0,capacity_deduction:a.capacity_deduction||0}));const{data,error}=await sb.from('allocations').insert(rows).select();if(error)throw new Error(error.message);if(data)setAllocs(p=>[...p,...data.map(mapA)]);};
   const dbUpdate=async(id,p)=>{const{data}=await sb.from('allocations').update({allocated_hours:p.allocated_hours,month:p.month,notes:p.notes}).eq('id',id).select().single();if(data)setAllocs(x=>x.map(a=>a.id===id?mapA(data):a));};
@@ -4188,20 +4202,25 @@ function ReportsPage(){
   const [dataLoaded,setDataLoaded]       = useState(false);
 
   useEffect(()=>{
-    Promise.all([
-      sb.from('employees').select('*'),
-      sb.from('contracts').select('*'),
-      sb.from('clients').select('*'),
-      sb.from('allocations').select('*').limit(5000),
-      sb.from('monthly_snapshots').select('*'),
-    ]).then(([{data:e},{data:ct},{data:cl},{data:al},{data:sn}])=>{
-      if(e)  setRealEmployees(e.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0,id:x.id})));
-      if(ct) setRealContracts(ct.map(x=>({...x,cn:x.client_name,cid:x.client_id,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status,bcs:parseFloat(x.budget_client_servicing)||0,bp:parseFloat(x.budget_production)||0,bc:parseFloat(x.budget_creative)||0,bpl:parseFloat(x.budget_planning)||0})));
-      if(cl) setRealClients(cl);
-      if(al) setRealAllocs(al.map(x=>({...x,eid:x.employee_id,cid:x.client_id,h:parseFloat(x.allocated_hours)||0})));
-      if(sn) setRealSnapshots(sn);
+    const fetchData=async()=>{
+      const [e,ct,cl,sn]=await Promise.all([
+        sb.from('employees').select('*'),
+        sb.from('contracts').select('*'),
+        sb.from('clients').select('*'),
+        sb.from('monthly_snapshots').select('*'),
+      ]);
+      const b1=await sb.from('allocations').select('*').range(0,999);
+      const b2=await sb.from('allocations').select('*').range(1000,1999);
+      const b3=await sb.from('allocations').select('*').range(2000,2999);
+      const al=[...(b1.data||[]),...(b2.data||[]),...(b3.data||[])];
+      if(e.data)  setRealEmployees(e.data.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0,id:x.id})));
+      if(ct.data) setRealContracts(ct.data.map(x=>({...x,cn:x.client_name,cid:x.client_id,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status,bcs:parseFloat(x.budget_client_servicing)||0,bp:parseFloat(x.budget_production)||0,bc:parseFloat(x.budget_creative)||0,bpl:parseFloat(x.budget_planning)||0})));
+      if(cl.data) setRealClients(cl.data);
+      if(al.length) setRealAllocs(al.map(x=>({...x,eid:x.employee_id,cid:x.client_id,h:parseFloat(x.allocated_hours)||0})));
+      if(sn.data) setRealSnapshots(sn.data);
       setDataLoaded(true);
-    });
+    };
+    fetchData();
   },[sb]);
 
   // Build allocsByMonth-style lookup from real allocations
@@ -5157,18 +5176,23 @@ function MonthlyClosePage(){
   const [realAllocs,setRealAllocs]=useState([]);
 
   useEffect(()=>{
-    Promise.all([
-      sb.from('monthly_snapshots').select('*').order('month',{ascending:false}),
-      sb.from('contracts').select('*'),
-      sb.from('employees').select('*'),
-      sb.from('allocations').select('*').limit(5000),
-    ]).then(([{data:sn},{data:ct},{data:em},{data:al}])=>{
-      if(sn) setSnapshots(sn);
-      if(ct) setRealContracts(ct.map(x=>({...x,cid:x.client_id,cn:x.client_name,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status})));
-      if(em) setRealEmployees(em.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0})));
-      if(al) setRealAllocs(al.map(x=>({...x,eid:x.employee_id,cid:x.client_id,h:parseFloat(x.allocated_hours)||0})));
+    const fetchData=async()=>{
+      const [sn,ct,em]=await Promise.all([
+        sb.from('monthly_snapshots').select('*').order('month',{ascending:false}),
+        sb.from('contracts').select('*'),
+        sb.from('employees').select('*'),
+      ]);
+      const b1=await sb.from('allocations').select('*').range(0,999);
+      const b2=await sb.from('allocations').select('*').range(1000,1999);
+      const b3=await sb.from('allocations').select('*').range(2000,2999);
+      const al=[...(b1.data||[]),...(b2.data||[]),...(b3.data||[])];
+      if(sn.data) setSnapshots(sn.data);
+      if(ct.data) setRealContracts(ct.data.map(x=>({...x,cid:x.client_id,cn:x.client_name,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status})));
+      if(em.data) setRealEmployees(em.data.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0})));
+      if(al.length) setRealAllocs(al.map(x=>({...x,eid:x.employee_id,cid:x.client_id,h:parseFloat(x.allocated_hours)||0})));
       setLoading(false);
-    });
+    };
+    fetchData();
   },[sb]);
   const dbBulkAdd=async items=>{const{data}=await sb.from('monthly_snapshots').insert(items.map(s=>({month:s.month,contract_id:s.contract_id,contract_number:s.contract_number,client_name:s.client_name,monthly_retainer:s.monthly_retainer,resource_cost:s.resource_cost,profit:s.profit,allocated_hours:s.allocated_hours,is_closed:true}))).select();if(data)setSnapshots(p=>[...p,...data]);};
   const dbDelete=async month=>{await sb.from('monthly_snapshots').delete().eq('month',month);setSnapshots(p=>p.filter(s=>s.month!==month));};
