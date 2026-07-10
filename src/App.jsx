@@ -3153,6 +3153,8 @@ function AllocationsPage(){
     }catch(err){toast(err.message||"Revert failed","error");}
     finally{setReverting(null);}
   };
+
+  const handleFileUpload=e=>{
     const file=e.target.files[0];if(!file)return;
     e.target.value="";setImportMenuOpen(false);
     parseAllocationFile(file,realEmps,realContracts,ALLOC_MONTHS,snapshots,(err,results)=>{
