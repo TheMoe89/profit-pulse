@@ -2646,18 +2646,34 @@ function generateAllocationTemplate(realEmps,realContracts,ALLOC_MONTHS){
       for(let i=0;i<binaryStr.length;i++) bytes[i]=binaryStr.charCodeAt(i);
       const wb=XS.read(bytes,{type:"array"});
 
-      // Update _Ref sheet with current system data
+      // Update _Ref sheet with current system data — update cells in place
       const empNames=realEmps.filter(e=>e.status==="Active").map(e=>e.name).sort();
       const clientNames=[...new Set(realContracts.map(c=>c.cn||c.client_name))].sort();
       const monthLabels=ALLOC_MONTHS.map(m=>m.l);
       const maxLen=Math.max(empNames.length,clientNames.length,monthLabels.length);
 
-      const refData=[["Employees","Clients","Months"]];
-      for(let i=0;i<maxLen;i++) refData.push([empNames[i]||"",clientNames[i]||"",monthLabels[i]||""]);
+      const wsRef=wb.Sheets["_Ref"];
 
-      const wsRef=XS.utils.aoa_to_sheet(refData);
-      wsRef["!cols"]=[{wch:35},{wch:35},{wch:18}];
-      wb.Sheets["_Ref"]=wsRef;
+      // Clear existing data rows first (keep header row 0)
+      // Find current extent
+      const range=XS.utils.decode_range(wsRef["!ref"]||"A1:C1");
+      for(let r=1;r<=range.e.r;r++){
+        ["A","B","C"].forEach(col=>{
+          const addr=`${col}${r+1}`;
+          if(wsRef[addr]) delete wsRef[addr];
+        });
+      }
+
+      // Write new data
+      for(let i=0;i<maxLen;i++){
+        const r=i+2; // row 2 onwards (row 1 is header)
+        if(empNames[i]) wsRef[`A${r}`]={v:empNames[i],t:"s"};
+        if(clientNames[i]) wsRef[`B${r}`]={v:clientNames[i],t:"s"};
+        if(monthLabels[i]) wsRef[`C${r}`]={v:monthLabels[i],t:"s"};
+      }
+
+      // Update the sheet ref range
+      wsRef["!ref"]=`A1:C${maxLen+1}`;
 
       XS.writeFile(wb,"ACQ_Allocation_Template.xlsx");
     }catch(err){
