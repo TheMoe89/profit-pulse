@@ -2642,11 +2642,18 @@ function generateAllocationTemplate(realEmps,realContracts,ALLOC_MONTHS){
     const clientNames=[...new Set(realContracts.map(c=>c.cn||c.client_name))].sort();
     const monthLabels=ALLOC_MONTHS.map(m=>m.l);
     const maxLen=Math.max(empNames.length,clientNames.length,monthLabels.length);
+
+    // ── Hidden _Ref sheet ──
     const refData=[["Employees","Clients","Months"]];
     for(let i=0;i<maxLen;i++) refData.push([empNames[i]||"",clientNames[i]||"",monthLabels[i]||""]);
     const wsRef=XS.utils.aoa_to_sheet(refData);
     wsRef["!cols"]=[{wch:35},{wch:35},{wch:18}];
     XS.utils.book_append_sheet(wb,wsRef,"_Ref");
+    // Hide the _Ref sheet
+    wb.Workbook={SheetView:[],Sheets:[]};
+    wb.Workbook.Sheets.push({Hidden:1}); // _Ref is first, mark hidden
+
+    // ── Main Allocations sheet ──
     const HEADER=["Month","Employee Name","Client Name","Hours","Notes"];
     const ROWS=50;
     const sheetData=[HEADER];
@@ -2655,8 +2662,12 @@ function generateAllocationTemplate(realEmps,realContracts,ALLOC_MONTHS){
     ws["!cols"]=[{wch:16},{wch:32},{wch:32},{wch:10},{wch:30}];
     ws["!rows"]=[{hpt:22}];
     for(let r=1;r<=ROWS;r++) ws["!rows"].push({hpt:18});
+
+    // Style header
     const hStyle={font:{bold:true,color:{rgb:"FFFFFF"},sz:11,name:"Arial"},fill:{fgColor:{rgb:"008A57"}},alignment:{horizontal:"center",vertical:"center"},border:{top:{style:"thin",color:{rgb:"006644"}},bottom:{style:"thin",color:{rgb:"006644"}},left:{style:"thin",color:{rgb:"006644"}},right:{style:"thin",color:{rgb:"006644"}}}};
     HEADER.forEach((_,ci)=>{const a=XS.utils.encode_cell({r:0,c:ci});if(!ws[a])ws[a]={v:HEADER[ci],t:"s"};ws[a].s=hStyle;});
+
+    // Style data rows
     const border={top:{style:"hair",color:{rgb:"E2E8F0"}},bottom:{style:"hair",color:{rgb:"E2E8F0"}},left:{style:"hair",color:{rgb:"E2E8F0"}},right:{style:"hair",color:{rgb:"E2E8F0"}}};
     for(let r=1;r<=ROWS;r++){
       for(let c=0;c<5;c++){
@@ -2665,14 +2676,31 @@ function generateAllocationTemplate(realEmps,realContracts,ALLOC_MONTHS){
         ws[a].s={font:{name:"Arial",sz:10},fill:{fgColor:{rgb:c===3?"FFFBEB":r%2===0?"F0FDF4":"FFFFFF"}},alignment:{vertical:"center",...(c===3?{horizontal:"center"}:{})},border};
       }
     }
-    ws["!dataValidation"]=[
-      {sqref:`A2:A${ROWS+1}`,type:"list",formula1:`_Ref!$C$2:$C$${monthLabels.length+1}`,showDropDown:false,showErrorMessage:true,errorTitle:"Invalid Month",error:"Please select a valid month."},
-      {sqref:`B2:B${ROWS+1}`,type:"list",formula1:`_Ref!$A$2:$A$${empNames.length+1}`,showDropDown:false,showErrorMessage:true,errorTitle:"Invalid Employee",error:"Please select a valid employee."},
-      {sqref:`C2:C${ROWS+1}`,type:"list",formula1:`_Ref!$B$2:$B$${clientNames.length+1}`,showDropDown:false,showErrorMessage:true,errorTitle:"Invalid Client",error:"Please select a valid client."},
-    ];
+
+    // Freeze header
     ws["!freeze"]={xSplit:0,ySplit:1,topLeftCell:"A2",activePane:"bottomLeft"};
+
+    // ── Data validation via raw XML injection ──
+    const dvXml=`<dataValidations count="3">`+
+      `<dataValidation type="list" showDropDown="0" showErrorMessage="1" errorTitle="Invalid Month" error="Select from dropdown" sqref="A2:A${ROWS+1}"><formula1>_Ref!$C$2:$C$${monthLabels.length+1}</formula1></dataValidation>`+
+      `<dataValidation type="list" showDropDown="0" showErrorMessage="1" errorTitle="Invalid Employee" error="Select from dropdown" sqref="B2:B${ROWS+1}"><formula1>_Ref!$A$2:$A$${empNames.length+1}</formula1></dataValidation>`+
+      `<dataValidation type="list" showDropDown="0" showErrorMessage="1" errorTitle="Invalid Client" error="Select from dropdown" sqref="C2:C${ROWS+1}"><formula1>_Ref!$B$2:$B$${clientNames.length+1}</formula1></dataValidation>`+
+      `</dataValidations>`;
+
+    // Inject into sheet XML — xlsx-js-style supports !xml extension
+    if(!ws["!xml"]) ws["!xml"]={};
+    ws["!xml"].dataValidations=dvXml;
+
     XS.utils.book_append_sheet(wb,ws,"Allocations");
     wb.SheetNames=["Allocations","_Ref"];
+
+    // Mark _Ref as hidden in workbook props
+    if(!wb.Workbook) wb.Workbook={Sheets:[]};
+    if(!wb.Workbook.Sheets) wb.Workbook.Sheets=[];
+    while(wb.Workbook.Sheets.length<wb.SheetNames.length) wb.Workbook.Sheets.push({});
+    // Allocations = index 0, _Ref = index 1
+    wb.Workbook.Sheets[1]={Hidden:1};
+
     XS.writeFile(wb,"ACQ_Allocation_Template.xlsx");
   });
 }
