@@ -2665,44 +2665,42 @@ function generateAllocationTemplate(realEmps,realContracts,ALLOC_MONTHS,allowedD
 
   loadJSZip(async()=>{
     try{
-      // Filter employees
       const deptEmps=realEmps.filter(e=>e.status==="Active"&&allowedDepts.includes(e.department)).map(e=>e.name).sort();
       const clientNames=[...new Set(realContracts.map(c=>c.cn||c.client_name))].sort();
       const monthLabels=ALLOC_MONTHS.map(m=>m.l);
       const maxLen=Math.max(deptEmps.length,clientNames.length,monthLabels.length);
 
-      // Build new _Ref sheet XML
-      const escXml=s=>(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-      let rows=`<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="s"><v>2</v></c></row>`;
-      const strings=["Employees","Clients","Months"];
+      // Build _Ref sheet XML using inline strings (t="inlineStr") — no shared strings needed
+      const escXml=s=>(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      let rows=`<row r="1">`;
+      rows+=`<c r="A1" t="inlineStr"><is><t>Employees</t></is></c>`;
+      rows+=`<c r="B1" t="inlineStr"><is><t>Clients</t></is></c>`;
+      rows+=`<c r="C1" t="inlineStr"><is><t>Months</t></is></c>`;
+      rows+=`</row>`;
+
       for(let i=0;i<maxLen;i++){
         const r=i+2;
-        const empIdx=strings.length; strings.push(deptEmps[i]||"");
-        const cliIdx=strings.length; strings.push(clientNames[i]||"");
-        const monIdx=strings.length; strings.push(monthLabels[i]||"");
         rows+=`<row r="${r}">`;
-        if(deptEmps[i]) rows+=`<c r="A${r}" t="s"><v>${empIdx}</v></c>`;
-        if(clientNames[i]) rows+=`<c r="B${r}" t="s"><v>${cliIdx}</v></c>`;
-        if(monthLabels[i]) rows+=`<c r="C${r}" t="s"><v>${monIdx}</v></c>`;
+        if(deptEmps[i]) rows+=`<c r="A${r}" t="inlineStr"><is><t>${escXml(deptEmps[i])}</t></is></c>`;
+        if(clientNames[i]) rows+=`<c r="B${r}" t="inlineStr"><is><t>${escXml(clientNames[i])}</t></is></c>`;
+        if(monthLabels[i]) rows+=`<c r="C${r}" t="inlineStr"><is><t>${escXml(monthLabels[i])}</t></is></c>`;
         rows+=`</row>`;
       }
-      const refXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rows}</sheetData></worksheet>`;
 
-      // Build shared strings XML
-      const ssXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${strings.length}" uniqueCount="${strings.length}">${strings.map(s=>`<si><t>${escXml(s)}</t></si>`).join("")}</sst>`;
+      const refXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+        `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`+
+        `<sheetData>${rows}</sheetData>`+
+        `</worksheet>`;
 
       // Load base64 template as zip
       const binaryStr=atob(ACQ_TEMPLATE_B64);
       const bytes=new Uint8Array(binaryStr.length);
       for(let i=0;i<binaryStr.length;i++) bytes[i]=binaryStr.charCodeAt(i);
-
       const zip=await window.JSZip.loadAsync(bytes);
 
-      // Swap _Ref sheet (sheet2) and shared strings
+      // Only swap sheet2.xml (_Ref) — don't touch shared strings or any other file
       zip.file("xl/worksheets/sheet2.xml",refXml);
-      zip.file("xl/sharedStrings.xml",ssXml);
 
-      // Generate and download
       const out=await zip.generateAsync({type:"uint8array",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
       const blob=new Blob([out],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
       const url=URL.createObjectURL(blob);
