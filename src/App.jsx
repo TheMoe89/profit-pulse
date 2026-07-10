@@ -2910,7 +2910,7 @@ function AllocationsPage(){
     };
     fetchAllocs();
   },[sb]);
-  const dbBulkAdd=async items=>{const rows=items.map(a=>({employee_id:a.employee_id,employee_name:a.employee_name,employee_monthly_cost:a.employee_monthly_cost||0,client_id:a.client_id||null,client_name:a.client_name||'',contract_id:a.contract_id||null,allocated_hours:a.allocated_hours||0,month:a.month,status:a.status||'Assigned',notes:a.notes||'',leave_from:a.leave_from||null,leave_to:a.leave_to||null,leave_days:a.leave_days||0,capacity_deduction:a.capacity_deduction||0}));const{data,error}=await sb.from('allocations').insert(rows).select();if(error)throw new Error(error.message);if(data)setAllocs(p=>[...p,...data.map(mapA)]);};
+  const dbBulkAdd=async items=>{const rows=items.map(a=>({employee_id:a.employee_id,employee_name:a.employee_name,employee_monthly_cost:a.employee_monthly_cost||0,client_id:a.client_id||null,client_name:a.client_name||'',contract_id:a.contract_id||null,allocated_hours:a.allocated_hours||0,month:a.month,status:a.status||'Assigned',notes:a.notes||'',leave_from:a.leave_from||null,leave_to:a.leave_to||null,leave_days:a.leave_days||0,capacity_deduction:a.capacity_deduction||0,...(a.batch_id?{batch_id:a.batch_id}:{})}));const{data,error}=await sb.from('allocations').insert(rows).select();if(error)throw new Error(error.message);if(data)setAllocs(p=>[...p,...data.map(mapA)]);};
   const dbUpdate=async(id,p)=>{const{data}=await sb.from('allocations').update({allocated_hours:p.allocated_hours,month:p.month,notes:p.notes}).eq('id',id).select().single();if(data)setAllocs(x=>x.map(a=>a.id===id?mapA(data):a));};
   const dbDelete=async id=>{await sb.from('allocations').delete().eq('id',id);setAllocs(x=>x.filter(a=>a.id!==id));};
   const [search,setSearch]       = useState("");
@@ -3141,13 +3141,14 @@ function AllocationsPage(){
   };
 
   const handleRevert=async(log)=>{
-    const ok=await confirm({title:"Revert import?",message:`This will delete all ${log.rows_count} allocations from this import. This cannot be undone.`,danger:true,confirmLabel:"Revert"});
+    const ok=await confirm({title:"Revert import?",message:`This will delete all ${log.rows_count} allocations from this import. The log will be kept as a record.`,danger:true,confirmLabel:"Revert"});
     if(!ok)return;
     setReverting(log.id);
     try{
-      await sb.from('allocations').delete().eq('batch_id',log.batch_id);
-      await sb.from('import_logs').delete().eq('id',log.id);
-      setImportLogs(p=>p.filter(l=>l.id!==log.id));
+      const{error}=await sb.from('allocations').delete().eq('batch_id',log.batch_id);
+      if(error)throw new Error(error.message);
+      await sb.from('import_logs').update({reverted:true}).eq('id',log.id);
+      setImportLogs(p=>p.map(l=>l.id===log.id?{...l,reverted:true}:l));
       setAllocs(p=>p.filter(a=>a.batch_id!==log.batch_id));
       toast(`✓ ${log.rows_count} allocations reverted`,"success");
     }catch(err){toast(err.message||"Revert failed","error");}
@@ -3272,12 +3273,12 @@ function AllocationsPage(){
                 const rows=log.rows_detail?JSON.parse(log.rows_detail):[];
                 const isClosed=false; // could check months against snapshots
                 return(
-                  <div key={log.id} style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden"}}>
+                  <div key={log.id} style={{border:`1px solid ${log.reverted?"#e2e8f0":"#e2e8f0"}`,borderRadius:10,overflow:"hidden",opacity:log.reverted?0.7:1}}>
                     {/* Log row header */}
                     <div onClick={()=>setImportLogExpanded(p=>({...p,[log.id]:!isOpen}))}
-                      style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",background:isOpen?"#f0fdf4":"#fff",cursor:"pointer",gap:8}}
+                      style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",background:isOpen?"#f0fdf4":log.reverted?"#f8fafc":"#fff",cursor:"pointer",gap:8}}
                       onMouseEnter={e=>{if(!isOpen)e.currentTarget.style.background="#f8fafc";}}
-                      onMouseLeave={e=>{if(!isOpen)e.currentTarget.style.background="#fff";}}>
+                      onMouseLeave={e=>{if(!isOpen)e.currentTarget.style.background=log.reverted?"#f8fafc":"#fff";}}>
                       <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
                         <span style={{fontSize:11,color:"#94a3b8",transform:isOpen?"rotate(90deg)":"none",transition:"transform .2s",display:"inline-block"}}>▶</span>
                         <div style={{minWidth:0}}>
@@ -3288,12 +3289,17 @@ function AllocationsPage(){
                             <span style={{fontSize:11,color:"#64748b"}}>·</span>
                             <span style={{padding:"1px 8px",borderRadius:999,background:"#f0fdf4",color:"#059669",fontSize:11,fontWeight:700}}>{log.rows_count} rows</span>
                             <span style={{padding:"1px 8px",borderRadius:999,background:"#eff6ff",color:"#3b82f6",fontSize:11,fontWeight:600}}>{log.months}</span>
+                            {log.reverted&&<span style={{padding:"1px 8px",borderRadius:999,background:"#f1f5f9",color:"#94a3b8",fontSize:11,fontWeight:700}}>Reverted</span>}
                           </div>
                         </div>
                       </div>
-                      <Btn variant="danger" size="sm" disabled={reverting===log.id} onClick={e=>{e.stopPropagation();handleRevert(log);}}>
-                        <RotateCcw size={12} strokeWidth={2}/>{reverting===log.id?"Reverting...":"Revert"}
-                      </Btn>
+                      {log.reverted?(
+                        <span style={{padding:"4px 12px",borderRadius:6,background:"#f1f5f9",color:"#94a3b8",fontSize:12,fontWeight:600,cursor:"default"}}>Reverted</span>
+                      ):(
+                        <Btn variant="danger" size="sm" disabled={reverting===log.id} onClick={e=>{e.stopPropagation();handleRevert(log);}}>
+                          <RotateCcw size={12} strokeWidth={2}/>{reverting===log.id?"Reverting...":"Revert"}
+                        </Btn>
+                      )}
                     </div>
                     {/* Expanded rows */}
                     {isOpen&&rows.length>0&&(
