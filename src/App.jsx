@@ -2893,7 +2893,7 @@ function ImportSuccessModal({open,onClose,log}){
 }
 
 function AllocationsPage(){
-  const {sb,allowedDepts}=useAuth();
+  const {sb,allowedDepts,profile}=useAuth();
   const toast=useToast();
   const confirm=useConfirm();
   const [allocs,setAllocs]=useState([]);
@@ -3111,6 +3111,11 @@ function AllocationsPage(){
   const [importPreviewOpen,setImportPreviewOpen]=useState(false);
   const [importSuccessOpen,setImportSuccessOpen]=useState(false);
   const [importLog,setImportLog]=useState(null);
+  const [importLogOpen,setImportLogOpen]=useState(false);
+  const [importLogs,setImportLogs]=useState([]);
+  const [importLogsLoading,setImportLogsLoading]=useState(false);
+  const [importLogExpanded,setImportLogExpanded]=useState({});
+  const [reverting,setReverting]=useState(null);
   const [importing,setImporting]=useState(false);
   const importMenuRef=React.useRef(null);
   const fileInputRef=React.useRef(null);
@@ -3119,7 +3124,35 @@ function AllocationsPage(){
     document.addEventListener("mousedown",h);
     return()=>document.removeEventListener("mousedown",h);
   },[]);
-  const handleFileUpload=e=>{
+  const loadImportLogs=async()=>{
+    setImportLogsLoading(true);
+    try{
+      let q=sb.from('import_logs').select('*').order('created_at',{ascending:false});
+      if(allowedDepts) q=q.eq('imported_by_email',profile?.email||"");
+      const{data}=await q;
+      if(data) setImportLogs(data);
+    }finally{setImportLogsLoading(false);}
+  };
+
+  const openImportLog=()=>{
+    setImportMenuOpen(false);
+    setImportLogOpen(true);
+    loadImportLogs();
+  };
+
+  const handleRevert=async(log)=>{
+    const ok=await confirm({title:"Revert import?",message:`This will delete all ${log.rows_count} allocations from this import. This cannot be undone.`,danger:true,confirmLabel:"Revert"});
+    if(!ok)return;
+    setReverting(log.id);
+    try{
+      await sb.from('allocations').delete().eq('batch_id',log.batch_id);
+      await sb.from('import_logs').delete().eq('id',log.id);
+      setImportLogs(p=>p.filter(l=>l.id!==log.id));
+      setAllocs(p=>p.filter(a=>a.batch_id!==log.batch_id));
+      toast(`✓ ${log.rows_count} allocations reverted`,"success");
+    }catch(err){toast(err.message||"Revert failed","error");}
+    finally{setReverting(null);}
+  };
     const file=e.target.files[0];if(!file)return;
     e.target.value="";setImportMenuOpen(false);
     parseAllocationFile(file,realEmps,realContracts,ALLOC_MONTHS,snapshots,(err,results)=>{
@@ -3130,15 +3163,37 @@ function AllocationsPage(){
   const handleImport=async(validRows)=>{
     setImporting(true);
     try{
+      const batchId=crypto.randomUUID();
       const toSave=validRows.map(r=>({
         employee_id:r.emp.id,employee_name:r.emp.name,employee_monthly_cost:r.emp.mc||0,
         client_id:r.ct?.cid||r.ct?.client_id||null,client_name:r.ct?.cn||r.ct?.client_name||"",
         contract_id:r.ct?.id||null,allocated_hours:r.hours,month:r.monthVal,
         status:"Assigned",notes:r.notes||"",
+        batch_id:batchId,
         leave_from:null,leave_to:null,leave_days:0,capacity_deduction:0,
       }));
       await dbBulkAdd(toSave);
-      setImportLog({total:toSave.length,skipped:importResults.filter(r=>!r.valid).length,date:new Date().toLocaleString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}),rows:toSave});
+      // Save to import_logs
+      const months=[...new Set(toSave.map(r=>r.month))].sort().map(m=>fmtLong(m)).join(", ");
+      const logEntry={
+        batch_id:batchId,
+        imported_by:profile?.full_name||profile?.email||"Unknown",
+        imported_by_email:profile?.email||"",
+        department:allowedDepts?allowedDepts[0]||"":null,
+        rows_count:toSave.length,
+        months,
+        rows_detail:JSON.stringify(toSave.map(r=>({employee_name:r.employee_name,client_name:r.client_name,allocated_hours:r.allocated_hours,month:r.month}))),
+      };
+      const{data:savedLog}=await sb.from('import_logs').insert([logEntry]).select().single();
+      const localLog={
+        total:toSave.length,
+        skipped:importResults.filter(r=>!r.valid).length,
+        date:new Date().toLocaleString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}),
+        rows:toSave,
+        batch_id:batchId,
+      };
+      setImportLog(localLog);
+      if(savedLog) setImportLogs(p=>[savedLog,...p]);
       setImportPreviewOpen(false);setImportSuccessOpen(true);
       toast(`✓ ${toSave.length} allocations imported`,"success");
     }catch(err){toast(err.message||"Import failed","error");}
@@ -3177,6 +3232,14 @@ function AllocationsPage(){
                   <Upload size={14} strokeWidth={1.75} color="#3b82f6"/>
                   <div><p style={{margin:0,fontWeight:600}}>Upload & Import</p><p style={{margin:0,fontSize:11,color:"#64748b"}}>Import filled template</p></div>
                 </button>
+                <div style={{height:1,background:"#f1f5f9"}}/>
+                <button onClick={openImportLog}
+                  style={{width:"100%",padding:"11px 16px",border:"none",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontSize:13,color:"#0f172a",textAlign:"left"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
+                  onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+                  <History size={14} strokeWidth={1.75} color="#8b5cf6"/>
+                  <div><p style={{margin:0,fontWeight:600}}>Import Log</p><p style={{margin:0,fontSize:11,color:"#64748b"}}>View & revert past imports</p></div>
+                </button>
               </div>
             )}
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFileUpload} style={{display:"none"}}/>
@@ -3188,6 +3251,73 @@ function AllocationsPage(){
       {/* Import Modals */}
       {importPreviewOpen&&importResults&&<ImportPreviewModal open={importPreviewOpen} onClose={()=>setImportPreviewOpen(false)} results={importResults} onImport={handleImport} importing={importing}/>}
       {importSuccessOpen&&<ImportSuccessModal open={importSuccessOpen} onClose={()=>setImportSuccessOpen(false)} log={importLog}/>}
+
+      {/* Import Log Modal */}
+      {importLogOpen&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:680,maxHeight:"90vh",overflowY:"auto",border:"1px solid #e2e8f0",boxShadow:"0 25px 50px rgba(0,0,0,.2)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 22px",borderBottom:"1px solid #e2e8f0",position:"sticky",top:0,background:"#fff",zIndex:1}}>
+              <div><h3 style={{margin:0,fontSize:16,fontWeight:700,color:"#0f172a"}}>Import Log</h3><p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>{allowedDepts?"Your imports":"All imports across team"}</p></div>
+              <button onClick={()=>setImportLogOpen(false)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#64748b"}}>&times;</button>
+            </div>
+            <div style={{padding:"16px 22px",display:"flex",flexDirection:"column",gap:8}}>
+              {importLogsLoading?(
+                <div style={{padding:32,textAlign:"center",color:"#94a3b8"}}>Loading...</div>
+              ):importLogs.length===0?(
+                <div style={{padding:32,textAlign:"center",color:"#94a3b8"}}>No import logs found.</div>
+              ):importLogs.map(log=>{
+                const isOpen=importLogExpanded[log.id];
+                const rows=log.rows_detail?JSON.parse(log.rows_detail):[];
+                const isClosed=false; // could check months against snapshots
+                return(
+                  <div key={log.id} style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden"}}>
+                    {/* Log row header */}
+                    <div onClick={()=>setImportLogExpanded(p=>({...p,[log.id]:!isOpen}))}
+                      style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",background:isOpen?"#f0fdf4":"#fff",cursor:"pointer",gap:8}}
+                      onMouseEnter={e=>{if(!isOpen)e.currentTarget.style.background="#f8fafc";}}
+                      onMouseLeave={e=>{if(!isOpen)e.currentTarget.style.background="#fff";}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
+                        <span style={{fontSize:11,color:"#94a3b8",transform:isOpen?"rotate(90deg)":"none",transition:"transform .2s",display:"inline-block"}}>▶</span>
+                        <div style={{minWidth:0}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                            <span style={{fontSize:13,fontWeight:700,color:"#0f172a"}}>{log.imported_by}</span>
+                            <span style={{fontSize:11,color:"#64748b"}}>·</span>
+                            <span style={{fontSize:11,color:"#64748b"}}>{new Date(log.created_at).toLocaleString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}</span>
+                            <span style={{fontSize:11,color:"#64748b"}}>·</span>
+                            <span style={{padding:"1px 8px",borderRadius:999,background:"#f0fdf4",color:"#059669",fontSize:11,fontWeight:700}}>{log.rows_count} rows</span>
+                            <span style={{padding:"1px 8px",borderRadius:999,background:"#eff6ff",color:"#3b82f6",fontSize:11,fontWeight:600}}>{log.months}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <Btn variant="danger" size="sm" disabled={reverting===log.id} onClick={e=>{e.stopPropagation();handleRevert(log);}}>
+                        <RotateCcw size={12} strokeWidth={2}/>{reverting===log.id?"Reverting...":"Revert"}
+                      </Btn>
+                    </div>
+                    {/* Expanded rows */}
+                    {isOpen&&rows.length>0&&(
+                      <div style={{borderTop:"1px solid #f1f5f9",maxHeight:280,overflowY:"auto"}}>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 80px 70px",padding:"7px 16px",background:"#f8fafc",borderBottom:"1px solid #f1f5f9"}}>
+                          {["Employee","Client","Hours","Month"].map(h=>(
+                            <span key={h} style={{fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".04em"}}>{h}</span>
+                          ))}
+                        </div>
+                        {rows.map((r,i)=>(
+                          <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 80px 70px",padding:"8px 16px",borderBottom:i<rows.length-1?"1px solid #f8fafc":"none",background:i%2===0?"#fff":"#fafafa"}}>
+                            <span style={{fontSize:12,color:"#0f172a",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.employee_name}</span>
+                            <span style={{fontSize:12,color:"#475569",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.client_name}</span>
+                            <span style={{fontSize:12,fontWeight:700,color:"#008A57"}}>{r.allocated_hours}h</span>
+                            <span style={{fontSize:11,color:"#64748b"}}>{fmtLong(r.month)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Chart month selector */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
