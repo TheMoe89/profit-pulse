@@ -2653,60 +2653,67 @@ function generateAllocationTemplate(realEmps,realContracts,ALLOC_MONTHS,allowedD
     return;
   }
 
-  // Manager gets a freshly generated file with their team only
-  loadXlsxStyle(()=>{
-    const XS=window.XLSX;
-    const wb=XS.utils.book_new();
+  // Manager gets template with _Ref swapped via JSZip (preserves Allocations formatting+dropdowns)
+  const loadJSZip=(cb)=>{
+    if(window.JSZip){cb();return;}
+    const s=document.createElement("script");
+    s.src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+    s.onload=()=>cb();
+    s.onerror=()=>{alert("Failed to load JSZip.");};
+    document.head.appendChild(s);
+  };
 
-    // Filter employees to manager's departments only
-    const deptEmps=realEmps.filter(e=>e.status==="Active"&&allowedDepts.includes(e.department)).map(e=>e.name).sort();
-    const clientNames=[...new Set(realContracts.map(c=>c.cn||c.client_name))].sort();
-    const monthLabels=ALLOC_MONTHS.map(m=>m.l);
-    const maxLen=Math.max(deptEmps.length,clientNames.length,monthLabels.length);
+  loadJSZip(async()=>{
+    try{
+      // Filter employees
+      const deptEmps=realEmps.filter(e=>e.status==="Active"&&allowedDepts.includes(e.department)).map(e=>e.name).sort();
+      const clientNames=[...new Set(realContracts.map(c=>c.cn||c.client_name))].sort();
+      const monthLabels=ALLOC_MONTHS.map(m=>m.l);
+      const maxLen=Math.max(deptEmps.length,clientNames.length,monthLabels.length);
 
-    // ── _Ref sheet ──
-    const refData=[["Employees","Clients","Months"]];
-    for(let i=0;i<maxLen;i++) refData.push([deptEmps[i]||"",clientNames[i]||"",monthLabels[i]||""]);
-    const wsRef=XS.utils.aoa_to_sheet(refData);
-    wsRef["!cols"]=[{wch:35},{wch:35},{wch:18}];
-    XS.utils.book_append_sheet(wb,wsRef,"_Ref");
-
-    // ── Allocations sheet ──
-    const HEADER=["Month","Employee Name","Client Name","Hours","Notes"];
-    const ROWS=50;
-    const sheetData=[HEADER];
-    for(let i=0;i<ROWS;i++) sheetData.push(["","","","",""]);
-    const ws=XS.utils.aoa_to_sheet(sheetData);
-    ws["!cols"]=[{wch:16},{wch:32},{wch:32},{wch:10},{wch:30}];
-    ws["!rows"]=[{hpt:22}];
-    for(let r=1;r<=ROWS;r++) ws["!rows"].push({hpt:18});
-
-    // Style header
-    const hStyle={font:{bold:true,color:{rgb:"FFFFFF"},sz:11,name:"Arial"},fill:{fgColor:{rgb:"008A57"}},alignment:{horizontal:"center",vertical:"center"},border:{top:{style:"thin",color:{rgb:"006644"}},bottom:{style:"thin",color:{rgb:"006644"}},left:{style:"thin",color:{rgb:"006644"}},right:{style:"thin",color:{rgb:"006644"}}}};
-    HEADER.forEach((_,ci)=>{const a=XS.utils.encode_cell({r:0,c:ci});if(!ws[a])ws[a]={v:HEADER[ci],t:"s"};ws[a].s=hStyle;});
-
-    // Style data rows
-    const border={top:{style:"hair",color:{rgb:"E2E8F0"}},bottom:{style:"hair",color:{rgb:"E2E8F0"}},left:{style:"hair",color:{rgb:"E2E8F0"}},right:{style:"hair",color:{rgb:"E2E8F0"}}};
-    for(let r=1;r<=ROWS;r++){
-      for(let c=0;c<5;c++){
-        const a=XS.utils.encode_cell({r,c});
-        if(!ws[a])ws[a]={v:"",t:"s"};
-        ws[a].s={font:{name:"Arial",sz:10},fill:{fgColor:{rgb:c===3?"FFFBEB":r%2===0?"F0FDF4":"FFFFFF"}},alignment:{vertical:"center",...(c===3?{horizontal:"center"}:{})},border};
+      // Build new _Ref sheet XML
+      const escXml=s=>(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+      let rows=`<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="s"><v>2</v></c></row>`;
+      const strings=["Employees","Clients","Months"];
+      for(let i=0;i<maxLen;i++){
+        const r=i+2;
+        const empIdx=strings.length; strings.push(deptEmps[i]||"");
+        const cliIdx=strings.length; strings.push(clientNames[i]||"");
+        const monIdx=strings.length; strings.push(monthLabels[i]||"");
+        rows+=`<row r="${r}">`;
+        if(deptEmps[i]) rows+=`<c r="A${r}" t="s"><v>${empIdx}</v></c>`;
+        if(clientNames[i]) rows+=`<c r="B${r}" t="s"><v>${cliIdx}</v></c>`;
+        if(monthLabels[i]) rows+=`<c r="C${r}" t="s"><v>${monIdx}</v></c>`;
+        rows+=`</row>`;
       }
+      const refXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rows}</sheetData></worksheet>`;
+
+      // Build shared strings XML
+      const ssXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${strings.length}" uniqueCount="${strings.length}">${strings.map(s=>`<si><t>${escXml(s)}</t></si>`).join("")}</sst>`;
+
+      // Load base64 template as zip
+      const binaryStr=atob(ACQ_TEMPLATE_B64);
+      const bytes=new Uint8Array(binaryStr.length);
+      for(let i=0;i<binaryStr.length;i++) bytes[i]=binaryStr.charCodeAt(i);
+
+      const zip=await window.JSZip.loadAsync(bytes);
+
+      // Swap _Ref sheet (sheet2) and shared strings
+      zip.file("xl/worksheets/sheet2.xml",refXml);
+      zip.file("xl/sharedStrings.xml",ssXml);
+
+      // Generate and download
+      const out=await zip.generateAsync({type:"uint8array",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+      const blob=new Blob([out],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");
+      a.href=url;a.download="ACQ_Allocation_Template.xlsx";
+      document.body.appendChild(a);a.click();
+      document.body.removeChild(a);URL.revokeObjectURL(url);
+    }catch(err){
+      console.error("Manager template error:",err);
+      alert("Failed to generate template: "+err.message);
     }
-
-    ws["!freeze"]={xSplit:0,ySplit:1,topLeftCell:"A2",activePane:"bottomLeft"};
-
-    // Data validations referencing _Ref sheet
-    ws["!dataValidation"]=[
-      {sqref:`A2:A${ROWS+1}`,type:"list",formula1:`_Ref!$C$2:$C$${monthLabels.length+1}`,showDropDown:false,showErrorMessage:true,errorTitle:"Invalid Month",error:"Please select a valid month."},
-      {sqref:`B2:B${ROWS+1}`,type:"list",formula1:`_Ref!$A$2:$A$${deptEmps.length+1}`,showDropDown:false,showErrorMessage:true,errorTitle:"Invalid Employee",error:"Please select a valid employee."},
-      {sqref:`C2:C${ROWS+1}`,type:"list",formula1:`_Ref!$B$2:$B$${clientNames.length+1}`,showDropDown:false,showErrorMessage:true,errorTitle:"Invalid Client",error:"Please select a valid client."},
-    ];
-
-    XS.utils.book_append_sheet(wb,ws,"Allocations");
-    wb.SheetNames=["Allocations","_Ref"];
-    XS.writeFile(wb,"ACQ_Allocation_Template.xlsx");
   });
 }
 
