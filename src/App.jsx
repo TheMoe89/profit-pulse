@@ -2643,15 +2643,11 @@ function generateAllocationTemplate(realEmps,realContracts,ALLOC_MONTHS){
     const monthLabels=ALLOC_MONTHS.map(m=>m.l);
     const maxLen=Math.max(empNames.length,clientNames.length,monthLabels.length);
 
-    // ── Hidden _Ref sheet ──
+    // ── _Ref sheet (visible, managers told not to touch) ──
     const refData=[["Employees","Clients","Months"]];
     for(let i=0;i<maxLen;i++) refData.push([empNames[i]||"",clientNames[i]||"",monthLabels[i]||""]);
     const wsRef=XS.utils.aoa_to_sheet(refData);
     wsRef["!cols"]=[{wch:35},{wch:35},{wch:18}];
-    XS.utils.book_append_sheet(wb,wsRef,"_Ref");
-    // Hide the _Ref sheet
-    wb.Workbook={SheetView:[],Sheets:[]};
-    wb.Workbook.Sheets.push({Hidden:1}); // _Ref is first, mark hidden
 
     // ── Main Allocations sheet ──
     const HEADER=["Month","Employee Name","Client Name","Hours","Notes"];
@@ -2680,28 +2676,51 @@ function generateAllocationTemplate(realEmps,realContracts,ALLOC_MONTHS){
     // Freeze header
     ws["!freeze"]={xSplit:0,ySplit:1,topLeftCell:"A2",activePane:"bottomLeft"};
 
-    // ── Data validation via raw XML injection ──
-    const dvXml=`<dataValidations count="3">`+
-      `<dataValidation type="list" showDropDown="0" showErrorMessage="1" errorTitle="Invalid Month" error="Select from dropdown" sqref="A2:A${ROWS+1}"><formula1>_Ref!$C$2:$C$${monthLabels.length+1}</formula1></dataValidation>`+
-      `<dataValidation type="list" showDropDown="0" showErrorMessage="1" errorTitle="Invalid Employee" error="Select from dropdown" sqref="B2:B${ROWS+1}"><formula1>_Ref!$A$2:$A$${empNames.length+1}</formula1></dataValidation>`+
-      `<dataValidation type="list" showDropDown="0" showErrorMessage="1" errorTitle="Invalid Client" error="Select from dropdown" sqref="C2:C${ROWS+1}"><formula1>_Ref!$B$2:$B$${clientNames.length+1}</formula1></dataValidation>`+
-      `</dataValidations>`;
+    // ── Data validation using sheet reference formulas ──
+    ws["!dataValidation"]=[
+      {
+        sqref:`A2:A${ROWS+1}`,
+        type:"list",
+        formula1:`_Ref!$C$2:$C$${monthLabels.length+1}`,
+        showDropDown:false,
+        showErrorMessage:true,
+        errorTitle:"Invalid Month",
+        error:"Please select a valid month from the list.",
+        showInputMessage:true,
+        promptTitle:"Month",
+        prompt:"Select the allocation month",
+      },
+      {
+        sqref:`B2:B${ROWS+1}`,
+        type:"list",
+        formula1:`_Ref!$A$2:$A$${empNames.length+1}`,
+        showDropDown:false,
+        showErrorMessage:true,
+        errorTitle:"Invalid Employee",
+        error:"Please select a valid employee from the list.",
+        showInputMessage:true,
+        promptTitle:"Employee",
+        prompt:"Select the employee name",
+      },
+      {
+        sqref:`C2:C${ROWS+1}`,
+        type:"list",
+        formula1:`_Ref!$B$2:$B$${clientNames.length+1}`,
+        showDropDown:false,
+        showErrorMessage:true,
+        errorTitle:"Invalid Client",
+        error:"Please select a valid client from the list.",
+        showInputMessage:true,
+        promptTitle:"Client",
+        prompt:"Select the client name",
+      },
+    ];
 
-    // Inject into sheet XML — xlsx-js-style supports !xml extension
-    if(!ws["!xml"]) ws["!xml"]={};
-    ws["!xml"].dataValidations=dvXml;
-
+    // Add sheets — Allocations first, _Ref second
     XS.utils.book_append_sheet(wb,ws,"Allocations");
-    wb.SheetNames=["Allocations","_Ref"];
+    XS.utils.book_append_sheet(wb,wsRef,"_Ref");
 
-    // Mark _Ref as hidden in workbook props
-    if(!wb.Workbook) wb.Workbook={Sheets:[]};
-    if(!wb.Workbook.Sheets) wb.Workbook.Sheets=[];
-    while(wb.Workbook.Sheets.length<wb.SheetNames.length) wb.Workbook.Sheets.push({});
-    // Allocations = index 0, _Ref = index 1
-    wb.Workbook.Sheets[1]={Hidden:1};
-
-    XS.writeFile(wb,"ACQ_Allocation_Template.xlsx");
+    XS.writeFile(wb,"ACQ_Allocation_Template.xlsx",{bookType:"xlsx",type:"binary"});
   });
 }
 
