@@ -2662,36 +2662,30 @@ function generateAllocationTemplate(realEmps,realContracts,ALLOC_MONTHS,allowedD
     const deptEmps=realEmps.filter(e=>e.status==="Active"&&allowedDepts.includes(e.department)).map(e=>e.name).sort();
     const clientNames=[...new Set(realContracts.map(c=>c.cn||c.client_name))].sort();
     const monthLabels=ALLOC_MONTHS.map(m=>m.l);
+    const maxLen=Math.max(deptEmps.length,clientNames.length,monthLabels.length);
 
-    // Build comma-separated lists for inline validation (max 255 chars)
-    const empList=deptEmps.join(",").slice(0,255);
-    const clientList=clientNames.join(",").slice(0,255);
-    const monthList=monthLabels.join(",").slice(0,255);
+    // ── _Ref sheet ──
+    const refData=[["Employees","Clients","Months"]];
+    for(let i=0;i<maxLen;i++) refData.push([deptEmps[i]||"",clientNames[i]||"",monthLabels[i]||""]);
+    const wsRef=XS.utils.aoa_to_sheet(refData);
+    wsRef["!cols"]=[{wch:35},{wch:35},{wch:18}];
+    XS.utils.book_append_sheet(wb,wsRef,"_Ref");
 
+    // ── Allocations sheet ──
     const HEADER=["Month","Employee Name","Client Name","Hours","Notes"];
     const ROWS=50;
     const sheetData=[HEADER];
     for(let i=0;i<ROWS;i++) sheetData.push(["","","","",""]);
     const ws=XS.utils.aoa_to_sheet(sheetData);
-
     ws["!cols"]=[{wch:16},{wch:32},{wch:32},{wch:10},{wch:30}];
     ws["!rows"]=[{hpt:22}];
     for(let r=1;r<=ROWS;r++) ws["!rows"].push({hpt:18});
 
-    // Style header — same as admin template
-    const hStyle={
-      font:{bold:true,color:{rgb:"FFFFFF"},sz:11,name:"Arial"},
-      fill:{fgColor:{rgb:"008A57"}},
-      alignment:{horizontal:"center",vertical:"center"},
-      border:{top:{style:"thin",color:{rgb:"006644"}},bottom:{style:"thin",color:{rgb:"006644"}},left:{style:"thin",color:{rgb:"006644"}},right:{style:"thin",color:{rgb:"006644"}}}
-    };
-    HEADER.forEach((_,ci)=>{
-      const a=XS.utils.encode_cell({r:0,c:ci});
-      if(!ws[a])ws[a]={v:HEADER[ci],t:"s"};
-      ws[a].s=hStyle;
-    });
+    // Style header
+    const hStyle={font:{bold:true,color:{rgb:"FFFFFF"},sz:11,name:"Arial"},fill:{fgColor:{rgb:"008A57"}},alignment:{horizontal:"center",vertical:"center"},border:{top:{style:"thin",color:{rgb:"006644"}},bottom:{style:"thin",color:{rgb:"006644"}},left:{style:"thin",color:{rgb:"006644"}},right:{style:"thin",color:{rgb:"006644"}}}};
+    HEADER.forEach((_,ci)=>{const a=XS.utils.encode_cell({r:0,c:ci});if(!ws[a])ws[a]={v:HEADER[ci],t:"s"};ws[a].s=hStyle;});
 
-    // Style data rows — same as admin template
+    // Style data rows
     const border={top:{style:"hair",color:{rgb:"E2E8F0"}},bottom:{style:"hair",color:{rgb:"E2E8F0"}},left:{style:"hair",color:{rgb:"E2E8F0"}},right:{style:"hair",color:{rgb:"E2E8F0"}}};
     for(let r=1;r<=ROWS;r++){
       for(let c=0;c<5;c++){
@@ -2701,17 +2695,17 @@ function generateAllocationTemplate(realEmps,realContracts,ALLOC_MONTHS,allowedD
       }
     }
 
-    // Freeze header row
     ws["!freeze"]={xSplit:0,ySplit:1,topLeftCell:"A2",activePane:"bottomLeft"};
 
-    // Inline dropdown validations
+    // Data validations referencing _Ref sheet
     ws["!dataValidation"]=[
-      {sqref:`A2:A${ROWS+1}`,type:"list",formula1:`"${monthList}"`,showDropDown:false,showErrorMessage:true,errorTitle:"Invalid Month",error:"Please select a valid month."},
-      {sqref:`B2:B${ROWS+1}`,type:"list",formula1:`"${empList}"`,showDropDown:false,showErrorMessage:true,errorTitle:"Invalid Employee",error:"Please select a valid employee."},
-      {sqref:`C2:C${ROWS+1}`,type:"list",formula1:`"${clientList}"`,showDropDown:false,showErrorMessage:true,errorTitle:"Invalid Client",error:"Please select a valid client."},
+      {sqref:`A2:A${ROWS+1}`,type:"list",formula1:`_Ref!$C$2:$C$${monthLabels.length+1}`,showDropDown:false,showErrorMessage:true,errorTitle:"Invalid Month",error:"Please select a valid month."},
+      {sqref:`B2:B${ROWS+1}`,type:"list",formula1:`_Ref!$A$2:$A$${deptEmps.length+1}`,showDropDown:false,showErrorMessage:true,errorTitle:"Invalid Employee",error:"Please select a valid employee."},
+      {sqref:`C2:C${ROWS+1}`,type:"list",formula1:`_Ref!$B$2:$B$${clientNames.length+1}`,showDropDown:false,showErrorMessage:true,errorTitle:"Invalid Client",error:"Please select a valid client."},
     ];
 
     XS.utils.book_append_sheet(wb,ws,"Allocations");
+    wb.SheetNames=["Allocations","_Ref"];
     XS.writeFile(wb,"ACQ_Allocation_Template.xlsx");
   });
 }
