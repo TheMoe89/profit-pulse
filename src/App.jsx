@@ -770,18 +770,18 @@ function DeptUtilizationCards({eu,HPM,fmtH,allowedDepts=null}){
   const depts=Object.entries(DEPT_META).filter(([key])=>!allowedDepts||allowedDepts.includes(key)).map(([key,meta])=>{
     const allEmps=eu.filter(e=>e.department===key);
     if(!allEmps.length)return null;
-    const onLeaveEmps=allEmps.filter(e=>e.onLeave);
-    const availEmps=allEmps.filter(e=>!e.onLeave);
-    const allocated=availEmps.reduce((s,e)=>s+e.h,0);
-    const capacity=availEmps.length*HPM;
+    const onLeaveEmps=allEmps.filter(e=>e.onLeave&&e.h===0);
+    const allocated=allEmps.reduce((s,e)=>s+e.h,0);
+    const capacity=allEmps.reduce((s,e)=>s+(e.effectiveHPM||HPM),0);
     const pct=capacity>0?Math.round((allocated/capacity)*100):0;
-    const fully=availEmps.filter(e=>e.h>158).length;
-    const optimal=availEmps.filter(e=>e.h>=123&&e.h<=158).length;
-    const under=availEmps.filter(e=>e.h>0&&e.h<123).length;
-    const unalloc=availEmps.filter(e=>e.h===0).length;
+    const getPct=e=>Math.round((e.h/(e.effectiveHPM||HPM))*100);
+    const fully=allEmps.filter(e=>e.h>0&&getPct(e)>=90).length;
+    const optimal=allEmps.filter(e=>e.h>0&&getPct(e)>=70&&getPct(e)<90).length;
+    const under=allEmps.filter(e=>e.h>0&&getPct(e)<70).length;
+    const unalloc=allEmps.filter(e=>e.h===0&&!e.onLeave).length;
     const onLeave=onLeaveEmps.length;
-    const topEmps=[...availEmps].sort((a,b)=>b.h-a.h).slice(0,5);
-    return{key,meta,allEmps,availEmps,allocated,capacity,pct,fully,optimal,under,unalloc,onLeave,topEmps};
+    const topEmps=[...allEmps].filter(e=>e.h>0).sort((a,b)=>b.h-a.h).slice(0,5);
+    return{key,meta,allEmps,allocated,capacity,pct,fully,optimal,under,unalloc,onLeave,topEmps};
   }).filter(Boolean);
   return(
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,alignItems:"start"}}>
@@ -839,7 +839,7 @@ function DeptUtilizationCards({eu,HPM,fmtH,allowedDepts=null}){
               <div style={{padding:"8px 16px 14px",background:"#fafafa"}}>
                 {d.topEmps.map((e,i)=>{
                   const es=getEmpStatus(e.h);
-                  const epct=Math.round((e.h/HPM)*100);
+                  const epct=Math.round((e.h/(e.effectiveHPM||HPM))*100);
                   return(
                     <div key={e.id} style={{display:"flex",alignItems:"center",gap:9,padding:"5px 0",borderTop:i>0?"1px solid #f1f5f9":"none"}}>
                       <div style={{width:26,height:26,borderRadius:7,background:d.meta.lightBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:d.meta.color,flexShrink:0}}>{e.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</div>
