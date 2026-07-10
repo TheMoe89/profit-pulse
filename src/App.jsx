@@ -2149,51 +2149,72 @@ function ContractsPage(){
 
 
 // ─── SEARCHABLE SELECT ────────────────────────────────────────────────────────
-function SearchableSelect({value,onChange,options,placeholder="Search…",disabled=false}){
+function SearchableSelect({value,onChange,options,placeholder="Search…",disabled=false,renderOption=null,renderSelected=null}){
   const [query,setQuery]=useState("");
   const [open,setOpen]=useState(false);
-  const ref=React.useRef(null);
+  const [pos,setPos]=useState({top:0,left:0,width:0});
+  const triggerRef=React.useRef(null);
+  const inputRef=React.useRef(null);
+
   React.useEffect(()=>{
-    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
+    const h=e=>{
+      if(triggerRef.current&&!triggerRef.current.contains(e.target)&&
+         !document.getElementById("ss-portal")?.contains(e.target)){
+        setOpen(false);setQuery("");
+      }
+    };
     document.addEventListener("mousedown",h);
     return()=>document.removeEventListener("mousedown",h);
   },[]);
+
+  const openDropdown=()=>{
+    if(disabled)return;
+    const rect=triggerRef.current?.getBoundingClientRect();
+    if(rect){
+      setPos({top:rect.bottom+window.scrollY+4,left:rect.left+window.scrollX,width:rect.width});
+    }
+    setOpen(v=>!v);
+    setTimeout(()=>inputRef.current?.focus(),50);
+  };
+
   const selected=options.find(o=>o.v===value);
   const filtered=query?options.filter(o=>o.l.toLowerCase().includes(query.toLowerCase())):options;
-  return(
-    <div ref={ref} style={{position:"relative"}}>
-      <div style={{display:"flex",alignItems:"center",border:"1px solid #e2e8f0",borderRadius:8,background:disabled?"#f8fafc":"#fff",overflow:"hidden",cursor:disabled?"not-allowed":"pointer"}}
-        onClick={()=>!disabled&&setOpen(v=>!v)}>
-        {open?(
-          <input autoFocus value={query} onChange={e=>{setQuery(e.target.value);setOpen(true);}}
-            onClick={e=>e.stopPropagation()}
-            placeholder={placeholder}
-            style={{flex:1,padding:"8px 12px",border:"none",outline:"none",fontSize:13,background:"transparent",color:"#0f172a"}}/>
-        ):(
-          <span style={{flex:1,padding:"8px 12px",fontSize:13,color:selected?"#0f172a":"#94a3b8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-            {selected?selected.l:placeholder}
-          </span>
-        )}
-        <span style={{padding:"0 10px",color:"#94a3b8",fontSize:10,flexShrink:0}}>▾</span>
+
+  const dropdown=open?React.createPortal(
+    <div id="ss-portal" style={{position:"absolute",top:pos.top,left:pos.left,width:pos.width,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,.15)",zIndex:9999,maxHeight:240,overflowY:"auto"}}>
+      <div style={{padding:"8px",borderBottom:"1px solid #f1f5f9",position:"sticky",top:0,background:"#fff"}}>
+        <input ref={inputRef} value={query} onChange={e=>setQuery(e.target.value)}
+          placeholder={placeholder}
+          style={{width:"100%",padding:"6px 10px",border:"1px solid #e2e8f0",borderRadius:7,fontSize:12,outline:"none",color:"#0f172a",boxSizing:"border-box"}}/>
       </div>
-      {open&&filtered.length>0&&(
-        <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.12)",zIndex:200,maxHeight:220,overflowY:"auto"}}>
-          {filtered.map(o=>(
-            <div key={o.v} onClick={()=>{onChange(o.v);setQuery("");setOpen(false);}}
-              style={{padding:"9px 12px",fontSize:13,color:"#0f172a",cursor:"pointer",background:o.v===value?"#f0fdf4":"#fff",fontWeight:o.v===value?600:400,borderBottom:"1px solid #f8fafc"}}
-              onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
-              onMouseLeave={e=>e.currentTarget.style.background=o.v===value?"#f0fdf4":"#fff"}>
-              {o.l}
-            </div>
-          ))}
+      {filtered.length===0?(
+        <div style={{padding:"14px",textAlign:"center",fontSize:12,color:"#94a3b8"}}>No results found</div>
+      ):filtered.map(o=>(
+        <div key={o.v} onClick={()=>{onChange(o.v);setQuery("");setOpen(false);}}
+          style={{padding:"8px 12px",cursor:"pointer",background:o.v===value?"#f0fdf4":"transparent",borderBottom:"1px solid #f8fafc",display:"flex",alignItems:"center",gap:8}}
+          onMouseEnter={e=>e.currentTarget.style.background=o.v===value?"#f0fdf4":"#f8fafc"}
+          onMouseLeave={e=>e.currentTarget.style.background=o.v===value?"#f0fdf4":"transparent"}>
+          {renderOption?renderOption(o):<span style={{fontSize:12,color:"#0f172a"}}>{o.l}</span>}
         </div>
-      )}
-      {open&&filtered.length===0&&(
-        <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.12)",zIndex:200,padding:"12px",textAlign:"center",fontSize:12,color:"#94a3b8"}}>
-          No results found
+      ))}
+    </div>,
+    document.body
+  ):null;
+
+  return(
+    <>
+      <div ref={triggerRef} onClick={openDropdown}
+        style={{display:"flex",alignItems:"center",border:"1px solid #e2e8f0",borderRadius:8,background:disabled?"#f8fafc":"#fff",cursor:disabled?"not-allowed":"pointer",minHeight:36,padding:"4px 10px",gap:6}}>
+        <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:6}}>
+          {selected
+            ?(renderSelected?renderSelected(selected):<span style={{fontSize:12,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selected.l}</span>)
+            :<span style={{fontSize:12,color:"#94a3b8"}}>{placeholder}</span>
+          }
         </div>
-      )}
-    </div>
+        <span style={{color:"#94a3b8",fontSize:10,flexShrink:0}}>▾</span>
+      </div>
+      {dropdown}
+    </>
   );
 }
 
@@ -2364,7 +2385,21 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
           onChange={v=>upd("clientId",v)}
           placeholder="Search client…"
           disabled={onLeave}
-          options={catContracts.map(c=>({v:c.id,l:`${c.cn||c.client_name} — ${c.contract_category||"Retainer"}`}))}
+          options={catContracts.map(c=>({v:c.id,l:c.cn||c.client_name,cat:c.contract_category||"Retainer"}))}
+          renderOption={o=>{
+            const bs=catBadge(o.cat);
+            return(<>
+              <span style={{fontSize:12,color:"#0f172a",fontWeight:500,flex:1}}>{o.l}</span>
+              <span style={{padding:"1px 7px",borderRadius:999,background:bs.bg,color:bs.color,fontSize:9,fontWeight:700,flexShrink:0}}>{o.cat}</span>
+            </>);
+          }}
+          renderSelected={o=>{
+            const bs=catBadge(o.cat);
+            return(<>
+              <span style={{fontSize:12,color:"#0f172a",fontWeight:500}}>{o.l}</span>
+              <span style={{padding:"1px 7px",borderRadius:999,background:bs.bg,color:bs.color,fontSize:9,fontWeight:700,flexShrink:0}}>{o.cat}</span>
+            </>);
+          }}
         />
         {clientId&&(()=>{
           const ct=realContracts.find(c=>c.id===clientId);
@@ -2399,7 +2434,21 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
                     value={row.empId}
                     onChange={v=>updRow(row.id,"empId",v)}
                     placeholder="Search employee…"
-                    options={activeEmps.map(e=>({v:e.id,l:`${e.name} — ${(e.department||"").replace(" Department","")}`}))}
+                    options={activeEmps.map(e=>({v:e.id,l:e.name,dept:e.department}))}
+                    renderOption={o=>{
+                      const meta=DEPT_COLORS[o.dept]||{color:"#475569",bg:"#f1f5f9"};
+                      return(<>
+                        <span style={{fontSize:12,color:"#0f172a",fontWeight:500,flex:1}}>{o.l}</span>
+                        <span style={{padding:"1px 7px",borderRadius:999,background:meta.bg,color:meta.color,fontSize:9,fontWeight:700,flexShrink:0,whiteSpace:"nowrap"}}>{(o.dept||"").replace(" Department","")}</span>
+                      </>);
+                    }}
+                    renderSelected={o=>{
+                      const meta=DEPT_COLORS[o.dept]||{color:"#475569",bg:"#f1f5f9"};
+                      return(<>
+                        <span style={{fontSize:12,color:"#0f172a",fontWeight:500}}>{o.l}</span>
+                        <span style={{padding:"1px 7px",borderRadius:999,background:meta.bg,color:meta.color,fontSize:9,fontWeight:700,flexShrink:0,whiteSpace:"nowrap"}}>{(o.dept||"").replace(" Department","")}</span>
+                      </>);
+                    }}
                   />
                 </div>
                 {!onLeave&&(
