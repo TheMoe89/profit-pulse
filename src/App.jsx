@@ -726,8 +726,8 @@ function Lbl({children}){return <p style={{margin:"0 0 5px",fontSize:12,fontWeig
 function Modal({open,onClose,title,children}){
   if(!open)return null;
   return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:100,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:16,overflowY:"auto"}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:600,overflow:"visible",border:"1px solid #e2e8f0",boxShadow:"0 25px 50px rgba(0,0,0,.15)",marginTop:"auto",marginBottom:"auto",alignSelf:"center",position:"relative"}}>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:600,maxHeight:"90vh",overflowY:"auto",border:"1px solid #e2e8f0",boxShadow:"0 25px 50px rgba(0,0,0,.15)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 22px",borderBottom:"1px solid #e2e8f0"}}>
           <h3 style={{margin:0,fontSize:16,fontWeight:700,color:"#0f172a"}}>{title}</h3>
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#64748b",lineHeight:1,padding:"0 4px"}}>&times;</button>
@@ -2173,7 +2173,7 @@ function SearchableSelect({value,onChange,options,placeholder="Search…",disabl
         <span style={{color:"#94a3b8",fontSize:10,flexShrink:0}}>▾</span>
       </div>
       {open&&(
-        <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.15)",zIndex:9999,maxHeight:220,overflowY:"auto"}}>
+        <div style={{position:"absolute",bottom:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,boxShadow:"0 -8px 24px rgba(0,0,0,.15)",zIndex:9999,maxHeight:220,overflowY:"auto"}}>
           <div style={{padding:"6px",borderBottom:"1px solid #f1f5f9",position:"sticky",top:0,background:"#fff"}}>
             <input autoFocus value={query} onChange={e=>setQuery(e.target.value)}
               placeholder={placeholder}
@@ -2633,7 +2633,391 @@ function AllocEmpCard({emp,u,allocs,chartMonth,HPM,fmtH,fmtLong}){
   );
 }
 
-function AllocationsPage(){
+// ─── EXCEL IMPORT FEATURE ─────────────────────────────────────────────────────
+
+function generateAllocationTemplate(realEmps, realContracts, ALLOC_MONTHS){
+  loadXlsxStyle(()=>{
+    const XS = window.XLSX;
+
+    const wb = XS.utils.book_new();
+
+    // ── Hidden reference sheet for dropdown validation ──
+    const empNames = realEmps.filter(e=>e.status==="Active").map(e=>e.name).sort();
+    const clientNames = [...new Set(realContracts.map(c=>c.cn||c.client_name))].sort();
+    const monthLabels = ALLOC_MONTHS.map(m=>m.l);
+
+    const refData = [];
+    const maxLen = Math.max(empNames.length, clientNames.length, monthLabels.length);
+    for(let i=0;i<maxLen;i++){
+      refData.push([empNames[i]||"", clientNames[i]||"", monthLabels[i]||""]);
+    }
+    const wsRef = XS.utils.aoa_to_sheet([["Employees","Clients","Months"],...refData]);
+    wsRef["!cols"] = [{wch:35},{wch:35},{wch:18}];
+    XS.utils.book_append_sheet(wb, wsRef, "_Ref");
+
+    // ── Main data sheet ──
+    const HEADER = ["Month","Employee Name","Client Name","Hours","Notes"];
+    const TOTAL_ROWS = 50;
+
+    // Build sheet data — header + 50 empty rows
+    const sheetData = [HEADER];
+    for(let i=0;i<TOTAL_ROWS;i++) sheetData.push(["","","","",""]);
+
+    const ws = XS.utils.aoa_to_sheet(sheetData);
+
+    // Column widths — fit content
+    ws["!cols"] = [
+      {wch:16},  // Month
+      {wch:32},  // Employee Name
+      {wch:32},  // Client Name
+      {wch:10},  // Hours
+      {wch:30},  // Notes
+    ];
+
+    // Style header row
+    const headerStyle = {
+      font:{bold:true,color:{rgb:"FFFFFF"},sz:11,name:"Arial"},
+      fill:{fgColor:{rgb:"008A57"}},
+      alignment:{horizontal:"center",vertical:"center"},
+      border:{
+        top:{style:"thin",color:{rgb:"006644"}},
+        bottom:{style:"thin",color:{rgb:"006644"}},
+        left:{style:"thin",color:{rgb:"006644"}},
+        right:{style:"thin",color:{rgb:"006644"}},
+      }
+    };
+    HEADER.forEach((_,ci)=>{
+      const cellAddr = XS.utils.encode_cell({r:0,c:ci});
+      if(!ws[cellAddr]) ws[cellAddr]={v:HEADER[ci],t:"s"};
+      ws[cellAddr].s = headerStyle;
+    });
+
+    // Style data rows — alternating, with hints
+    const evenRow = {fill:{fgColor:{rgb:"F0FDF4"}}};
+    const oddRow  = {fill:{fgColor:{rgb:"FFFFFF"}}};
+    const inputStyle = (row) => ({
+      font:{name:"Arial",sz:10},
+      fill:{fgColor:{rgb: row%2===0 ? "F0FDF4" : "FFFFFF"}},
+      alignment:{vertical:"center"},
+      border:{
+        top:{style:"hair",color:{rgb:"E2E8F0"}},
+        bottom:{style:"hair",color:{rgb:"E2E8F0"}},
+        left:{style:"hair",color:{rgb:"E2E8F0"}},
+        right:{style:"hair",color:{rgb:"E2E8F0"}},
+      }
+    });
+    const hoursStyle = (row) => ({
+      ...inputStyle(row),
+      alignment:{horizontal:"center",vertical:"center"},
+      fill:{fgColor:{rgb:"FFFBEB"}}, // light yellow for hours
+    });
+
+    for(let r=1;r<=TOTAL_ROWS;r++){
+      for(let c=0;c<5;c++){
+        const addr = XS.utils.encode_cell({r,c});
+        if(!ws[addr]) ws[addr]={v:"",t:"s"};
+        ws[addr].s = c===3 ? hoursStyle(r) : inputStyle(r);
+      }
+    }
+
+    // Row height
+    ws["!rows"] = [{hpt:20}]; // header
+    for(let r=1;r<=TOTAL_ROWS;r++) ws["!rows"].push({hpt:18});
+
+    // Data validations (dropdowns)
+    const refSheetName = "_Ref";
+    ws["!dataValidation"] = [];
+
+    // Month dropdown — column A (rows 2–51)
+    ws["!dataValidation"].push({
+      sqref:`A2:A${TOTAL_ROWS+1}`,
+      type:"list",
+      formula1:`_Ref!$C$2:$C$${monthLabels.length+1}`,
+      showDropDown:false,
+      showErrorMessage:true,
+      errorTitle:"Invalid Month",
+      error:"Please select a valid month from the dropdown.",
+    });
+    // Employee dropdown — column B
+    ws["!dataValidation"].push({
+      sqref:`B2:B${TOTAL_ROWS+1}`,
+      type:"list",
+      formula1:`_Ref!$A$2:$A$${empNames.length+1}`,
+      showDropDown:false,
+      showErrorMessage:true,
+      errorTitle:"Invalid Employee",
+      error:"Please select a valid employee from the dropdown.",
+    });
+    // Client dropdown — column C
+    ws["!dataValidation"].push({
+      sqref:`C2:C${TOTAL_ROWS+1}`,
+      type:"list",
+      formula1:`_Ref!$B$2:$B$${clientNames.length+1}`,
+      showDropDown:false,
+      showErrorMessage:true,
+      errorTitle:"Invalid Client",
+      error:"Please select a valid client from the dropdown.",
+    });
+
+    // Freeze header row
+    ws["!freeze"] = {xSplit:0, ySplit:1, topLeftCell:"A2", activePane:"bottomLeft"};
+
+    XS.utils.book_append_sheet(wb, ws, "Allocations");
+
+    // Reorder sheets so Allocations is first, _Ref is hidden-ish (last)
+    wb.SheetNames = ["Allocations","_Ref"];
+
+    XS.writeFile(wb, "ACQ_Allocation_Template.xlsx");
+  });
+}
+
+function parseAllocationFile(file, realEmps, realContracts, ALLOC_MONTHS, snapshots, cb){
+  loadXlsxStyle(()=>{
+    const XS = window.XLSX;
+    const reader = new FileReader();
+    reader.onload = e=>{
+      try{
+        const data = new Uint8Array(e.target.result);
+        const wb = XS.read(data, {type:"array"});
+        const ws = wb.Sheets["Allocations"] || wb.Sheets[wb.SheetNames[0]];
+        const rows = XS.utils.sheet_to_json(ws, {header:1, defval:""});
+
+        // Skip header row
+        const dataRows = rows.slice(1).filter(r=>r.some(c=>String(c).trim()!==""));
+
+        const validMonthLabels = ALLOC_MONTHS.map(m=>m.l.toLowerCase());
+        const validMonthMap = {};
+        ALLOC_MONTHS.forEach(m=>{ validMonthMap[m.l.toLowerCase()] = m.v; });
+
+        const empMap = {};
+        realEmps.forEach(e=>{ empMap[e.name.toLowerCase().trim()] = e; });
+
+        const clientMap = {};
+        realContracts.forEach(c=>{
+          const name = (c.cn||c.client_name||"").toLowerCase().trim();
+          clientMap[name] = c;
+        });
+
+        const results = dataRows.map((row, idx)=>{
+          const rowNum = idx + 2;
+          const monthRaw  = String(row[0]||"").trim();
+          const empRaw    = String(row[1]||"").trim();
+          const clientRaw = String(row[2]||"").trim();
+          const hoursRaw  = String(row[3]||"").trim();
+          const notes     = String(row[4]||"").trim();
+
+          const errors = [];
+
+          // Validate month
+          const monthVal = validMonthMap[monthRaw.toLowerCase()];
+          if(!monthRaw) errors.push("Month is required");
+          else if(!monthVal) errors.push(`Invalid month: "${monthRaw}"`);
+          else if(snapshots.some(s=>s.month===monthVal&&s.is_closed)) errors.push(`Month "${monthRaw}" is closed`);
+
+          // Validate employee
+          const emp = empMap[empRaw.toLowerCase()];
+          if(!empRaw) errors.push("Employee name is required");
+          else if(!emp) errors.push(`Employee not found: "${empRaw}"`);
+
+          // Validate client
+          const ct = clientMap[clientRaw.toLowerCase()];
+          if(!clientRaw) errors.push("Client name is required");
+          else if(!ct) errors.push(`Client not found: "${clientRaw}"`);
+
+          // Validate hours
+          const hours = parseFloat(hoursRaw);
+          if(!hoursRaw) errors.push("Hours is required");
+          else if(isNaN(hours)||hours<=0) errors.push(`Invalid hours: "${hoursRaw}"`);
+          else if(hours>176) errors.push(`Hours exceeds max 176h: "${hours}"`);
+
+          return{
+            rowNum,
+            monthRaw, monthVal,
+            empRaw, emp,
+            clientRaw, ct,
+            hoursRaw, hours,
+            notes,
+            errors,
+            valid: errors.length===0,
+          };
+        });
+
+        cb(null, results);
+      }catch(err){
+        cb(err.message||"Failed to parse file", null);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function ImportPreviewModal({open, onClose, results, onImport, importing}){
+  const [expanded, setExpanded] = useState({});
+  if(!open) return null;
+
+  const valid = results.filter(r=>r.valid);
+  const errors = results.filter(r=>!r.valid);
+
+  // Group valid rows by employee + month
+  const grouped = [];
+  const groupMap = {};
+  valid.forEach(r=>{
+    const key = `${r.emp?.id}_${r.monthVal}`;
+    if(!groupMap[key]){
+      groupMap[key] = {empName:r.emp?.name||r.empRaw, month:r.monthVal, monthRaw:r.monthRaw, totalHours:0, clients:[]};
+      grouped.push(groupMap[key]);
+    }
+    groupMap[key].totalHours += r.hours;
+    groupMap[key].clients.push({name:r.ct?.cn||r.ct?.client_name||r.clientRaw, hours:r.hours});
+  });
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:680,maxHeight:"90vh",overflowY:"auto",border:"1px solid #e2e8f0",boxShadow:"0 25px 50px rgba(0,0,0,.2)"}}>
+
+        {/* Header */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 22px",borderBottom:"1px solid #e2e8f0",position:"sticky",top:0,background:"#fff",zIndex:1}}>
+          <div>
+            <h3 style={{margin:0,fontSize:16,fontWeight:700,color:"#0f172a"}}>Import Preview</h3>
+            <p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>{results.length} rows parsed from file</p>
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#64748b"}}>&times;</button>
+        </div>
+
+        <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:16}}>
+
+          {/* Summary bar */}
+          <div style={{display:"flex",gap:10}}>
+            <div style={{flex:1,padding:"12px 16px",background:"#f0fdf4",borderRadius:10,border:"1px solid #a7f3d0",textAlign:"center"}}>
+              <p style={{margin:0,fontSize:22,fontWeight:800,color:"#059669"}}>{valid.length}</p>
+              <p style={{margin:0,fontSize:11,color:"#059669",fontWeight:600}}>Ready to import</p>
+            </div>
+            {errors.length>0&&(
+              <div style={{flex:1,padding:"12px 16px",background:"#fef2f2",borderRadius:10,border:"1px solid #fca5a5",textAlign:"center"}}>
+                <p style={{margin:0,fontSize:22,fontWeight:800,color:"#ef4444"}}>{errors.length}</p>
+                <p style={{margin:0,fontSize:11,color:"#ef4444",fontWeight:600}}>Rows with errors (will be skipped)</p>
+              </div>
+            )}
+          </div>
+
+          {/* Employee summary — grouped, expandable */}
+          {grouped.length>0&&(
+            <div>
+              <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#0f172a",textTransform:"uppercase",letterSpacing:".05em"}}>Employee Summary</p>
+              <div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden"}}>
+                {/* Table header */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 140px 100px",background:"#f8fafc",padding:"8px 14px",borderBottom:"1px solid #e2e8f0"}}>
+                  <span style={{fontSize:11,fontWeight:700,color:"#64748b"}}>EMPLOYEE</span>
+                  <span style={{fontSize:11,fontWeight:700,color:"#64748b"}}>MONTH</span>
+                  <span style={{fontSize:11,fontWeight:700,color:"#64748b",textAlign:"right"}}>TOTAL HOURS</span>
+                </div>
+                {grouped.map((g,i)=>{
+                  const key=`${g.empName}_${g.month}`;
+                  const isOpen=expanded[key];
+                  return(
+                    <div key={key} style={{borderBottom:i<grouped.length-1?"1px solid #f1f5f9":"none"}}>
+                      <div onClick={()=>setExpanded(p=>({...p,[key]:!isOpen}))}
+                        style={{display:"grid",gridTemplateColumns:"1fr 140px 100px",padding:"10px 14px",cursor:"pointer",background:isOpen?"#f0fdf4":"#fff",transition:"background .15s"}}
+                        onMouseEnter={e=>!isOpen&&(e.currentTarget.style.background="#f8fafc")}
+                        onMouseLeave={e=>!isOpen&&(e.currentTarget.style.background="#fff")}>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <span style={{fontSize:11,color:"#94a3b8",transition:"transform .2s",display:"inline-block",transform:isOpen?"rotate(90deg)":"none"}}>▶</span>
+                          <span style={{fontSize:13,fontWeight:600,color:"#0f172a"}}>{g.empName}</span>
+                        </div>
+                        <span style={{fontSize:12,color:"#475569",alignSelf:"center"}}>{g.monthRaw}</span>
+                        <span style={{fontSize:13,fontWeight:700,color:"#008A57",textAlign:"right",alignSelf:"center"}}>{g.totalHours}h</span>
+                      </div>
+                      {isOpen&&(
+                        <div style={{background:"#f8fafc",padding:"8px 14px 10px 32px",borderTop:"1px solid #f1f5f9"}}>
+                          {g.clients.map((c,ci)=>(
+                            <div key={ci} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:ci<g.clients.length-1?"1px solid #f1f5f9":"none"}}>
+                              <span style={{fontSize:12,color:"#475569"}}>→ {c.name}</span>
+                              <span style={{fontSize:12,fontWeight:600,color:"#008A57"}}>{c.hours}h</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Error rows */}
+          {errors.length>0&&(
+            <div>
+              <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#ef4444",textTransform:"uppercase",letterSpacing:".05em"}}>⚠ Skipped Rows ({errors.length})</p>
+              <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                {errors.map((r,i)=>(
+                  <div key={i} style={{padding:"9px 12px",background:"#fef2f2",borderRadius:8,border:"1px solid #fca5a5"}}>
+                    <p style={{margin:"0 0 3px",fontSize:12,fontWeight:600,color:"#991b1b"}}>Row {r.rowNum}: {r.empRaw||"(no employee)"} — {r.clientRaw||"(no client)"}</p>
+                    <p style={{margin:0,fontSize:11,color:"#ef4444"}}>{r.errors.join(" · ")}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:4}}>
+            <Btn variant="outline" onClick={onClose} disabled={importing}>Cancel</Btn>
+            <Btn variant="primary" onClick={()=>onImport(valid)} disabled={valid.length===0||importing}>
+              {importing
+                ?<><Loader size={13} style={{animation:"spin .8s linear infinite"}}/>Importing…</>
+                :<><Download size={13} strokeWidth={2}/>Import {valid.length} Rows</>
+              }
+            </Btn>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImportSuccessModal({open, onClose, log}){
+  if(!open||!log) return null;
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"90vh",overflowY:"auto",border:"1px solid #e2e8f0",boxShadow:"0 25px 50px rgba(0,0,0,.2)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 22px",borderBottom:"1px solid #e2e8f0"}}>
+          <h3 style={{margin:0,fontSize:16,fontWeight:700,color:"#0f172a"}}>Import Complete</h3>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#64748b"}}>&times;</button>
+        </div>
+        <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:14}}>
+          {/* Success summary */}
+          <div style={{padding:"16px",background:"#f0fdf4",borderRadius:12,border:"1px solid #a7f3d0",textAlign:"center"}}>
+            <p style={{margin:"0 0 4px",fontSize:28,fontWeight:800,color:"#059669"}}>{log.total}</p>
+            <p style={{margin:0,fontSize:13,fontWeight:600,color:"#059669"}}>Allocations imported successfully</p>
+            <p style={{margin:"4px 0 0",fontSize:11,color:"#059669"}}>{log.date} · {log.skipped} rows skipped</p>
+          </div>
+          {/* Transaction details */}
+          <div>
+            <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".05em"}}>Transaction Details</p>
+            <div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden"}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 120px 90px",background:"#f8fafc",padding:"7px 14px",borderBottom:"1px solid #e2e8f0"}}>
+                <span style={{fontSize:11,fontWeight:700,color:"#64748b"}}>EMPLOYEE</span>
+                <span style={{fontSize:11,fontWeight:700,color:"#64748b"}}>MONTH</span>
+                <span style={{fontSize:11,fontWeight:700,color:"#64748b",textAlign:"right"}}>HOURS</span>
+              </div>
+              {log.rows.map((r,i)=>(
+                <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 120px 90px",padding:"8px 14px",borderBottom:i<log.rows.length-1?"1px solid #f1f5f9":"none",background:i%2===0?"#fff":"#fafafa"}}>
+                  <span style={{fontSize:12,color:"#0f172a",fontWeight:500}}>{r.employee_name}</span>
+                  <span style={{fontSize:12,color:"#475569"}}>{r.month}</span>
+                  <span style={{fontSize:12,fontWeight:700,color:"#008A57",textAlign:"right"}}>{r.allocated_hours}h</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{display:"flex",justifyContent:"flex-end"}}>
+            <Btn variant="primary" onClick={onClose}>Done</Btn>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
   const {sb,allowedDepts}=useAuth();
   const toast=useToast();
   const confirm=useConfirm();
@@ -2846,14 +3230,116 @@ function AllocationsPage(){
   const del=async id=>{const ok=await confirm({title:'Delete allocation?',message:'This allocation will be permanently removed.',danger:true,confirmLabel:'Delete'});if(ok){dbDelete(id);toast('Allocation deleted','success');}};
   const statusBadge=s=>s==="Assigned"?{bg:"#d1fae5",col:"#10b981"}:isLeave(s)?{bg:"#fef9c3",col:"#d97706"}:{bg:"#f1f5f9",col:"#64748b"};
 
+  // ── Excel Import state ──
+  const [importMenuOpen, setImportMenuOpen] = useState(false);
+  const [importResults, setImportResults] = useState(null);
+  const [importPreviewOpen, setImportPreviewOpen] = useState(false);
+  const [importSuccessOpen, setImportSuccessOpen] = useState(false);
+  const [importLog, setImportLog] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const importMenuRef = React.useRef(null);
+  const fileInputRef = React.useRef(null);
+
+  React.useEffect(()=>{
+    const h=e=>{if(importMenuRef.current&&!importMenuRef.current.contains(e.target))setImportMenuOpen(false);};
+    document.addEventListener("mousedown",h);
+    return()=>document.removeEventListener("mousedown",h);
+  },[]);
+
+  const handleFileUpload = e=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    e.target.value="";
+    setImportMenuOpen(false);
+    parseAllocationFile(file, realEmps, realContracts, ALLOC_MONTHS, snapshots, (err, results)=>{
+      if(err){ toast(err,"error"); return; }
+      setImportResults(results);
+      setImportPreviewOpen(true);
+    });
+  };
+
+  const handleImport = async(validRows)=>{
+    setImporting(true);
+    try{
+      const toSave = validRows.map(r=>({
+        employee_id: r.emp.id,
+        employee_name: r.emp.name,
+        employee_monthly_cost: r.emp.mc||0,
+        client_id: r.ct?.cid||r.ct?.client_id||null,
+        client_name: r.ct?.cn||r.ct?.client_name||"",
+        contract_id: r.ct?.id||null,
+        allocated_hours: r.hours,
+        month: r.monthVal,
+        status: "Assigned",
+        notes: r.notes||"",
+        leave_from: null, leave_to: null, leave_days: 0, capacity_deduction: 0,
+      }));
+      await dbBulkAdd(toSave);
+      const skipped = importResults.filter(r=>!r.valid).length;
+      setImportLog({
+        total: toSave.length,
+        skipped,
+        date: new Date().toLocaleString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}),
+        rows: toSave,
+      });
+      setImportPreviewOpen(false);
+      setImportSuccessOpen(true);
+      toast(`✓ ${toSave.length} allocations imported`,"success");
+    }catch(err){
+      toast(err.message||"Import failed","error");
+    }finally{
+      setImporting(false);
+    }
+  };
+
   return(
     <div style={{display:"flex",flexDirection:"column",gap:18}}>
 
       {/* Header */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
         <div><h1 style={{fontSize:26,fontWeight:800,color:"#0f172a",margin:0}}>Team Allocations</h1><p style={{fontSize:13,color:"#64748b",lineHeight:1.5,marginTop:3}}>Assign employees to client projects</p></div>
-        <Btn variant="primary" onClick={openAdd} style={{gap:6}}><Plus size={14} strokeWidth={2}/>Add Allocation</Btn>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {/* Excel Import button */}
+          <div ref={importMenuRef} style={{position:"relative"}}>
+            <button onClick={()=>setImportMenuOpen(v=>!v)}
+              style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#fff",cursor:"pointer",fontSize:13,fontWeight:600,color:"#475569",transition:"all .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor="#008A57";e.currentTarget.style.color="#008A57";}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";}}>
+              <FileSpreadsheet size={14} strokeWidth={1.75}/>Excel Import <span style={{fontSize:10}}>▾</span>
+            </button>
+            {importMenuOpen&&(
+              <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,.12)",zIndex:50,minWidth:200,overflow:"hidden"}}>
+                <button onClick={()=>{setImportMenuOpen(false);generateAllocationTemplate(realEmps,realContracts,ALLOC_MONTHS);}}
+                  style={{width:"100%",padding:"11px 16px",border:"none",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontSize:13,color:"#0f172a",textAlign:"left"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
+                  onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+                  <Download size={14} strokeWidth={1.75} color="#008A57"/>
+                  <div><p style={{margin:0,fontWeight:600}}>Download Template</p><p style={{margin:0,fontSize:11,color:"#64748b"}}>Get pre-formatted Excel</p></div>
+                </button>
+                <div style={{height:1,background:"#f1f5f9"}}/>
+                <button onClick={()=>{setImportMenuOpen(false);fileInputRef.current?.click();}}
+                  style={{width:"100%",padding:"11px 16px",border:"none",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontSize:13,color:"#0f172a",textAlign:"left"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
+                  onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+                  <Upload size={14} strokeWidth={1.75} color="#3b82f6"/>
+                  <div><p style={{margin:0,fontWeight:600}}>Upload & Import</p><p style={{margin:0,fontSize:11,color:"#64748b"}}>Import filled template</p></div>
+                </button>
+              </div>
+            )}
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFileUpload} style={{display:"none"}}/>
+          </div>
+          <Btn variant="primary" onClick={openAdd} style={{gap:6}}><Plus size={14} strokeWidth={2}/>Add Allocation</Btn>
+        </div>
       </div>
+
+      {/* Import Preview Modal */}
+      {importPreviewOpen&&importResults&&(
+        <ImportPreviewModal open={importPreviewOpen} onClose={()=>setImportPreviewOpen(false)} results={importResults} onImport={handleImport} importing={importing}/>
+      )}
+      {/* Import Success Modal */}
+      {importSuccessOpen&&(
+        <ImportSuccessModal open={importSuccessOpen} onClose={()=>setImportSuccessOpen(false)} log={importLog}/>
+      )}
 
       {/* Chart month selector */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
