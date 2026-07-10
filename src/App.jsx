@@ -726,8 +726,8 @@ function Lbl({children}){return <p style={{margin:"0 0 5px",fontSize:12,fontWeig
 function Modal({open,onClose,title,children}){
   if(!open)return null;
   return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:600,maxHeight:"90vh",overflowY:"auto",overflowX:"visible",border:"1px solid #e2e8f0",boxShadow:"0 25px 50px rgba(0,0,0,.15)"}}>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:100,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:16,overflowY:"auto"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:600,overflow:"visible",border:"1px solid #e2e8f0",boxShadow:"0 25px 50px rgba(0,0,0,.15)",marginTop:"auto",marginBottom:"auto",alignSelf:"center",position:"relative"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 22px",borderBottom:"1px solid #e2e8f0"}}>
           <h3 style={{margin:0,fontSize:16,fontWeight:700,color:"#0f172a"}}>{title}</h3>
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#64748b",lineHeight:1,padding:"0 4px"}}>&times;</button>
@@ -2163,7 +2163,7 @@ function SearchableSelect({value,onChange,options,placeholder="Search…",disabl
   return(
     <div ref={ref} style={{position:"relative"}}>
       <div onClick={()=>{if(!disabled)setOpen(v=>!v);}}
-        style={{display:"flex",alignItems:"center",border:"1px solid #e2e8f0",borderRadius:8,background:disabled?"#f8fafc":"#fff",cursor:disabled?"not-allowed":"pointer",minHeight:36,padding:"4px 10px",gap:6}}>
+        style={{display:"flex",alignItems:"center",border:"1px solid #e2e8f0",borderRadius:8,background:disabled?"#f8fafc":"#fff",cursor:disabled?"not-allowed":"pointer",padding:"7px 10px",gap:6}}>
         <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:6,overflow:"hidden"}}>
           {selected
             ?(renderSelected?renderSelected(selected):<span style={{fontSize:12,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selected.l}</span>)
