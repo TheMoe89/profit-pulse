@@ -2148,6 +2148,55 @@ function ContractsPage(){
 }
 
 
+// ─── SEARCHABLE SELECT ────────────────────────────────────────────────────────
+function SearchableSelect({value,onChange,options,placeholder="Search…",disabled=false}){
+  const [query,setQuery]=useState("");
+  const [open,setOpen]=useState(false);
+  const ref=React.useRef(null);
+  React.useEffect(()=>{
+    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
+    document.addEventListener("mousedown",h);
+    return()=>document.removeEventListener("mousedown",h);
+  },[]);
+  const selected=options.find(o=>o.v===value);
+  const filtered=query?options.filter(o=>o.l.toLowerCase().includes(query.toLowerCase())):options;
+  return(
+    <div ref={ref} style={{position:"relative"}}>
+      <div style={{display:"flex",alignItems:"center",border:"1px solid #e2e8f0",borderRadius:8,background:disabled?"#f8fafc":"#fff",overflow:"hidden",cursor:disabled?"not-allowed":"pointer"}}
+        onClick={()=>!disabled&&setOpen(v=>!v)}>
+        {open?(
+          <input autoFocus value={query} onChange={e=>{setQuery(e.target.value);setOpen(true);}}
+            onClick={e=>e.stopPropagation()}
+            placeholder={placeholder}
+            style={{flex:1,padding:"8px 12px",border:"none",outline:"none",fontSize:13,background:"transparent",color:"#0f172a"}}/>
+        ):(
+          <span style={{flex:1,padding:"8px 12px",fontSize:13,color:selected?"#0f172a":"#94a3b8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+            {selected?selected.l:placeholder}
+          </span>
+        )}
+        <span style={{padding:"0 10px",color:"#94a3b8",fontSize:10,flexShrink:0}}>▾</span>
+      </div>
+      {open&&filtered.length>0&&(
+        <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.12)",zIndex:200,maxHeight:220,overflowY:"auto"}}>
+          {filtered.map(o=>(
+            <div key={o.v} onClick={()=>{onChange(o.v);setQuery("");setOpen(false);}}
+              style={{padding:"9px 12px",fontSize:13,color:"#0f172a",cursor:"pointer",background:o.v===value?"#f0fdf4":"#fff",fontWeight:o.v===value?600:400,borderBottom:"1px solid #f8fafc"}}
+              onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
+              onMouseLeave={e=>e.currentTarget.style.background=o.v===value?"#f0fdf4":"#fff"}>
+              {o.l}
+            </div>
+          ))}
+        </div>
+      )}
+      {open&&filtered.length===0&&(
+        <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.12)",zIndex:200,padding:"12px",textAlign:"center",fontSize:12,color:"#94a3b8"}}>
+          No results found
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── ADD ALLOCATION FORM (extracted component to respect React hook rules) ────
 function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM,getRemainingHours,ALLOC_MONTHS,isActive,onClose,onSubmit,saving=false,snapshots=[]}){
   const{month,empStatus,clientId,clientCat,notes,rows,leaveFrom,leaveTo}=newForm;
@@ -2310,17 +2359,13 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
             );
           })}
         </div>
-        <select value={clientId} onChange={e=>upd("clientId",e.target.value)} style={{
-          width:"100%",padding:"8px 12px",border:"1px solid #e2e8f0",
-          borderRadius:8,fontSize:13,outline:"none",background:"#fff",
-          color:clientId?"#0f172a":"#94a3b8",appearance:"none",cursor:"pointer"
-        }}>
-          <option value="">Select client…</option>
-          {catContracts.map(c=>{
-            const cat=c.contract_category||"Retainer";
-            return <option key={c.id} value={c.id}>{c.cn||c.client_name} — {cat}</option>;
-          })}
-        </select>
+        <SearchableSelect
+          value={clientId}
+          onChange={v=>upd("clientId",v)}
+          placeholder="Search client…"
+          disabled={onLeave}
+          options={catContracts.map(c=>({v:c.id,l:`${c.cn||c.client_name} — ${c.contract_category||"Retainer"}`}))}
+        />
         {clientId&&(()=>{
           const ct=realContracts.find(c=>c.id===clientId);
           const cat=ct?.contract_category||"Retainer";
@@ -2350,13 +2395,12 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
             return(
               <div key={row.id} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"10px 12px",background:"#f8fafc",borderRadius:8,border:"1px solid #e2e8f0"}}>
                 <div style={{flex:2,minWidth:0}}>
-                  <select value={row.empId} onChange={e=>updRow(row.id,"empId",e.target.value)} style={{
-                    width:"100%",padding:"7px 10px",border:"1px solid #e2e8f0",borderRadius:7,
-                    fontSize:12,outline:"none",background:"#fff",color:row.empId?"#0f172a":"#94a3b8",appearance:"none"
-                  }}>
-                    <option value="">Select employee…</option>
-                    {activeEmps.map(e=><option key={e.id} value={e.id}>{e.name} — {(e.department||"").replace(" Department","")}</option>)}
-                  </select>
+                  <SearchableSelect
+                    value={row.empId}
+                    onChange={v=>updRow(row.id,"empId",v)}
+                    placeholder="Search employee…"
+                    options={activeEmps.map(e=>({v:e.id,l:`${e.name} — ${(e.department||"").replace(" Department","")}`}))}
+                  />
                 </div>
                 {!onLeave&&(
                   <div style={{flex:1,minWidth:0}}>
