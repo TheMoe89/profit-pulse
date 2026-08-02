@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect, useContext, createCon
 import { createClient } from "@supabase/supabase-js";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend, PieChart, Pie, LineChart, Line } from "recharts";
 import {
-  LayoutDashboard, Users, Building2, FileText, FolderKanban, TrendingUp, Calendar, Receipt, UserCog, Zap,
+  LayoutDashboard, Users, Building2, FileText, FolderKanban, TrendingUp, Calendar, Receipt, UserCog,
   Wallet, Coins, BarChart3, ClipboardList, FileCheck,
   AlertTriangle, TrendingDown, CalendarClock, UserPlus,
   Search, Pencil, Trash2, Eye, X, Check, ChevronRight,
@@ -10,7 +10,7 @@ import {
   Clock, Building, Plus, Save, ShieldCheck, AlertCircle, Send,
   ShieldAlert, ShieldOff, Construction, FileWarning, User,
   Upload, Download, Paperclip, FileSpreadsheet,
-  CheckCircle, Info, Loader, Copy, KeyRound, RefreshCw, EyeOff, History, RotateCcw
+  CheckCircle, Info, Loader, Copy, KeyRound, RefreshCw, EyeOff
 } from "lucide-react";
 
 // ─── TOAST SYSTEM ─────────────────────────────────────────────────────────────
@@ -187,27 +187,12 @@ function AuthProvider({children}){
       else setPermsLoaded(true); // no session = show login immediately
     });
     const {data:{subscription}} = sb.auth.onAuthStateChange((event,session)=>{
-      // Ignore token refresh entirely
-      if(event==="TOKEN_REFRESHED") return;
-      // Ignore SIGNED_IN when user is already logged in (happens on browser tab focus)
-      if(event==="SIGNED_IN"){
-        setSession(s=>{
-          // If we already have a session for the same user, do nothing
-          if(s?.user?.id&&s.user.id===session?.user?.id) return s;
-          // New login
-          if(session) loadProfile(session.user.id);
-          return session;
-        });
-        return;
-      }
-      if(event==="SIGNED_OUT"){
-        setSession(null);
-        setProfile(null); setUserPerms(null); setPermsLoaded(true);
-        return;
-      }
-      if(event==="USER_UPDATED"){
+      // Only act on real auth changes, not tab focus token refresh
+      if(event==="SIGNED_IN"||event==="SIGNED_OUT"||event==="USER_UPDATED"||event==="TOKEN_REFRESHED"){
+        if(event==="TOKEN_REFRESHED") return; // ignore silent token refresh
         setSession(session);
         if(session){ setPermsLoaded(false); loadProfile(session.user.id); }
+        else { setProfile(null); setUserPerms(null); setPermsLoaded(true); }
       }
     });
     return ()=>subscription.unsubscribe();
@@ -357,9 +342,7 @@ class ErrBoundary extends React.Component {
 
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
-const HPM = 176; // v229.1
-const LEAVE_STATUSES=new Set(["On Leave","On Leave (Annual Vacation)","On Leave (Annual)","On Leave (Public H.)"]);
-const isLeave=s=>LEAVE_STATUSES.has(s);
+const HPM = 176;
 const SAR = (v) => `SAR ${(v||0).toLocaleString("en-US",{maximumFractionDigits:0})}`;
 const fmtH = h => Math.round(parseFloat(h)||0).toLocaleString("en-US");
 const currentMonth = "2026-04";
@@ -659,7 +642,7 @@ const NAV=[
   {id:"Reports",          label:"Reports",                   Icon:TrendingUp},
   {id:"MonthlyClose",     label:"Monthly Close",             Icon:Calendar},
   {id:"ContractExpenses", label:"Contract/Project Expenses", Icon:Receipt},
-  {id:"Settings",         label:"System Settings",              Icon:UserCog},
+  {id:"Settings",         label:"System Users",              Icon:UserCog},
 ];
 const PAGE_PERM_KEY = {
   Dashboard:         "dashboard",
@@ -770,18 +753,18 @@ function DeptUtilizationCards({eu,HPM,fmtH,allowedDepts=null}){
   const depts=Object.entries(DEPT_META).filter(([key])=>!allowedDepts||allowedDepts.includes(key)).map(([key,meta])=>{
     const allEmps=eu.filter(e=>e.department===key);
     if(!allEmps.length)return null;
-    const onLeaveEmps=allEmps.filter(e=>e.onLeave&&e.h===0);
-    const allocated=allEmps.reduce((s,e)=>s+e.h,0);
-    const capacity=allEmps.reduce((s,e)=>s+(e.effectiveHPM||HPM),0);
+    const onLeaveEmps=allEmps.filter(e=>e.onLeave);
+    const availEmps=allEmps.filter(e=>!e.onLeave);
+    const allocated=availEmps.reduce((s,e)=>s+e.h,0);
+    const capacity=availEmps.length*HPM;
     const pct=capacity>0?Math.round((allocated/capacity)*100):0;
-    const getPct=e=>Math.round((e.h/(e.effectiveHPM||HPM))*100);
-    const fully=allEmps.filter(e=>e.h>0&&getPct(e)>=90).length;
-    const optimal=allEmps.filter(e=>e.h>0&&getPct(e)>=70&&getPct(e)<90).length;
-    const under=allEmps.filter(e=>e.h>0&&getPct(e)<70).length;
-    const unalloc=allEmps.filter(e=>e.h===0&&!e.onLeave).length;
+    const fully=availEmps.filter(e=>e.h>158).length;
+    const optimal=availEmps.filter(e=>e.h>=123&&e.h<=158).length;
+    const under=availEmps.filter(e=>e.h>0&&e.h<123).length;
+    const unalloc=availEmps.filter(e=>e.h===0).length;
     const onLeave=onLeaveEmps.length;
-    const topEmps=[...allEmps].filter(e=>e.h>0).sort((a,b)=>b.h-a.h).slice(0,5);
-    return{key,meta,allEmps,allocated,capacity,pct,fully,optimal,under,unalloc,onLeave,topEmps};
+    const topEmps=[...availEmps].sort((a,b)=>b.h-a.h).slice(0,5);
+    return{key,meta,allEmps,availEmps,allocated,capacity,pct,fully,optimal,under,unalloc,onLeave,topEmps};
   }).filter(Boolean);
   return(
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,alignItems:"start"}}>
@@ -839,7 +822,7 @@ function DeptUtilizationCards({eu,HPM,fmtH,allowedDepts=null}){
               <div style={{padding:"8px 16px 14px",background:"#fafafa"}}>
                 {d.topEmps.map((e,i)=>{
                   const es=getEmpStatus(e.h);
-                  const epct=Math.round((e.h/(e.effectiveHPM||HPM))*100);
+                  const epct=Math.round((e.h/HPM)*100);
                   return(
                     <div key={e.id} style={{display:"flex",alignItems:"center",gap:9,padding:"5px 0",borderTop:i>0?"1px solid #f1f5f9":"none"}}>
                       <div style={{width:26,height:26,borderRadius:7,background:d.meta.lightBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:d.meta.color,flexShrink:0}}>{e.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</div>
@@ -875,6 +858,7 @@ const DEPT_COLORS={
 };
 function getCapTheme(pct,hours,cap,onLeave){
   const rpct=Math.round(pct);
+  if(onLeave)    return{border:"#fde68a",cardBg:"#fffbeb",barColor:"#f59e0b",badgeBg:"#fef9c3",badgeColor:"#d97706",label:"On Leave"};
   if(hours===0)  return{border:"#e2e8f0",cardBg:"#fafafa",barColor:"#cbd5e1",badgeBg:"#f1f5f9",badgeColor:"#94a3b8",label:"Unallocated"};
   if(rpct>=90)   return{border:"#a7f3d0",cardBg:"#f0fdf4",barColor:"#008A57",badgeBg:"#d1fae5",badgeColor:"#059669",label:"Fully Utilized"};
   if(rpct>=70)   return{border:"#bae6fd",cardBg:"#f0f9ff",barColor:"#0891b2",badgeBg:"#e0f7fa",badgeColor:"#0891b2",label:"Optimal"};
@@ -898,28 +882,26 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
   },[openId]);
 
   const sortOrder=e=>{
-    if(e.h===0&&!e.onLeave) return 5;
-    const epct=Math.round((e.h/(e.effectiveHPM||HPM))*100);
-    if(epct>=90)  return 0;
-    if(epct>=70)  return 1;
-    if(e.h>0)     return 2;
-    if(e.onLeave) return 3;
-    return 4;
+    if(e.onLeave) return 4;
+    if(e.h===0)   return 5;
+    if(e.h>158)   return 0;
+    if(e.h>=123)  return 1;
+    return 2;
   };
 
   const deptFiltered=capDept==="all"?eu:eu.filter(e=>e.department===capDept);
   const empSearchFiltered=capEmpSearch?deptFiltered.filter(e=>e.name.toLowerCase().includes(capEmpSearch.toLowerCase())):deptFiltered;
   const visible=empSearchFiltered.filter(e=>{
     if(capStatus==="All Statuses") return true;
-    const th=getCapTheme(Math.round((e.h/(e.effectiveHPM||HPM))*100),e.h,HPM,e.onLeave);
+    const th=getCapTheme(Math.round((e.h/HPM)*100),e.h,HPM,e.onLeave);
     return th.label===capStatus;
   }).slice().sort((a,b)=>sortOrder(a)-sortOrder(b)||(b.h-a.h));
 
-  const fullyCount =empSearchFiltered.filter(e=>e.h>0&&Math.round((e.h/(e.effectiveHPM||HPM))*100)>=90).length;
-  const optCount   =empSearchFiltered.filter(e=>e.h>0&&Math.round((e.h/(e.effectiveHPM||HPM))*100)>=70&&Math.round((e.h/(e.effectiveHPM||HPM))*100)<90).length;
-  const underCount =empSearchFiltered.filter(e=>e.h>0&&Math.round((e.h/(e.effectiveHPM||HPM))*100)<70).length;
-  const leaveCount =empSearchFiltered.filter(e=>e.onLeave&&e.h===0).length;
-  const unallocCount=empSearchFiltered.filter(e=>e.h===0&&!e.onLeave).length;
+  const fullyCount =empSearchFiltered.filter(e=>!e.onLeave&&e.h>158).length;
+  const optCount   =empSearchFiltered.filter(e=>!e.onLeave&&e.h>=123&&e.h<=158).length;
+  const underCount =empSearchFiltered.filter(e=>!e.onLeave&&e.h>0&&e.h<123).length;
+  const leaveCount =empSearchFiltered.filter(e=>e.onLeave).length;
+  const unallocCount=empSearchFiltered.filter(e=>!e.onLeave&&e.h===0).length;
 
   const selStyle={padding:"7px 12px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:11,fontWeight:600,color:"#0f172a",background:"#fff",cursor:"pointer",outline:"none",appearance:"none",backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,backgroundRepeat:"no-repeat",backgroundPosition:"right 9px center",paddingRight:26};
 
@@ -972,13 +954,12 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
         ))}
       </div>
       {/* Cards grid */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:10,minHeight:300,alignContent:"start"}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:10}}>
         {visible.map(emp=>{
-          const effCap = emp.effectiveHPM||HPM;
-          const pct    = Math.round((emp.h/effCap)*100);
+          const pct    = Math.round((emp.h/HPM)*100);
           const theme  = getCapTheme(pct,emp.h,HPM,emp.onLeave);
           const meta   = DEPT_COLORS[emp.department]||{color:"#475569",bg:"#f1f5f9"};
-          const over   = emp.h>effCap;
+          const over   = emp.h>HPM;
           const open   = openId===emp.id;
           const toggle = ()=>setOpenId(open?null:emp.id);
 
@@ -1002,53 +983,49 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
                     <p style={{margin:0,fontSize:10,color:"#94a3b8",lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{emp.designation||emp.department?.replace(" Department","")}</p>
                   </div>
                 </div>
-                {(emp.onLeave||(emp.clients&&emp.clients.length>0))&&(
+                {!emp.onLeave&&emp.clients&&emp.clients.length>0&&(
                   <button onClick={toggle} style={{padding:"4px",borderRadius:5,border:`1px solid ${open?meta.color:"#e2e8f0"}`,background:open?meta.bg:"#fff",cursor:"pointer",display:"flex",alignItems:"center",flexShrink:0,marginLeft:4,transition:"all .15s"}}>
                     <Eye size={11} strokeWidth={1.75} color={open?meta.color:"#94a3b8"}/>
                   </button>
                 )}
               </div>
-              {/* Dept badge + month pill */}
+              {/* Dept badge */}
               {capDept==="all"&&(
-                <div style={{display:"flex",gap:5,alignItems:"center",marginBottom:8}}>
-                  <span style={{padding:"2px 7px",borderRadius:999,background:meta.bg,color:meta.color,fontSize:9,fontWeight:600}}>
-                    {emp.department?.replace(" Department","")}
-                  </span>
-                  <span style={{padding:"2px 7px",borderRadius:999,background:"#f1f5f9",color:"#475569",fontSize:9,fontWeight:600}}>
-                    {fmtLong(month)}
-                  </span>
+                <span style={{padding:"2px 7px",borderRadius:999,background:meta.bg,color:meta.color,fontSize:9,fontWeight:600,display:"inline-block",marginBottom:8}}>
+                  {emp.department?.replace(" Department","")}
+                </span>
+              )}
+              {/* Progress bar */}
+              {emp.onLeave?(
+                <div style={{height:6,borderRadius:99,overflow:"hidden",marginBottom:6}}>
+                  <div style={{height:"100%",width:"100%",background:"repeating-linear-gradient(45deg,#fde68a,#fde68a 3px,#fef9c3 3px,#fef9c3 6px)"}}/>
+                </div>
+              ):(
+                <div style={{height:6,borderRadius:99,background:"rgba(0,0,0,.07)",overflow:"hidden",marginBottom:6}}>
+                  <div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:theme.barColor,borderRadius:99,transition:"width .4s ease"}}/>
                 </div>
               )}
-              {capDept!=="all"&&(
-                <div style={{display:"flex",gap:5,alignItems:"center",marginBottom:8}}>
-                  <span style={{padding:"2px 7px",borderRadius:999,background:"#f1f5f9",color:"#475569",fontSize:9,fontWeight:600}}>
-                    {fmtLong(month)}
-                  </span>
-                </div>
-              )}
-              {/* Progress bar — always real utilization */}
-              <div style={{height:6,borderRadius:99,background:"rgba(0,0,0,.07)",overflow:"hidden",marginBottom:6}}>
-                <div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:theme.barColor,borderRadius:99,transition:"width .4s ease"}}/>
-              </div>
               {/* Hours + badge */}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <span style={{fontSize:10,color:"#64748b",lineHeight:1.4}}>
                   {emp.h===0&&!emp.onLeave
                     ?<span style={{color:"#94a3b8"}}>0h</span>
-                    :<><strong style={{color:"#0f172a"}}>{fmtH(emp.h)}h</strong> · {fmtH(Math.max(0,effCap-emp.h))}h free</>
+                    :<><strong style={{color:"#0f172a"}}>{fmtH(emp.h)}h</strong> · {fmtH(Math.max(0,(emp.effectiveHPM||HPM)-emp.h))}h free</>
                   }
                 </span>
-                <span style={{padding:"1px 7px",borderRadius:999,background:theme.badgeBg,color:theme.badgeColor,fontSize:9,fontWeight:700}}>{emp.h===0?"Unallocated":theme.label}</span>
+                {!emp.onLeave&&(
+                  <span style={{padding:"1px 7px",borderRadius:999,background:theme.badgeBg,color:theme.badgeColor,fontSize:9,fontWeight:700}}>{emp.h===0?"Unallocated":theme.label}</span>
+                )}
               </div>
-              {/* Over warning — only for non-leave employees */}
-              {over&&!emp.onLeave&&(
+              {/* Over warning */}
+              {over&&(
                 <div style={{marginTop:6,display:"flex",alignItems:"center",gap:4,padding:"3px 7px",background:"#fee2e2",borderRadius:5,border:"1px solid #fca5a5"}}>
                   <AlertTriangle size={9} strokeWidth={2} color="#ef4444"/>
-                  <span style={{fontSize:9,color:"#ef4444",fontWeight:600}}>Over by {fmtH(emp.h-effCap)}h</span>
+                  <span style={{fontSize:9,color:"#ef4444",fontWeight:600}}>Over by {fmtH(emp.h-HPM)}h</span>
                 </div>
               )}
-              {/* Eye dropdown */}
-              {(emp.onLeave||(emp.clients&&emp.clients.length>0))&&(
+              {/* Eye dropdown — client breakdown */}
+              {!emp.onLeave&&(
                 <div style={{
                   position:"absolute",top:"calc(100% + 6px)",left:0,
                   width:"100%",minWidth:200,background:"#fff",
@@ -1070,26 +1047,10 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
                       <X size={10} strokeWidth={2} color="#94a3b8"/>
                     </button>
                   </div>
-                  {emp.onLeave&&emp.leaveDeduction>0&&(
-                    <div style={{marginBottom:9,display:"flex",flexDirection:"column",gap:5}}>
-                      <p style={{margin:"0 0 2px",fontSize:8,fontWeight:700,color:"#d97706",textTransform:"uppercase",letterSpacing:".06em"}}>Leave This Month</p>
-                      {(emp.leaveRecords||[]).map((lr,i)=>(
-                        <div key={i} style={{padding:"6px 10px",background:"#fef9c3",borderRadius:7,border:"1px solid #fde68a"}}>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
-                            <span style={{fontSize:10,fontWeight:700,color:"#d97706"}}>{lr.status}</span>
-                            <span style={{fontSize:10,fontWeight:700,color:"#92400e"}}>{lr.capacity_deduction||0}h deducted</span>
-                          </div>
-                          {lr.leave_from&&lr.leave_to&&(
-                            <p style={{margin:0,fontSize:9,color:"#92400e"}}>{new Date(lr.leave_from+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})} → {new Date(lr.leave_to+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})} · {lr.leave_days||0} days</p>
-                          )}
-                        </div>
-                      ))}
-                      <p style={{margin:"2px 0 0",fontSize:9,color:"#92400e",fontWeight:600}}>Total: {emp.leaveDeduction}h deducted · Effective cap: {fmtH(emp.effectiveHPM||HPM)}h of {HPM}h</p>
-                    </div>
-                  )}
-                  {(emp.clients||[]).length>0&&(
-                    <>
-                      <p style={{margin:"0 0 6px",fontSize:8,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".06em"}}>Client breakdown</p>
+                  <p style={{margin:"0 0 6px",fontSize:8,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".06em"}}>Client breakdown</p>
+                  {(emp.clients||[]).length===0
+                    ?<p style={{margin:0,fontSize:11,color:"#94a3b8"}}>No allocations this month</p>
+                    :(
                       <div style={{overflowY:"auto",maxHeight:200,overscrollBehavior:"contain"}}>
                         {(emp.clients||[]).map((c,i)=>{
                           const share=emp.h>0?Math.round((c.hours/emp.h)*100):0;
@@ -1107,8 +1068,8 @@ function CapacityCards({eu,HPM,fmtH,month,fmtLong,allowedDepts=null}){
                           );
                         })}
                       </div>
-                    </>
-                  )}
+                    )
+                  }
                 </div>
               )}
             </div>
@@ -1134,23 +1095,17 @@ function DashboardPage(){
   const [dbSnapshots,setDbSnapshots]=useState([]);
 
   useEffect(()=>{
-    const fetchAll=async()=>{
-      const [e,ct,sn]=await Promise.all([
-        sb.from('employees').select('*'),
-        sb.from('contracts').select('*'),
-        sb.from('monthly_snapshots').select('*'),
-      ]);
-      // Fetch allocations in batches to bypass 1000 row default limit
-      const batch1=await sb.from('allocations').select('*').range(0,999);
-      const batch2=await sb.from('allocations').select('*').range(1000,1999);
-      const batch3=await sb.from('allocations').select('*').range(2000,2999);
-      const al=[...(batch1.data||[]),...(batch2.data||[]),...(batch3.data||[])];
-      if(e.data)  setDbEmployees(e.data.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0,id:x.id,name:x.name,designation:x.designation,department:x.department,status:x.status})));
-      if(ct.data) setDbContracts(ct.data.map(x=>({...x,cn:x.client_name,cid:x.client_id,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status,bcs:parseFloat(x.budget_client_servicing)||0,bp:parseFloat(x.budget_production)||0,bc:parseFloat(x.budget_creative)||0,bpl:parseFloat(x.budget_planning)||0})));
-      if(al.length) setDbAllocs(al.map(x=>({...x,eid:x.employee_id,cid:x.client_id,h:parseFloat(x.allocated_hours)||0})));
-      if(sn.data) setDbSnapshots(sn.data.map(x=>({...x,m:x.month,cn:x.client_name,r:parseFloat(x.monthly_retainer)||0,c:parseFloat(x.resource_cost)||0})));
-    };
-    fetchAll();
+    Promise.all([
+      sb.from('employees').select('*'),
+      sb.from('contracts').select('*'),
+      sb.from('allocations').select('*'),
+      sb.from('monthly_snapshots').select('*'),
+    ]).then(([{data:e},{data:ct},{data:al},{data:sn}])=>{
+      if(e)  setDbEmployees(e.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0,id:x.id,name:x.name,designation:x.designation,department:x.department,status:x.status})));
+      if(ct) setDbContracts(ct.map(x=>({...x,cn:x.client_name,cid:x.client_id,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status,bcs:parseFloat(x.budget_client_servicing)||0,bp:parseFloat(x.budget_production)||0,bc:parseFloat(x.budget_creative)||0,bpl:parseFloat(x.budget_planning)||0})));
+      if(al) setDbAllocs(al.map(x=>({...x,eid:x.employee_id,cid:x.client_id,h:parseFloat(x.allocated_hours)||0})));
+      if(sn) setDbSnapshots(sn.map(x=>({...x,m:x.month,cn:x.client_name,r:parseFloat(x.monthly_retainer)||0,c:parseFloat(x.resource_cost)||0})));
+    });
   },[sb]);
 
   const dbAllocsByMonth=useMemo(()=>{const m={};dbAllocs.forEach(a=>{if(!m[a.month])m[a.month]=[];m[a.month].push(a);});return m;},[dbAllocs]);
@@ -1189,11 +1144,11 @@ function DashboardPage(){
     };
     const da=bld(ac,als);
     const dbc=id=>id==="all"?da:bld(ac.filter(c=>c.cid===id),als.filter(a=>a.cid===id));
-    const eu=dbEmployees.filter(e=>(!allowedDepts||allowedDepts.includes(e.department))&&(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=month))).map(e=>{const empAls=als.filter(a=>(a.eid||a.employee_id)===e.id);const h=empAls.filter(a=>!isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.h||a.allocated_hours)||0),0);const leaveDeduction=empAls.filter(a=>isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);const effectiveHPM=Math.max(0,HPM-leaveDeduction);const clients=empAls.filter(a=>!isLeave(a.status)&&parseFloat(a.h||a.allocated_hours)>0).map(a=>({name:a.client_name||a.cn||'',hours:parseFloat(a.h||a.allocated_hours)||0}));const leaveRecords=empAls.filter(a=>isLeave(a.status));const rawPct=effectiveHPM>0?(h/effectiveHPM)*100:0;const onLeave=leaveRecords.length>0;return{...e,h,u:Math.round(rawPct),av:Math.max(0,effectiveHPM-h),effectiveHPM,leaveDeduction,onLeave,clients,leaveRecords};});
-    const fullyUtil=eu.filter(e=>e.h>0&&Math.round((e.h/(e.effectiveHPM||HPM))*100)>=90);
-    const optimal=eu.filter(e=>e.h>0&&Math.round((e.h/(e.effectiveHPM||HPM))*100)>=70&&Math.round((e.h/(e.effectiveHPM||HPM))*100)<90);
-    const underUtil=eu.filter(e=>e.h>0&&Math.round((e.h/(e.effectiveHPM||HPM))*100)<70);
-    const unallocated=eu.filter(e=>e.h===0&&!e.onLeave);
+    const eu=dbEmployees.filter(e=>(!allowedDepts||allowedDepts.includes(e.department))&&(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=month))).map(e=>{const empAls=als.filter(a=>(a.eid||a.employee_id)===e.id);const h=empAls.reduce((s,a)=>s+(parseFloat(a.h||a.allocated_hours)||0),0);const leaveDeduction=empAls.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);const effectiveHPM=Math.max(0,HPM-leaveDeduction);const clients=empAls.filter(a=>a.status!=='On Leave'&&parseFloat(a.h||a.allocated_hours)>0).map(a=>({name:a.client_name||a.cn||'',hours:parseFloat(a.h||a.allocated_hours)||0}));const rawPct=effectiveHPM>0?(h/effectiveHPM)*100:0;const onLeave=empAls.some(a=>a.status==='On Leave');return{...e,h,u:Math.round(rawPct),av:Math.max(0,effectiveHPM-h),effectiveHPM,leaveDeduction,onLeave,clients};});
+    const fullyUtil=eu.filter(e=>!e.onLeave&&e.h>158);
+    const optimal=eu.filter(e=>!e.onLeave&&e.h>=123&&e.h<=158);
+    const underUtil=eu.filter(e=>!e.onLeave&&e.h>0&&e.h<123);
+    const unallocated=eu.filter(e=>!e.onLeave&&e.h===0);
     const over=fullyUtil,under=underUtil; // keep aliases for backward compat
     const chart=eu.map(e=>({name:e.name.split(" ")[0],hours:e.h,available:e.av,u:e.u})).sort((a,b)=>b.u-a.u);
     const ren=allAc.filter(c=>{const d=diffDays(c.ed);return d>=0&&d<=60;}).sort((a,b)=>new Date(a.ed)-new Date(b.ed));
@@ -1639,7 +1594,10 @@ function ClientsPage(){
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search clients..." style={{width:"100%",padding:"8px 12px 8px 30px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,outline:"none",background:"#fff",boxSizing:"border-box"}}/>
         </div>
         <Sel value={statusF} onChange={setStatusF} options={[{v:"all",l:"All Status"},{v:"Active",l:"Active"},{v:"Prospect",l:"Prospect"},{v:"Inactive",l:"Inactive"},{v:"Churned",l:"Churned"}]} style={{width:150}}/>
-        <Btn variant="outline" style={{gap:6}}><Download size={13} strokeWidth={1.75}/>Export</Btn>
+        <Btn variant="outline" style={{gap:6}} onClick={()=>{
+          const rows=sorted.map(c=>[c.contract_number||"",c.client_name||c.cn||"",c.contract_value||c.cv||0,c.contract_category||"",c.start_date||c.sd||"",c.end_date||c.ed||"",c.status,c.tenure_months||""]);
+          exportXLSX([["Contract #","Client","Value (SAR)","Category","Start Date","End Date","Status","Tenure (months)"],...rows],"Contracts","contracts_export.xlsx");
+        }}><Download size={13} strokeWidth={1.75}/>Export</Btn>
       </div>
 
       {/* Table */}
@@ -1966,7 +1924,10 @@ function ContractsPage(){
         </div>
         <Sel value={statusF} onChange={setStatusF} options={[{v:"all",l:"All Status"},{v:"Active",l:"Active"},{v:"Expired",l:"Expired"}]} style={{width:140}}/>
         <Sel value={catF} onChange={setCatF} options={[{v:"all",l:"All Categories"},{v:"Retainer",l:"Retainer"},{v:"Project",l:"Project"},{v:"Adhoc",l:"Adhoc"}]} style={{width:160}}/>
-        <Btn variant="outline" style={{gap:6}}><Download size={13} strokeWidth={1.75}/>Export</Btn>
+        <Btn variant="outline" style={{gap:6}} onClick={()=>{
+          const rows=sorted.map(c=>[c.contract_number||"",c.client_name||c.cn||"",c.contract_value||c.cv||0,c.contract_category||"",c.start_date||c.sd||"",c.end_date||c.ed||"",c.status,c.tenure_months||""]);
+          exportXLSX([["Contract #","Client","Value (SAR)","Category","Start Date","End Date","Status","Tenure (months)"],...rows],"Contracts","contracts_export.xlsx");
+        }}><Download size={13} strokeWidth={1.75}/>Export</Btn>
       </div>
 
       {/* Table */}
@@ -2148,55 +2109,6 @@ function ContractsPage(){
 }
 
 
-// ─── SEARCHABLE SELECT ────────────────────────────────────────────────────────
-function SearchableSelect({value,onChange,options,placeholder="Search…",disabled=false,renderOption=null,renderSelected=null}){
-  const [query,setQuery]=useState("");
-  const [open,setOpen]=useState(false);
-  const ref=React.useRef(null);
-  React.useEffect(()=>{
-    const h=e=>{if(ref.current&&!ref.current.contains(e.target)){setOpen(false);setQuery("");}};
-    document.addEventListener("mousedown",h);
-    return()=>document.removeEventListener("mousedown",h);
-  },[]);
-  const selected=options.find(o=>o.v===value);
-  const filtered=query?options.filter(o=>o.l.toLowerCase().includes(query.toLowerCase())):options;
-  return(
-    <div ref={ref} style={{position:"relative"}}>
-      <div onClick={()=>{if(!disabled)setOpen(v=>!v);}}
-        style={{display:"flex",alignItems:"center",border:"1px solid #e2e8f0",borderRadius:8,background:disabled?"#f8fafc":"#fff",cursor:disabled?"not-allowed":"pointer",padding:"7px 10px",gap:6}}>
-        <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:6,overflow:"hidden"}}>
-          {selected
-            ?(renderSelected?renderSelected(selected):<span style={{fontSize:12,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selected.l}</span>)
-            :<span style={{fontSize:12,color:"#94a3b8"}}>{placeholder}</span>
-          }
-        </div>
-        <span style={{color:"#94a3b8",fontSize:10,flexShrink:0}}>▾</span>
-      </div>
-      {open&&(
-        <div style={{position:"absolute",bottom:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,boxShadow:"0 -8px 24px rgba(0,0,0,.15)",zIndex:9999,maxHeight:220,overflowY:"auto"}}>
-          <div style={{padding:"6px",borderBottom:"1px solid #f1f5f9",position:"sticky",top:0,background:"#fff"}}>
-            <input autoFocus value={query} onChange={e=>setQuery(e.target.value)}
-              placeholder={placeholder}
-              style={{width:"100%",padding:"6px 10px",border:"1px solid #e2e8f0",borderRadius:6,fontSize:12,outline:"none",color:"#0f172a",boxSizing:"border-box"}}/>
-          </div>
-          {filtered.length===0
-            ?<div style={{padding:"12px",textAlign:"center",fontSize:12,color:"#94a3b8"}}>No results found</div>
-            :filtered.map(o=>(
-              <div key={o.v}
-                onMouseDown={e=>{e.preventDefault();onChange(o.v);setQuery("");setOpen(false);}}
-                style={{padding:"8px 12px",cursor:"pointer",background:o.v===value?"#f0fdf4":"transparent",borderBottom:"1px solid #f8fafc",display:"flex",alignItems:"center",gap:8}}
-                onMouseEnter={e=>e.currentTarget.style.background=o.v===value?"#dcfce7":"#f8fafc"}
-                onMouseLeave={e=>e.currentTarget.style.background=o.v===value?"#f0fdf4":"transparent"}>
-                {renderOption?renderOption(o):<span style={{fontSize:12,color:"#0f172a"}}>{o.l}</span>}
-              </div>
-            ))
-          }
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── ADD ALLOCATION FORM (extracted component to respect React hook rules) ────
 function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM,getRemainingHours,ALLOC_MONTHS,isActive,onClose,onSubmit,saving=false,snapshots=[]}){
   const{month,empStatus,clientId,clientCat,notes,rows,leaveFrom,leaveTo}=newForm;
@@ -2205,8 +2117,6 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
   const leaveDays=onLeave?countWorkingDays(leaveFrom,leaveTo):0;
   const leaveDeduction=Math.round(leaveDays*(176/22));
   const adjustedCapacity=176-leaveDeduction;
-
-  const [pending,setPending]=useState([]);
 
   const monthContracts=month?realContracts.filter(c=>isActive(c,month)):realContracts;
   const catContracts=clientCat==="all"?monthContracts:monthContracts.filter(c=>(c.contract_category||"Retainer")===clientCat);
@@ -2223,61 +2133,7 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
   const removeRow=id=>setNewForm(p=>({...p,rows:p.rows.filter(r=>r.id!==id)}));
   const updRow=(id,k,v)=>setNewForm(p=>({...p,rows:p.rows.map(r=>r.id===id?{...r,[k]:v}:r)}));
 
-  const canAdd=month&&(onLeave
-    ?(rows.some(r=>r.empId)&&leaveFrom&&leaveTo&&leaveDays>0)
-    :(clientId&&rows.some(r=>r.empId&&parseFloat(r.hours)>0)));
-
-  const handleAddToPending=()=>{
-    if(!canAdd) return;
-    const newEntries=[];
-    if(onLeave){
-      rows.filter(r=>r.empId).forEach(r=>{
-        const emp=realEmps.find(e=>e.id===r.empId);
-        newEntries.push({
-          id:Date.now()+Math.random(),
-          type:"leave",
-          employee_id:r.empId,
-          employee_name:emp?.name||"",
-          employee_monthly_cost:emp?.mc||0,
-          status:"On Leave (Annual Vacation)",
-          month,
-          leave_from:leaveFrom,
-          leave_to:leaveTo,
-          leave_days:leaveDays,
-          capacity_deduction:leaveDeduction,
-          notes:notes||"",
-          client_id:null,client_name:"",contract_id:null,allocated_hours:0,
-        });
-      });
-    } else {
-      const ct=realContracts.find(c=>c.id===clientId);
-      rows.filter(r=>r.empId&&parseFloat(r.hours)>0).forEach(r=>{
-        const emp=realEmps.find(e=>e.id===r.empId);
-        newEntries.push({
-          id:Date.now()+Math.random(),
-          type:"assigned",
-          employee_id:r.empId,
-          employee_name:emp?.name||"",
-          employee_monthly_cost:emp?.mc||0,
-          status:"Assigned",
-          month,
-          client_id:ct?.cid||ct?.client_id||"",
-          client_name:ct?.cn||ct?.client_name||"",
-          contract_id:clientId,
-          allocated_hours:parseFloat(r.hours),
-          notes:notes||"",
-          leave_from:null,leave_to:null,leave_days:0,capacity_deduction:0,
-        });
-      });
-    }
-    setPending(p=>[...p,...newEntries]);
-    // Reset form fields but keep month
-    setNewForm(p=>({...p,empStatus:"in_duty",clientId:"",clientCat:"all",notes:"",rows:[{id:Date.now(),empId:"",hours:""}],leaveFrom:"",leaveTo:""}));
-  };
-
-  const removePending=id=>setPending(p=>p.filter(x=>x.id!==id));
-
-  const fmtD=d=>d?new Date(d+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"}):"—";
+  const canSubmit=month&&(onLeave?(rows.some(r=>r.empId)&&leaveFrom&&leaveTo&&leaveDays>0):clientId&&rows.some(r=>r.empId&&parseFloat(r.hours)>0));
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
@@ -2288,7 +2144,7 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
           <Lbl>Month *</Lbl>
           <Sel value={month} onChange={v=>{
             const closed=snapshots.some(s=>s.month===v&&s.is_closed);
-            if(closed)return;
+            if(closed)return; // prevent selecting closed month
             upd("month",v);
           }} options={[{v:"",l:"Select month"},...ALLOC_MONTHS.map(m=>{
             const closed=snapshots.some(s=>s.month===m.v&&s.is_closed);
@@ -2359,27 +2215,17 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
             );
           })}
         </div>
-        <SearchableSelect
-          value={clientId}
-          onChange={v=>upd("clientId",v)}
-          placeholder="Search client…"
-          disabled={onLeave}
-          options={catContracts.map(c=>({v:c.id,l:c.cn||c.client_name,cat:c.contract_category||"Retainer"}))}
-          renderOption={o=>{
-            const bs=catBadge(o.cat);
-            return(<>
-              <span style={{fontSize:12,color:"#0f172a",fontWeight:500,flex:1}}>{o.l}</span>
-              <span style={{padding:"1px 7px",borderRadius:999,background:bs.bg,color:bs.color,fontSize:9,fontWeight:700,flexShrink:0}}>{o.cat}</span>
-            </>);
-          }}
-          renderSelected={o=>{
-            const bs=catBadge(o.cat);
-            return(<>
-              <span style={{fontSize:12,color:"#0f172a",fontWeight:500}}>{o.l}</span>
-              <span style={{padding:"1px 7px",borderRadius:999,background:bs.bg,color:bs.color,fontSize:9,fontWeight:700,flexShrink:0}}>{o.cat}</span>
-            </>);
-          }}
-        />
+        <select value={clientId} onChange={e=>upd("clientId",e.target.value)} style={{
+          width:"100%",padding:"8px 12px",border:"1px solid #e2e8f0",
+          borderRadius:8,fontSize:13,outline:"none",background:"#fff",
+          color:clientId?"#0f172a":"#94a3b8",appearance:"none",cursor:"pointer"
+        }}>
+          <option value="">Select client…</option>
+          {catContracts.map(c=>{
+            const cat=c.contract_category||"Retainer";
+            return <option key={c.id} value={c.id}>{c.cn||c.client_name} — {cat}</option>;
+          })}
+        </select>
         {clientId&&(()=>{
           const ct=realContracts.find(c=>c.id===clientId);
           const cat=ct?.contract_category||"Retainer";
@@ -2409,26 +2255,13 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
             return(
               <div key={row.id} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"10px 12px",background:"#f8fafc",borderRadius:8,border:"1px solid #e2e8f0"}}>
                 <div style={{flex:2,minWidth:0}}>
-                  <SearchableSelect
-                    value={row.empId}
-                    onChange={v=>updRow(row.id,"empId",v)}
-                    placeholder="Search employee…"
-                    options={activeEmps.map(e=>({v:e.id,l:e.name,dept:e.department}))}
-                    renderOption={o=>{
-                      const meta=DEPT_COLORS[o.dept]||{color:"#475569",bg:"#f1f5f9"};
-                      return(<>
-                        <span style={{fontSize:12,color:"#0f172a",fontWeight:500,flex:1}}>{o.l}</span>
-                        <span style={{padding:"1px 7px",borderRadius:999,background:meta.bg,color:meta.color,fontSize:9,fontWeight:700,flexShrink:0,whiteSpace:"nowrap"}}>{(o.dept||"").replace(" Department","")}</span>
-                      </>);
-                    }}
-                    renderSelected={o=>{
-                      const meta=DEPT_COLORS[o.dept]||{color:"#475569",bg:"#f1f5f9"};
-                      return(<>
-                        <span style={{fontSize:12,color:"#0f172a",fontWeight:500}}>{o.l}</span>
-                        <span style={{padding:"1px 7px",borderRadius:999,background:meta.bg,color:meta.color,fontSize:9,fontWeight:700,flexShrink:0,whiteSpace:"nowrap"}}>{(o.dept||"").replace(" Department","")}</span>
-                      </>);
-                    }}
-                  />
+                  <select value={row.empId} onChange={e=>updRow(row.id,"empId",e.target.value)} style={{
+                    width:"100%",padding:"7px 10px",border:"1px solid #e2e8f0",borderRadius:7,
+                    fontSize:12,outline:"none",background:"#fff",color:row.empId?"#0f172a":"#94a3b8",appearance:"none"
+                  }}>
+                    <option value="">Select employee…</option>
+                    {activeEmps.map(e=><option key={e.id} value={e.id}>{e.name} — {(e.department||"").replace(" Department","")}</option>)}
+                  </select>
                 </div>
                 {!onLeave&&(
                   <div style={{flex:1,minWidth:0}}>
@@ -2462,51 +2295,13 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
           style={{width:"100%",padding:"8px 12px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:12,outline:"none",resize:"none",lineHeight:1.5,fontFamily:"inherit",boxSizing:"border-box",color:"#0f172a"}}/>
       </div>
 
-      {/* Add to list button */}
-      <button type="button" onClick={handleAddToPending} disabled={!canAdd} style={{
-        width:"100%",padding:"9px",borderRadius:8,border:`1.5px dashed ${canAdd?"#008A57":"#e2e8f0"}`,
-        background:canAdd?"#f0fdf4":"#fafafa",color:canAdd?"#008A57":"#94a3b8",
-        cursor:canAdd?"pointer":"not-allowed",fontSize:12,fontWeight:700,
-        display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .15s"
-      }}>
-        <Plus size={13} strokeWidth={2}/>{onLeave?"Add Leave to List":"Add Allocation to List"}
-      </button>
-
-      {/* Pending records staging area */}
-      {pending.length>0&&(
-        <div style={{display:"flex",flexDirection:"column",gap:6}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <p style={{margin:0,fontSize:11,fontWeight:700,color:"#0f172a",textTransform:"uppercase",letterSpacing:".05em"}}>Pending ({pending.length})</p>
-            <span style={{fontSize:11,color:"#64748b"}}>Will be saved together</span>
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:5,maxHeight:200,overflowY:"auto"}}>
-            {pending.map(p=>(
-              <div key={p.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 11px",borderRadius:8,border:`1px solid ${p.type==="leave"?"#fde68a":"#a7f3d0"}`,background:p.type==="leave"?"#fffbeb":"#f0fdf4"}}>
-                <div style={{flex:1,minWidth:0}}>
-                  <p style={{margin:0,fontSize:12,fontWeight:600,color:"#0f172a",lineHeight:1.4}}>{p.employee_name}</p>
-                  <p style={{margin:0,fontSize:10,color:"#64748b",lineHeight:1.4}}>
-                    {p.type==="leave"
-                      ?`On Leave (Annual Vacation) · ${fmtD(p.leave_from)} → ${fmtD(p.leave_to)} · ${p.capacity_deduction}h deducted`
-                      :`${p.client_name} · ${p.allocated_hours}h`
-                    }
-                  </p>
-                </div>
-                <button type="button" onClick={()=>removePending(p.id)} style={{padding:"4px",borderRadius:5,border:"1px solid #fecaca",background:"#fff",cursor:"pointer",display:"flex",flexShrink:0,marginLeft:8}}>
-                  <X size={11} strokeWidth={2} color="#ef4444"/>
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Actions */}
       <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:4}}>
         <Btn variant="outline" onClick={onClose} disabled={saving}>Cancel</Btn>
-        <Btn variant="primary" onClick={()=>onSubmit(pending)} disabled={pending.length===0||saving} style={{gap:6,minWidth:140,justifyContent:"center"}}>
+        <Btn variant="primary" onClick={onSubmit} disabled={!canSubmit||saving} style={{gap:6,minWidth:140,justifyContent:"center"}}>
           {saving
             ? <><Loader size={13} style={{animation:"spin .8s linear infinite"}}/>Saving…</>
-            : <><Plus size={13} strokeWidth={2}/>Save All ({pending.length})</>
+            : <><Plus size={13} strokeWidth={2}/>{onLeave?"Save On Leave":"Create Allocations"}</>
           }
         </Btn>
       </div>
@@ -2515,402 +2310,17 @@ function AddAllocationForm({newForm,setNewForm,realEmps,realContracts,allocs,HPM
   );
 }
 
-function AllocEmpCard({emp,u,allocs,chartMonth,HPM,fmtH,fmtLong}){
-  const effCap=u.effectiveHPM||HPM;
-  const pct=Math.round(u.percentage);
-  const theme=getCapTheme(pct,u.totalHours,HPM,u.onLeave);
-  const meta=DEPT_COLORS[emp.department]||{color:"#475569",bg:"#f1f5f9"};
-  const clients=allocs.filter(a=>a.employee_id===emp.id&&a.month===chartMonth&&!isLeave(a.status)&&(a.allocated_hours||0)>0).map(a=>({name:a.client_name||"",hours:a.allocated_hours||0}));
-  const leaveRecords=allocs.filter(a=>a.employee_id===emp.id&&a.month===chartMonth&&isLeave(a.status));
-  const [open,setOpen]=useState(false);
-  const ref=React.useRef(null);
-  React.useEffect(()=>{
-    if(!open) return;
-    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
-    document.addEventListener("mousedown",h);
-    return()=>document.removeEventListener("mousedown",h);
-  },[open]);
-  const toggle=()=>setOpen(v=>!v);
-  const over=u.totalHours>effCap;
-  const fmtD=d=>d?new Date(d+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"}):"—";
-  return(
-    <div ref={ref} style={{position:"relative",padding:"12px 14px",borderRadius:12,border:`1.5px solid ${open?meta.color:theme.border}`,background:theme.cardBg,boxShadow:open?"0 4px 12px rgba(0,0,0,.08)":"0 1px 3px rgba(0,0,0,.04)",transition:"all .15s ease"}}>
-      {/* Header */}
-      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:8}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
-          <div style={{width:32,height:32,borderRadius:8,background:`linear-gradient(135deg,${meta.color},${meta.color}88)`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:11,color:"#fff",flexShrink:0}}>
-            {emp.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}
-          </div>
-          <div style={{minWidth:0}}>
-            <p style={{margin:0,fontWeight:700,fontSize:11,color:"#0f172a",lineHeight:1.4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{emp.name}</p>
-            <p style={{margin:0,fontSize:10,color:"#94a3b8",lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{emp.designation||emp.department?.replace(" Department","")}</p>
-          </div>
-        </div>
-        {(clients.length>0||u.onLeave)&&(
-          <button onClick={toggle} style={{padding:"4px",borderRadius:5,border:`1px solid ${open?meta.color:"#e2e8f0"}`,background:open?meta.bg:"#fff",cursor:"pointer",display:"flex",alignItems:"center",flexShrink:0,marginLeft:4,transition:"all .15s"}}>
-            <Eye size={11} strokeWidth={1.75} color={open?meta.color:"#94a3b8"}/>
-          </button>
-        )}
-      </div>
-      {/* Dept badge + month pill */}
-      <div style={{display:"flex",gap:5,alignItems:"center",marginBottom:8}}>
-        <span style={{padding:"2px 7px",borderRadius:999,background:meta.bg,color:meta.color,fontSize:9,fontWeight:600}}>{emp.department?.replace(" Department","")}</span>
-        <span style={{padding:"2px 7px",borderRadius:999,background:"#f1f5f9",color:"#475569",fontSize:9,fontWeight:600}}>{fmtLong(chartMonth)}</span>
-      </div>
-      {/* Progress bar */}
-      <div style={{height:6,borderRadius:99,background:"rgba(0,0,0,.07)",overflow:"hidden",marginBottom:6}}>
-        <div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:theme.barColor,borderRadius:99,transition:"width .4s ease"}}/>
-      </div>
-      {/* Hours + badge */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <span style={{fontSize:10,color:"#64748b",lineHeight:1.4}}>
-          {u.totalHours===0&&!u.onLeave
-            ?<span style={{color:"#94a3b8"}}>0h</span>
-            :<><strong style={{color:"#0f172a"}}>{fmtH(u.totalHours)}h</strong> · {fmtH(Math.max(0,effCap-u.totalHours))}h free</>
-          }
-        </span>
-        <span style={{padding:"1px 7px",borderRadius:999,background:theme.badgeBg,color:theme.badgeColor,fontSize:9,fontWeight:700}}>{u.totalHours===0?"Unallocated":theme.label}</span>
-      </div>
-      {/* Over warning */}
-      {over&&!u.onLeave&&(
-        <div style={{marginTop:6,display:"flex",alignItems:"center",gap:4,padding:"3px 7px",background:"#fee2e2",borderRadius:5,border:"1px solid #fca5a5"}}>
-          <AlertTriangle size={9} strokeWidth={2} color="#ef4444"/>
-          <span style={{fontSize:9,color:"#ef4444",fontWeight:600}}>Over by {fmtH(u.totalHours-effCap)}h</span>
-        </div>
-      )}
-      {/* Eye dropdown */}
-      {(clients.length>0||u.onLeave)&&(
-        <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,width:"100%",minWidth:200,background:"#fff",border:`1.5px solid ${meta.color}`,borderRadius:12,padding:"11px 13px",boxShadow:"0 8px 28px rgba(0,0,0,.15)",opacity:open?1:0,transform:open?"translateY(0)":"translateY(-6px)",transition:"opacity .18s ease,transform .18s ease",pointerEvents:open?"auto":"none",zIndex:50}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}>
-            <div>
-              <p style={{margin:0,fontWeight:700,fontSize:11,color:"#0f172a"}}>{emp.name}</p>
-              <p style={{margin:"1px 0 0",fontSize:9,color:"#94a3b8"}}>{clients.length} client{clients.length!==1?"s":""} · {fmtH(u.totalHours)}h total · Effective cap: {fmtH(effCap)}h</p>
-            </div>
-            <button onClick={()=>setOpen(false)} style={{padding:3,borderRadius:5,border:"1px solid #e2e8f0",background:"#fff",cursor:"pointer",display:"flex"}}><X size={10} strokeWidth={2} color="#94a3b8"/></button>
-          </div>
-          {leaveRecords.length>0&&(
-            <div style={{marginBottom:9,display:"flex",flexDirection:"column",gap:5}}>
-              <p style={{margin:"0 0 4px",fontSize:8,fontWeight:700,color:"#d97706",textTransform:"uppercase",letterSpacing:".06em"}}>Leave This Month</p>
-              {leaveRecords.map((lr,i)=>(
-                <div key={i} style={{padding:"6px 10px",background:"#fef9c3",borderRadius:7,border:"1px solid #fde68a"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
-                    <span style={{fontSize:10,fontWeight:700,color:"#d97706"}}>{lr.status}</span>
-                    <span style={{fontSize:10,fontWeight:700,color:"#92400e"}}>{lr.capacity_deduction||0}h deducted</span>
-                  </div>
-                  {lr.leave_from&&lr.leave_to&&(
-                    <p style={{margin:0,fontSize:9,color:"#92400e"}}>{fmtD(lr.leave_from)} → {fmtD(lr.leave_to)} · {lr.leave_days||0} days</p>
-                  )}
-                </div>
-              ))}
-              <p style={{margin:"2px 0 0",fontSize:9,color:"#92400e",fontWeight:600}}>Total: {u.leaveDeduction}h deducted · Effective cap: {fmtH(effCap)}h of {HPM}h</p>
-            </div>
-          )}
-          {clients.length>0&&(
-            <>
-              <p style={{margin:"0 0 6px",fontSize:8,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:".06em"}}>Client breakdown</p>
-              <div style={{overflowY:"auto",maxHeight:200,overscrollBehavior:"contain"}}>
-                {clients.map((c,i)=>{
-                  const share=u.totalHours>0?Math.round((c.hours/u.totalHours)*100):0;
-                  return(
-                    <div key={i} style={{marginBottom:7}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:2}}>
-                        <span style={{fontSize:11,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,marginRight:8,lineHeight:1.4}}>{c.name}</span>
-                        <span style={{fontSize:11,fontWeight:700,color:"#008A57",flexShrink:0,fontVariantNumeric:"tabular-nums"}}>{fmtH(c.hours)}h</span>
-                      </div>
-                      <div style={{height:4,borderRadius:99,background:"#f1f5f9",overflow:"hidden"}}>
-                        <div style={{height:"100%",width:`${share}%`,background:meta.color,borderRadius:99,opacity:.6}}/>
-                      </div>
-                      <p style={{margin:"1px 0 0",fontSize:9,color:"#94a3b8"}}>{share}% of total</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── EXCEL IMPORT FEATURE ─────────────────────────────────────────────────────
-const ACQ_TEMPLATE_B64="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";
-
-function generateAllocationTemplate(realEmps,realContracts,ALLOC_MONTHS,allowedDepts=null){
-  // Admin gets the raw embedded template (full employee list, _Ref sheet)
-  if(!allowedDepts){
-    try{
-      const binaryStr=atob(ACQ_TEMPLATE_B64);
-      const bytes=new Uint8Array(binaryStr.length);
-      for(let i=0;i<binaryStr.length;i++) bytes[i]=binaryStr.charCodeAt(i);
-      const blob=new Blob([bytes],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
-      const url=URL.createObjectURL(blob);
-      const a=document.createElement("a");
-      a.href=url;a.download="ACQ_Allocation_Template.xlsx";
-      document.body.appendChild(a);a.click();
-      document.body.removeChild(a);URL.revokeObjectURL(url);
-    }catch(err){alert("Failed to download template.");}
-    return;
-  }
-
-  // Manager gets template with _Ref swapped via JSZip (preserves Allocations formatting+dropdowns)
-  const loadJSZip=(cb)=>{
-    if(window.JSZip){cb();return;}
-    const s=document.createElement("script");
-    s.src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
-    s.onload=()=>cb();
-    s.onerror=()=>{alert("Failed to load JSZip.");};
-    document.head.appendChild(s);
-  };
-
-  loadJSZip(async()=>{
-    try{
-      const deptEmps=realEmps.filter(e=>e.status==="Active"&&allowedDepts.includes(e.department)).map(e=>e.name).sort();
-      const clientNames=[...new Set(realContracts.map(c=>c.cn||c.client_name))].sort();
-      const monthLabels=ALLOC_MONTHS.map(m=>m.l);
-      const maxLen=Math.max(deptEmps.length,clientNames.length,monthLabels.length);
-
-      // Build _Ref sheet XML using inline strings (t="inlineStr") — no shared strings needed
-      const escXml=s=>(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-      let rows=`<row r="1">`;
-      rows+=`<c r="A1" t="inlineStr"><is><t>Employees</t></is></c>`;
-      rows+=`<c r="B1" t="inlineStr"><is><t>Clients</t></is></c>`;
-      rows+=`<c r="C1" t="inlineStr"><is><t>Months</t></is></c>`;
-      rows+=`</row>`;
-
-      for(let i=0;i<maxLen;i++){
-        const r=i+2;
-        rows+=`<row r="${r}">`;
-        if(deptEmps[i]) rows+=`<c r="A${r}" t="inlineStr"><is><t>${escXml(deptEmps[i])}</t></is></c>`;
-        if(clientNames[i]) rows+=`<c r="B${r}" t="inlineStr"><is><t>${escXml(clientNames[i])}</t></is></c>`;
-        if(monthLabels[i]) rows+=`<c r="C${r}" t="inlineStr"><is><t>${escXml(monthLabels[i])}</t></is></c>`;
-        rows+=`</row>`;
-      }
-
-      const refXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
-        `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`+
-        `<sheetData>${rows}</sheetData>`+
-        `</worksheet>`;
-
-      // Load base64 template as zip
-      const binaryStr=atob(ACQ_TEMPLATE_B64);
-      const bytes=new Uint8Array(binaryStr.length);
-      for(let i=0;i<binaryStr.length;i++) bytes[i]=binaryStr.charCodeAt(i);
-      const zip=await window.JSZip.loadAsync(bytes);
-
-      // Only swap sheet2.xml (_Ref) — don't touch shared strings or any other file
-      zip.file("xl/worksheets/sheet2.xml",refXml);
-
-      const out=await zip.generateAsync({type:"uint8array",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
-      const blob=new Blob([out],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
-      const url=URL.createObjectURL(blob);
-      const a=document.createElement("a");
-      a.href=url;a.download="ACQ_Allocation_Template.xlsx";
-      document.body.appendChild(a);a.click();
-      document.body.removeChild(a);URL.revokeObjectURL(url);
-    }catch(err){
-      console.error("Manager template error:",err);
-      alert("Failed to generate template: "+err.message);
-    }
-  });
-}
-
-function parseAllocationFile(file,realEmps,realContracts,ALLOC_MONTHS,snapshots,cb){
-  loadXlsxStyle(()=>{
-    const XS=window.XLSX;
-    const reader=new FileReader();
-    reader.onload=e=>{
-      try{
-        const wb=XS.read(new Uint8Array(e.target.result),{type:"array"});
-        const ws=wb.Sheets["Allocations"]||wb.Sheets[wb.SheetNames[0]];
-        const rows=XS.utils.sheet_to_json(ws,{header:1,defval:""}).slice(1).filter(r=>r.some(c=>String(c).trim()!==""));
-        const monthMap={};ALLOC_MONTHS.forEach(m=>{monthMap[m.l.toLowerCase()]=m.v;});
-        const empMap={};realEmps.forEach(e=>{empMap[e.name.toLowerCase().trim()]=e;});
-        const clientMap={};realContracts.forEach(c=>{clientMap[(c.cn||c.client_name||"").toLowerCase().trim()]=c;});
-        const results=rows.map((row,idx)=>{
-          const monthRaw=String(row[0]||"").trim(),empRaw=String(row[1]||"").trim(),clientRaw=String(row[2]||"").trim(),hoursRaw=String(row[3]||"").trim(),notes=String(row[4]||"").trim();
-          const errors=[];
-          const monthVal=monthMap[monthRaw.toLowerCase()];
-          if(!monthRaw)errors.push("Month required");
-          else if(!monthVal)errors.push(`Invalid month: "${monthRaw}"`);
-          else if(snapshots.some(s=>s.month===monthVal&&s.is_closed))errors.push(`"${monthRaw}" is closed`);
-          const emp=empMap[empRaw.toLowerCase()];
-          if(!empRaw)errors.push("Employee required");
-          else if(!emp)errors.push(`Employee not found: "${empRaw}"`);
-          const ct=clientMap[clientRaw.toLowerCase()];
-          if(!clientRaw)errors.push("Client required");
-          else if(!ct)errors.push(`Client not found: "${clientRaw}"`);
-          const hours=parseFloat(hoursRaw);
-          if(!hoursRaw)errors.push("Hours required");
-          else if(isNaN(hours)||hours<=0)errors.push(`Invalid hours: "${hoursRaw}"`);
-          else if(hours>176)errors.push(`Exceeds 176h max`);
-          return{rowNum:idx+2,monthRaw,monthVal,empRaw,emp,clientRaw,ct,hours,notes,errors,valid:errors.length===0};
-        });
-        cb(null,results);
-      }catch(err){cb(err.message||"Failed to parse file",null);}
-    };
-    reader.readAsArrayBuffer(file);
-  });
-}
-
-function ImportPreviewModal({open,onClose,results,onImport,importing}){
-  const [expanded,setExpanded]=useState({});
-  if(!open)return null;
-  const valid=results.filter(r=>r.valid),errors=results.filter(r=>!r.valid);
-  const grouped=[],groupMap={};
-  valid.forEach(r=>{
-    const key=`${r.emp?.id}_${r.monthVal}`;
-    if(!groupMap[key]){groupMap[key]={empName:r.emp?.name||r.empRaw,month:r.monthVal,monthRaw:r.monthRaw,totalHours:0,clients:[]};grouped.push(groupMap[key]);}
-    groupMap[key].totalHours+=r.hours;
-    groupMap[key].clients.push({name:r.ct?.cn||r.ct?.client_name||r.clientRaw,hours:r.hours});
-  });
-  return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:680,maxHeight:"90vh",overflowY:"auto",border:"1px solid #e2e8f0",boxShadow:"0 25px 50px rgba(0,0,0,.2)"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 22px",borderBottom:"1px solid #e2e8f0",position:"sticky",top:0,background:"#fff",zIndex:1}}>
-          <div><h3 style={{margin:0,fontSize:16,fontWeight:700,color:"#0f172a"}}>Import Preview</h3><p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>{results.length} rows parsed</p></div>
-          <button onClick={onClose} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#64748b"}}>&times;</button>
-        </div>
-        <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:16}}>
-          <div style={{display:"flex",gap:10}}>
-            <div style={{flex:1,padding:"12px 16px",background:"#f0fdf4",borderRadius:10,border:"1px solid #a7f3d0",textAlign:"center"}}>
-              <p style={{margin:0,fontSize:22,fontWeight:800,color:"#059669"}}>{valid.length}</p>
-              <p style={{margin:0,fontSize:11,color:"#059669",fontWeight:600}}>Ready to import</p>
-            </div>
-            {errors.length>0&&(
-              <div style={{flex:1,padding:"12px 16px",background:"#fef2f2",borderRadius:10,border:"1px solid #fca5a5",textAlign:"center"}}>
-                <p style={{margin:0,fontSize:22,fontWeight:800,color:"#ef4444"}}>{errors.length}</p>
-                <p style={{margin:0,fontSize:11,color:"#ef4444",fontWeight:600}}>Errors (will be skipped)</p>
-              </div>
-            )}
-          </div>
-          {grouped.length>0&&(
-            <div>
-              <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#0f172a",textTransform:"uppercase",letterSpacing:".05em"}}>Employee Summary</p>
-              <div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden"}}>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 140px 100px",background:"#f8fafc",padding:"8px 14px",borderBottom:"1px solid #e2e8f0"}}>
-                  <span style={{fontSize:11,fontWeight:700,color:"#64748b"}}>EMPLOYEE</span>
-                  <span style={{fontSize:11,fontWeight:700,color:"#64748b"}}>MONTH</span>
-                  <span style={{fontSize:11,fontWeight:700,color:"#64748b",textAlign:"right"}}>TOTAL HOURS</span>
-                </div>
-                {grouped.map((g,i)=>{
-                  const key=`${g.empName}_${g.month}`;const isOpen=expanded[key];
-                  return(
-                    <div key={key} style={{borderBottom:i<grouped.length-1?"1px solid #f1f5f9":"none"}}>
-                      <div onClick={()=>setExpanded(p=>({...p,[key]:!isOpen}))}
-                        style={{display:"grid",gridTemplateColumns:"1fr 140px 100px",padding:"10px 14px",cursor:"pointer",background:isOpen?"#f0fdf4":"#fff",transition:"background .15s"}}
-                        onMouseEnter={e=>{if(!isOpen)e.currentTarget.style.background="#f8fafc";}}
-                        onMouseLeave={e=>{if(!isOpen)e.currentTarget.style.background="#fff";}}>
-                        <div style={{display:"flex",alignItems:"center",gap:6}}>
-                          <span style={{fontSize:11,color:"#94a3b8",display:"inline-block",transform:isOpen?"rotate(90deg)":"none",transition:"transform .2s"}}>▶</span>
-                          <span style={{fontSize:13,fontWeight:600,color:"#0f172a"}}>{g.empName}</span>
-                        </div>
-                        <span style={{fontSize:12,color:"#475569",alignSelf:"center"}}>{g.monthRaw}</span>
-                        <span style={{fontSize:13,fontWeight:700,color:"#008A57",textAlign:"right",alignSelf:"center"}}>{g.totalHours}h</span>
-                      </div>
-                      {isOpen&&(
-                        <div style={{background:"#f8fafc",padding:"8px 14px 10px 36px",borderTop:"1px solid #f1f5f9"}}>
-                          {g.clients.map((c,ci)=>(
-                            <div key={ci} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:ci<g.clients.length-1?"1px solid #f1f5f9":"none"}}>
-                              <span style={{fontSize:12,color:"#475569"}}>→ {c.name}</span>
-                              <span style={{fontSize:12,fontWeight:600,color:"#008A57"}}>{c.hours}h</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          {errors.length>0&&(
-            <div>
-              <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#ef4444",textTransform:"uppercase",letterSpacing:".05em"}}>⚠ Skipped Rows ({errors.length})</p>
-              <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                {errors.map((r,i)=>(
-                  <div key={i} style={{padding:"9px 12px",background:"#fef2f2",borderRadius:8,border:"1px solid #fca5a5"}}>
-                    <p style={{margin:"0 0 3px",fontSize:12,fontWeight:600,color:"#991b1b"}}>Row {r.rowNum}: {r.empRaw||"(no employee)"} — {r.clientRaw||"(no client)"}</p>
-                    <p style={{margin:0,fontSize:11,color:"#ef4444"}}>{r.errors.join(" · ")}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:4}}>
-            <Btn variant="outline" onClick={onClose} disabled={importing}>Cancel</Btn>
-            <Btn variant="primary" onClick={()=>onImport(valid)} disabled={valid.length===0||importing}>
-              {importing?<><Loader size={13} style={{animation:"spin .8s linear infinite"}}/>Importing…</>:<><Download size={13} strokeWidth={2}/>Import {valid.length} Rows</>}
-            </Btn>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ImportSuccessModal({open,onClose,log}){
-  if(!open||!log)return null;
-  return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"90vh",overflowY:"auto",border:"1px solid #e2e8f0",boxShadow:"0 25px 50px rgba(0,0,0,.2)"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 22px",borderBottom:"1px solid #e2e8f0"}}>
-          <h3 style={{margin:0,fontSize:16,fontWeight:700,color:"#0f172a"}}>Import Complete</h3>
-          <button onClick={onClose} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#64748b"}}>&times;</button>
-        </div>
-        <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:14}}>
-          <div style={{padding:"16px",background:"#f0fdf4",borderRadius:12,border:"1px solid #a7f3d0",textAlign:"center"}}>
-            <p style={{margin:"0 0 4px",fontSize:28,fontWeight:800,color:"#059669"}}>{log.total}</p>
-            <p style={{margin:0,fontSize:13,fontWeight:600,color:"#059669"}}>Allocations imported successfully</p>
-            <p style={{margin:"4px 0 0",fontSize:11,color:"#059669"}}>{log.date} · {log.skipped} rows skipped</p>
-          </div>
-          <div>
-            <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".05em"}}>Transaction Details</p>
-            <div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden"}}>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 120px 90px",background:"#f8fafc",padding:"7px 14px",borderBottom:"1px solid #e2e8f0"}}>
-                <span style={{fontSize:11,fontWeight:700,color:"#64748b"}}>EMPLOYEE</span>
-                <span style={{fontSize:11,fontWeight:700,color:"#64748b"}}>MONTH</span>
-                <span style={{fontSize:11,fontWeight:700,color:"#64748b",textAlign:"right"}}>HOURS</span>
-              </div>
-              <div style={{maxHeight:300,overflowY:"auto"}}>
-                {log.rows.map((r,i)=>(
-                  <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 120px 90px",padding:"8px 14px",borderBottom:i<log.rows.length-1?"1px solid #f1f5f9":"none",background:i%2===0?"#fff":"#fafafa"}}>
-                    <span style={{fontSize:12,color:"#0f172a",fontWeight:500}}>{r.employee_name}</span>
-                    <span style={{fontSize:12,color:"#475569"}}>{fmtLong(r.month)}</span>
-                    <span style={{fontSize:12,fontWeight:700,color:"#008A57",textAlign:"right"}}>{r.allocated_hours}h</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div style={{display:"flex",justifyContent:"flex-end"}}>
-            <Btn variant="primary" onClick={onClose}>Done</Btn>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function AllocationsPage(){
-  const {sb,allowedDepts,profile}=useAuth();
+  const {sb,allowedDepts}=useAuth();
   const toast=useToast();
   const confirm=useConfirm();
   const [allocs,setAllocs]=useState([]);
   const [loading,setLoading]=useState(true);
   const mapA=a=>({...a,eid:a.employee_id,cid:a.client_id,h:a.allocated_hours});
   useEffect(()=>{
-    const fetchAllocs=async()=>{
-      const b1=await sb.from('allocations').select('*').range(0,999).order('month',{ascending:false});
-      const b2=await sb.from('allocations').select('*').range(1000,1999).order('month',{ascending:false});
-      const b3=await sb.from('allocations').select('*').range(2000,2999).order('month',{ascending:false});
-      const all=[...(b1.data||[]),...(b2.data||[]),...(b3.data||[])];
-      if(all.length)setAllocs(all.map(mapA));
-      setLoading(false);
-    };
-    fetchAllocs();
+    sb.from('allocations').select('*').order('month',{ascending:false}).then(({data})=>{if(data)setAllocs(data.map(mapA));setLoading(false);});
   },[sb]);
-  const dbBulkAdd=async items=>{const rows=items.map(a=>({employee_id:a.employee_id,employee_name:a.employee_name,employee_monthly_cost:a.employee_monthly_cost||0,client_id:a.client_id||null,client_name:a.client_name||'',contract_id:a.contract_id||null,allocated_hours:a.allocated_hours||0,month:a.month,status:a.status||'Assigned',notes:a.notes||'',leave_from:a.leave_from||null,leave_to:a.leave_to||null,leave_days:a.leave_days||0,capacity_deduction:a.capacity_deduction||0,...(a.batch_id?{batch_id:a.batch_id}:{})}));const{data,error}=await sb.from('allocations').insert(rows).select();if(error)throw new Error(error.message);if(data)setAllocs(p=>[...p,...data.map(mapA)]);};
+  const dbBulkAdd=async items=>{const rows=items.map(a=>({employee_id:a.employee_id,employee_name:a.employee_name,employee_monthly_cost:a.employee_monthly_cost||0,client_id:a.client_id||null,client_name:a.client_name||'',contract_id:a.contract_id||null,allocated_hours:a.allocated_hours||0,month:a.month,status:a.status||'Assigned',notes:a.notes||'',leave_from:a.leave_from||null,leave_to:a.leave_to||null,leave_days:a.leave_days||0,capacity_deduction:a.capacity_deduction||0}));const{data,error}=await sb.from('allocations').insert(rows).select();if(error)throw new Error(error.message);if(data)setAllocs(p=>[...p,...data.map(mapA)]);};
   const dbUpdate=async(id,p)=>{const{data}=await sb.from('allocations').update({allocated_hours:p.allocated_hours,month:p.month,notes:p.notes}).eq('id',id).select().single();if(data)setAllocs(x=>x.map(a=>a.id===id?mapA(data):a));};
   const dbDelete=async id=>{await sb.from('allocations').delete().eq('id',id);setAllocs(x=>x.filter(a=>a.id!==id));};
   const [search,setSearch]       = useState("");
@@ -2960,10 +2370,10 @@ function AllocationsPage(){
     const map={};
     (realEmps).forEach(emp=>{
       const empAllocs=allocs.filter(a=>a.employee_id===emp.id&&a.month===month);
-      const h=empAllocs.filter(a=>!isLeave(a.status)).reduce((s,a)=>s+(a.allocated_hours||0),0);
-      const leaveDeduction=empAllocs.filter(a=>isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
+      const h=empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
+      const leaveDeduction=empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
       const effectiveHPM=Math.max(0,HPM-leaveDeduction);
-      const onLeave=empAllocs.some(a=>isLeave(a.status));
+      const onLeave=empAllocs.some(a=>a.status==='On Leave');
       map[emp.id]={totalHours:h,availableHours:Math.max(0,effectiveHPM-h),percentage:effectiveHPM>0?(h/effectiveHPM)*100:0,effectiveHPM,leaveDeduction,onLeave};
     });
     return map;
@@ -2979,7 +2389,7 @@ function AllocationsPage(){
   const getRemainingHours=(empId,month,excludeId=null)=>{
     const empAllocs=allocs.filter(a=>a.employee_id===empId&&a.month===month&&a.id!==excludeId);
     const used=empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
-    const leaveDeduction=empAllocs.filter(a=>isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
+    const leaveDeduction=empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
     const effectiveHPM=Math.max(0,HPM-leaveDeduction);
     return Math.max(0,effectiveHPM-used);
   };
@@ -2988,7 +2398,7 @@ function AllocationsPage(){
     const emp=(realEmps).find(e=>e.id===a.employee_id);
     const ct=(realContracts).find(c=>c.id===a.contract_id);
     const ms=!search||a.employee_name?.toLowerCase().includes(search.toLowerCase())||a.client_name?.toLowerCase().includes(search.toLowerCase());
-    const isOnLeave=isLeave(a.status);
+    const isOnLeave=a.status==="On Leave";
     const deptAllowed = !allowedDepts || allowedDepts.includes(emp?.department);
     return ms&&deptAllowed&&(filterEmp==="all"||a.employee_id===filterEmp)&&(filterCli==="all"||a.client_id===filterCli)&&(filterDept==="all"||emp?.department===filterDept)&&(filterCat==="all"||isOnLeave||(ct?.contract_category||"Retainer")===filterCat);
   }),[allocs,search,filterEmp,filterCli,filterDept,filterCat]);
@@ -3030,7 +2440,7 @@ function AllocationsPage(){
 
   const closeModal=()=>{setModalOpen(false);setEditing(null);setFormStep(1);setSelMonth("");setSelEmpIds([]);setEmpAllocs({});setEmpSearch("");setConfirmOpen(false);setNewForm({month:"",empStatus:"in_duty",clientId:"",clientCat:"all",notes:"",rows:[{id:1,empId:"",hours:""}],leaveFrom:"",leaveTo:""});};
   const openAdd=()=>{setEditing(null);setFormStep(1);setSelMonth("");setSelEmpIds([]);setEmpAllocs({});setNewForm({month:"",empStatus:"in_duty",clientId:"",clientCat:"all",notes:"",rows:[{id:1,empId:"",hours:""}],leaveFrom:"",leaveTo:""});setModalOpen(true);};
-  const openEdit=a=>{setEditing(a);setEditForm({allocated_hours:a.allocated_hours,month:a.month,notes:a.notes||"",leave_from:a.leave_from||"",leave_to:a.leave_to||""});setModalOpen(true);};
+  const openEdit=a=>{setEditing(a);setEditForm({allocated_hours:a.allocated_hours,month:a.month,notes:a.notes||""});setModalOpen(true);};
 
   const handleEmpToggle=(id,checked)=>{
     if(checked){setSelEmpIds(p=>[...p,id]);setEmpAllocs(p=>({...p,[id]:{hours:"",notes:"",client_id:""}}));}
@@ -3039,33 +2449,42 @@ function AllocationsPage(){
   const updEmpAlloc=(id,k,v)=>setEmpAllocs(p=>({...p,[id]:{...p[id],[k]:v}}));
 
   const [newFormSaving,setNewFormSaving]=useState(false);
-  const handleNewSubmit=async(pending)=>{
-    if(newFormSaving||!pending||pending.length===0)return;
+  const handleNewSubmit=async()=>{
+    if(newFormSaving)return; // prevent double-submit
+    const{month,empStatus,clientId,notes,rows}=newForm;
+    if(!month)return;
     setNewFormSaving(true);
     try{
-      const toSave=pending.map(p=>({
-        employee_id:p.employee_id,
-        employee_name:p.employee_name,
-        employee_monthly_cost:p.employee_monthly_cost||0,
-        client_id:p.client_id||null,
-        client_name:p.client_name||"",
-        contract_id:p.contract_id||null,
-        allocated_hours:p.allocated_hours||0,
-        month:p.month,
-        status:p.status,
-        notes:p.notes||"",
-        leave_from:p.leave_from||null,
-        leave_to:p.leave_to||null,
-        leave_days:p.leave_days||0,
-        capacity_deduction:p.capacity_deduction||0,
-      }));
-      await dbBulkAdd(toSave);
-      toast(`${toSave.length} allocation(s) saved`,"success");
+      if(empStatus==="on_leave"){
+        const{leaveFrom,leaveTo}=newForm;
+        const lDays=countWorkingDays(leaveFrom,leaveTo);
+        const capDed=Math.round(lDays*(176/22));
+        const onLeaveRows=rows.filter(r=>r.empId).map(r=>{
+          const emp=realEmps.find(e=>e.id===r.empId);
+          return{employee_id:r.empId,employee_name:emp?.name||"",employee_monthly_cost:emp?.mc||0,
+                 client_id:null,client_name:"",contract_id:null,
+                 allocated_hours:0,month,status:"On Leave",notes:notes||"",
+                 leave_from:leaveFrom,leave_to:leaveTo,leave_days:lDays,capacity_deduction:capDed};
+        });
+        if(onLeaveRows.length) await dbBulkAdd(onLeaveRows);
+        toast(`${onLeaveRows.length} On Leave allocation(s) saved - ${lDays} day(s), ${capDed}h deducted`,"success");
+      } else {
+        const ct=realContracts.find(c=>c.id===clientId);
+        const toCreate=rows.filter(r=>r.empId&&parseFloat(r.hours)>0).map(r=>{
+          const emp=realEmps.find(e=>e.id===r.empId);
+          return{employee_id:r.empId,employee_name:emp?.name||"",employee_monthly_cost:emp?.mc||0,
+                 client_id:ct?.cid||ct?.client_id||"",client_name:ct?.cn||ct?.client_name||"",
+                 contract_id:clientId,allocated_hours:parseFloat(r.hours),
+                 month,status:"Assigned",notes:notes||""};
+        });
+        if(toCreate.length) await dbBulkAdd(toCreate);
+        toast(`${toCreate.length} allocation(s) created`,"success");
+      }
       closeModal();
-    }catch(err){
+    } catch(err){
       console.error("Allocation save error:",err);
       toast("Failed to save allocations. Please try again.","error");
-    }finally{
+    } finally{
       setNewFormSaving(false);
     }
   };
@@ -3090,118 +2509,14 @@ function AllocationsPage(){
 
   const handleEditSubmit=async e=>{
     e.preventDefault();
-    if(isLeave(editing.status)){
-      const lDays=countWorkingDays(editForm.leave_from,editForm.leave_to);
-      const capDed=Math.round(lDays*(176/22));
-      await dbUpdate(editing.id,{leave_from:editForm.leave_from,leave_to:editForm.leave_to,leave_days:lDays,capacity_deduction:capDed,notes:editForm.notes});
-    } else {
-      const rem=getRemainingHours(editing.employee_id,editForm.month,editing.id);
-      if(parseFloat(editForm.allocated_hours)>rem+editing.allocated_hours){toast(`Only ${rem+editing.allocated_hours}h available.`);return;}
-      await dbUpdate(editing.id,{allocated_hours:parseFloat(editForm.allocated_hours),month:editForm.month,notes:editForm.notes});
-    }
+    const rem=getRemainingHours(editing.employee_id,editForm.month,editing.id);
+    if(parseFloat(editForm.allocated_hours)>rem+editing.allocated_hours){toast(`Only ${rem+editing.allocated_hours}h available.`);return;}
+    await dbUpdate(editing.id,{allocated_hours:parseFloat(editForm.allocated_hours),month:editForm.month,notes:editForm.notes});
     closeModal();
   };
 
   const del=async id=>{const ok=await confirm({title:'Delete allocation?',message:'This allocation will be permanently removed.',danger:true,confirmLabel:'Delete'});if(ok){dbDelete(id);toast('Allocation deleted','success');}};
-  const statusBadge=s=>s==="Assigned"?{bg:"#d1fae5",col:"#10b981"}:isLeave(s)?{bg:"#fef9c3",col:"#d97706"}:{bg:"#f1f5f9",col:"#64748b"};
-
-  // ── Excel Import state ──
-  const [importMenuOpen,setImportMenuOpen]=useState(false);
-  const [importResults,setImportResults]=useState(null);
-  const [importPreviewOpen,setImportPreviewOpen]=useState(false);
-  const [importSuccessOpen,setImportSuccessOpen]=useState(false);
-  const [importLog,setImportLog]=useState(null);
-  const [importLogOpen,setImportLogOpen]=useState(false);
-  const [importLogs,setImportLogs]=useState([]);
-  const [importLogsLoading,setImportLogsLoading]=useState(false);
-  const [importLogExpanded,setImportLogExpanded]=useState({});
-  const [reverting,setReverting]=useState(null);
-  const [importing,setImporting]=useState(false);
-  const importMenuRef=React.useRef(null);
-  const fileInputRef=React.useRef(null);
-  React.useEffect(()=>{
-    const h=e=>{if(importMenuRef.current&&!importMenuRef.current.contains(e.target))setImportMenuOpen(false);};
-    document.addEventListener("mousedown",h);
-    return()=>document.removeEventListener("mousedown",h);
-  },[]);
-  const loadImportLogs=async()=>{
-    setImportLogsLoading(true);
-    try{
-      let q=sb.from('import_logs').select('*').order('created_at',{ascending:false});
-      if(allowedDepts) q=q.eq('imported_by_email',profile?.email||"");
-      const{data}=await q;
-      if(data) setImportLogs(data);
-    }finally{setImportLogsLoading(false);}
-  };
-
-  const openImportLog=()=>{
-    setImportMenuOpen(false);
-    setImportLogOpen(true);
-    loadImportLogs();
-  };
-
-  const handleRevert=async(log)=>{
-    const ok=await confirm({title:"Revert import?",message:`This will delete all ${log.rows_count} allocations from this import. The log will be kept as a record.`,danger:true,confirmLabel:"Revert"});
-    if(!ok)return;
-    setReverting(log.id);
-    try{
-      const{error}=await sb.from('allocations').delete().eq('batch_id',log.batch_id);
-      if(error)throw new Error(error.message);
-      await sb.from('import_logs').update({reverted:true}).eq('id',log.id);
-      setImportLogs(p=>p.map(l=>l.id===log.id?{...l,reverted:true}:l));
-      setAllocs(p=>p.filter(a=>a.batch_id!==log.batch_id));
-      toast(`✓ ${log.rows_count} allocations reverted`,"success");
-    }catch(err){toast(err.message||"Revert failed","error");}
-    finally{setReverting(null);}
-  };
-
-  const handleFileUpload=e=>{
-    const file=e.target.files[0];if(!file)return;
-    e.target.value="";setImportMenuOpen(false);
-    parseAllocationFile(file,realEmps,realContracts,ALLOC_MONTHS,snapshots,(err,results)=>{
-      if(err){toast(err,"error");return;}
-      setImportResults(results);setImportPreviewOpen(true);
-    });
-  };
-  const handleImport=async(validRows)=>{
-    setImporting(true);
-    try{
-      const batchId=crypto.randomUUID();
-      const toSave=validRows.map(r=>({
-        employee_id:r.emp.id,employee_name:r.emp.name,employee_monthly_cost:r.emp.mc||0,
-        client_id:r.ct?.cid||r.ct?.client_id||null,client_name:r.ct?.cn||r.ct?.client_name||"",
-        contract_id:r.ct?.id||null,allocated_hours:r.hours,month:r.monthVal,
-        status:"Assigned",notes:r.notes||"",
-        batch_id:batchId,
-        leave_from:null,leave_to:null,leave_days:0,capacity_deduction:0,
-      }));
-      await dbBulkAdd(toSave);
-      // Save to import_logs
-      const months=[...new Set(toSave.map(r=>r.month))].sort().map(m=>fmtLong(m)).join(", ");
-      const logEntry={
-        batch_id:batchId,
-        imported_by:profile?.full_name||profile?.email||"Unknown",
-        imported_by_email:profile?.email||"",
-        department:allowedDepts?allowedDepts[0]||"":null,
-        rows_count:toSave.length,
-        months,
-        rows_detail:JSON.stringify(toSave.map(r=>({employee_name:r.employee_name,client_name:r.client_name,allocated_hours:r.allocated_hours,month:r.month}))),
-      };
-      const{data:savedLog}=await sb.from('import_logs').insert([logEntry]).select().single();
-      const localLog={
-        total:toSave.length,
-        skipped:importResults.filter(r=>!r.valid).length,
-        date:new Date().toLocaleString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}),
-        rows:toSave,
-        batch_id:batchId,
-      };
-      setImportLog(localLog);
-      if(savedLog) setImportLogs(p=>[savedLog,...p]);
-      setImportPreviewOpen(false);setImportSuccessOpen(true);
-      toast(`✓ ${toSave.length} allocations imported`,"success");
-    }catch(err){toast(err.message||"Import failed","error");}
-    finally{setImporting(false);}
-  };
+  const statusBadge=s=>s==="Assigned"?{bg:"#d1fae5",col:"#10b981"}:s==="On Leave"?{bg:"#fef9c3",col:"#d97706"}:{bg:"#f1f5f9",col:"#64748b"};
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:18}}>
@@ -3209,123 +2524,8 @@ function AllocationsPage(){
       {/* Header */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
         <div><h1 style={{fontSize:26,fontWeight:800,color:"#0f172a",margin:0}}>Team Allocations</h1><p style={{fontSize:13,color:"#64748b",lineHeight:1.5,marginTop:3}}>Assign employees to client projects</p></div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          {/* Excel Import button */}
-          <div ref={importMenuRef} style={{position:"relative"}}>
-            <button onClick={()=>setImportMenuOpen(v=>!v)}
-              style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#fff",cursor:"pointer",fontSize:13,fontWeight:600,color:"#475569",transition:"all .15s"}}
-              onMouseEnter={e=>{e.currentTarget.style.borderColor="#008A57";e.currentTarget.style.color="#008A57";}}
-              onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";}}>
-              <FileSpreadsheet size={14} strokeWidth={1.75}/>Excel Import <span style={{fontSize:10}}>▾</span>
-            </button>
-            {importMenuOpen&&(
-              <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,.12)",zIndex:50,minWidth:200,overflow:"hidden"}}>
-                <button onClick={()=>{setImportMenuOpen(false);generateAllocationTemplate(realEmps,realContracts,ALLOC_MONTHS,allowedDepts);}}
-                  style={{width:"100%",padding:"11px 16px",border:"none",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontSize:13,color:"#0f172a",textAlign:"left"}}
-                  onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
-                  onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
-                  <Download size={14} strokeWidth={1.75} color="#008A57"/>
-                  <div><p style={{margin:0,fontWeight:600}}>Download Template</p><p style={{margin:0,fontSize:11,color:"#64748b"}}>Get pre-formatted Excel</p></div>
-                </button>
-                <div style={{height:1,background:"#f1f5f9"}}/>
-                <button onClick={()=>{setImportMenuOpen(false);fileInputRef.current?.click();}}
-                  style={{width:"100%",padding:"11px 16px",border:"none",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontSize:13,color:"#0f172a",textAlign:"left"}}
-                  onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
-                  onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
-                  <Upload size={14} strokeWidth={1.75} color="#3b82f6"/>
-                  <div><p style={{margin:0,fontWeight:600}}>Upload & Import</p><p style={{margin:0,fontSize:11,color:"#64748b"}}>Import filled template</p></div>
-                </button>
-                <div style={{height:1,background:"#f1f5f9"}}/>
-                <button onClick={openImportLog}
-                  style={{width:"100%",padding:"11px 16px",border:"none",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontSize:13,color:"#0f172a",textAlign:"left"}}
-                  onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
-                  onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
-                  <History size={14} strokeWidth={1.75} color="#8b5cf6"/>
-                  <div><p style={{margin:0,fontWeight:600}}>Import Log</p><p style={{margin:0,fontSize:11,color:"#64748b"}}>View & revert past imports</p></div>
-                </button>
-              </div>
-            )}
-            <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFileUpload} style={{display:"none"}}/>
-          </div>
-          <Btn variant="primary" onClick={openAdd} style={{gap:6}}><Plus size={14} strokeWidth={2}/>Add Allocation</Btn>
-        </div>
+        <Btn variant="primary" onClick={openAdd} style={{gap:6}}><Plus size={14} strokeWidth={2}/>Add Allocation</Btn>
       </div>
-
-      {/* Import Modals */}
-      {importPreviewOpen&&importResults&&<ImportPreviewModal open={importPreviewOpen} onClose={()=>setImportPreviewOpen(false)} results={importResults} onImport={handleImport} importing={importing}/>}
-      {importSuccessOpen&&<ImportSuccessModal open={importSuccessOpen} onClose={()=>setImportSuccessOpen(false)} log={importLog}/>}
-
-      {/* Import Log Modal */}
-      {importLogOpen&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:680,maxHeight:"90vh",overflowY:"auto",border:"1px solid #e2e8f0",boxShadow:"0 25px 50px rgba(0,0,0,.2)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 22px",borderBottom:"1px solid #e2e8f0",position:"sticky",top:0,background:"#fff",zIndex:1}}>
-              <div><h3 style={{margin:0,fontSize:16,fontWeight:700,color:"#0f172a"}}>Import Log</h3><p style={{margin:"2px 0 0",fontSize:12,color:"#64748b"}}>{allowedDepts?"Your imports":"All imports across team"}</p></div>
-              <button onClick={()=>setImportLogOpen(false)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#64748b"}}>&times;</button>
-            </div>
-            <div style={{padding:"16px 22px",display:"flex",flexDirection:"column",gap:8}}>
-              {importLogsLoading?(
-                <div style={{padding:32,textAlign:"center",color:"#94a3b8"}}>Loading...</div>
-              ):importLogs.length===0?(
-                <div style={{padding:32,textAlign:"center",color:"#94a3b8"}}>No import logs found.</div>
-              ):importLogs.map(log=>{
-                const isOpen=importLogExpanded[log.id];
-                const rows=log.rows_detail?JSON.parse(log.rows_detail):[];
-                const isClosed=false; // could check months against snapshots
-                return(
-                  <div key={log.id} style={{border:`1px solid ${log.reverted?"#e2e8f0":"#e2e8f0"}`,borderRadius:10,overflow:"hidden",opacity:log.reverted?0.7:1}}>
-                    {/* Log row header */}
-                    <div onClick={()=>setImportLogExpanded(p=>({...p,[log.id]:!isOpen}))}
-                      style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",background:isOpen?"#f0fdf4":log.reverted?"#f8fafc":"#fff",cursor:"pointer",gap:8}}
-                      onMouseEnter={e=>{if(!isOpen)e.currentTarget.style.background="#f8fafc";}}
-                      onMouseLeave={e=>{if(!isOpen)e.currentTarget.style.background=log.reverted?"#f8fafc":"#fff";}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
-                        <span style={{fontSize:11,color:"#94a3b8",transform:isOpen?"rotate(90deg)":"none",transition:"transform .2s",display:"inline-block"}}>▶</span>
-                        <div style={{minWidth:0}}>
-                          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                            <span style={{fontSize:13,fontWeight:700,color:"#0f172a"}}>{log.imported_by}</span>
-                            <span style={{fontSize:11,color:"#64748b"}}>·</span>
-                            <span style={{fontSize:11,color:"#64748b"}}>{new Date(log.created_at).toLocaleString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}</span>
-                            <span style={{fontSize:11,color:"#64748b"}}>·</span>
-                            <span style={{padding:"1px 8px",borderRadius:999,background:"#f0fdf4",color:"#059669",fontSize:11,fontWeight:700}}>{log.rows_count} rows</span>
-                            <span style={{padding:"1px 8px",borderRadius:999,background:"#eff6ff",color:"#3b82f6",fontSize:11,fontWeight:600}}>{log.months}</span>
-                            {log.reverted&&<span style={{padding:"1px 8px",borderRadius:999,background:"#f1f5f9",color:"#94a3b8",fontSize:11,fontWeight:700}}>Reverted</span>}
-                          </div>
-                        </div>
-                      </div>
-                      {log.reverted?(
-                        <span style={{padding:"4px 12px",borderRadius:6,background:"#f1f5f9",color:"#94a3b8",fontSize:12,fontWeight:600,cursor:"default"}}>Reverted</span>
-                      ):(
-                        <Btn variant="danger" size="sm" disabled={reverting===log.id} onClick={e=>{e.stopPropagation();handleRevert(log);}}>
-                          <RotateCcw size={12} strokeWidth={2}/>{reverting===log.id?"Reverting...":"Revert"}
-                        </Btn>
-                      )}
-                    </div>
-                    {/* Expanded rows */}
-                    {isOpen&&rows.length>0&&(
-                      <div style={{borderTop:"1px solid #f1f5f9",maxHeight:280,overflowY:"auto"}}>
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 80px 70px",padding:"7px 16px",background:"#f8fafc",borderBottom:"1px solid #f1f5f9"}}>
-                          {["Employee","Client","Hours","Month"].map(h=>(
-                            <span key={h} style={{fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".04em"}}>{h}</span>
-                          ))}
-                        </div>
-                        {rows.map((r,i)=>(
-                          <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 80px 70px",padding:"8px 16px",borderBottom:i<rows.length-1?"1px solid #f8fafc":"none",background:i%2===0?"#fff":"#fafafa"}}>
-                            <span style={{fontSize:12,color:"#0f172a",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.employee_name}</span>
-                            <span style={{fontSize:12,color:"#475569",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.client_name}</span>
-                            <span style={{fontSize:12,fontWeight:700,color:"#008A57"}}>{r.allocated_hours}h</span>
-                            <span style={{fontSize:11,color:"#64748b"}}>{fmtLong(r.month)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Chart month selector */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -3377,10 +2577,28 @@ function AllocationsPage(){
       </div>
 
       {/* Capacity cards — all active employees for chartMonth (mirrors Base44) */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:10,minHeight:300,alignContent:"start"}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
         {(realEmps).filter(e=>isEmpActiveForMonth(e,chartMonth)).map(emp=>{
-          const u=utilMap[emp.id]||{totalHours:0,availableHours:HPM,percentage:0,effectiveHPM:HPM,leaveDeduction:0,onLeave:false};
-          return <AllocEmpCard key={emp.id} emp={emp} u={u} allocs={allocs} chartMonth={chartMonth} HPM={HPM} fmtH={fmtH} fmtLong={fmtLong}/>;
+          const u=utilMap[emp.id]||{totalHours:0,availableHours:HPM,percentage:0};
+          const ov=u.percentage>100,ok=u.percentage>=70&&u.percentage<=100;
+          const border=ov?"#fecaca":ok?"#a7f3d0":"#fde68a";
+          const bg2=ov?"#fff5f5":ok?"#f0fdf4":"#fffbeb";
+          const clr=ov?"#EF4444":ok?"#10b981":"#d97706";
+          return(
+            <Card key={emp.id} style={{background:bg2,borderColor:border,padding:14}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:7}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{width:30,height:30,borderRadius:8,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:clr,flexShrink:0}}>{emp.name.slice(0,2).toUpperCase()}</div>
+                  <div><p style={{margin:0,fontWeight:600,fontSize:12,color:"#0f172a",lineHeight:1.5}}>{emp.name}</p><p style={{margin:0,fontSize:10,color:"#64748b",lineHeight:1.5}}>{emp.designation}</p></div>
+                </div>
+                {ov&&<AlertTriangle size={12} strokeWidth={2} style={{color:"#ef4444",flexShrink:0}}/>}
+              </div>
+              <PBar val={u.percentage} color={clr}/>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#64748b",lineHeight:1.5,marginTop:3}}>
+                <span>{fmtH(u.totalHours)}h allocated</span><span>{fmtH(u.availableHours)}h available</span>
+              </div>
+            </Card>
+          );
         })}
       </div>
 
@@ -3509,10 +2727,10 @@ function AllocationsPage(){
                                     <div><p style={{margin:0,fontWeight:600,fontSize:13,color:"#0f172a",lineHeight:1.5}}>{a.employee_name||"—"}</p><p style={{margin:0,fontSize:11,color:"#64748b",lineHeight:1.5}}>{emp?.department?.replace(" Department","")||""}</p></div>
                                   </div>
                                 </td>
-                                <td style={{padding:"10px 13px",color:"#0f172a"}}>{isLeave(a.status)?<span style={{fontSize:11,fontWeight:600,color:"#d97706",background:"#fef9c3",padding:"2px 8px",borderRadius:999}}>{a.status}</span>:(a.client_name||"—")}</td>
+                                <td style={{padding:"10px 13px",color:"#0f172a"}}>{a.status==="On Leave"?<span style={{fontSize:11,fontWeight:600,color:"#d97706",background:"#fef9c3",padding:"2px 8px",borderRadius:999}}>On Leave</span>:(a.client_name||"—")}</td>
                                 <td style={{padding:"10px 13px",textAlign:"center"}}>
-                                  <span style={{display:"inline-flex",alignItems:"center",gap:5,background:isLeave(a.status)?"#fef9c3":"#f1f5f9",padding:"3px 10px",borderRadius:999,fontSize:12}}>
-                                    <span style={{display:"inline-flex",alignItems:"center",gap:4,color:isLeave(a.status)?"#d97706":"inherit"}}><Clock size={11} strokeWidth={1.75}/>{isLeave(a.status)?`${a.capacity_deduction||0}h deducted`:`${a.allocated_hours} hrs`}</span>
+                                  <span style={{display:"inline-flex",alignItems:"center",gap:5,background:"#f1f5f9",padding:"3px 10px",borderRadius:999,fontSize:12}}>
+                                    <span style={{display:"inline-flex",alignItems:"center",gap:4}}><Clock size={11} strokeWidth={1.75}/>{a.allocated_hours} hrs</span>
                                   </span>
                                 </td>
                                 <td style={{padding:"10px 13px",textAlign:"center"}}>
@@ -3540,9 +2758,8 @@ function AllocationsPage(){
                           const pct=Math.min(100,util.percentage||0);
                           const clr=pct>100?"#ef4444":pct>=70?"#10b981":"#d97706";
                           const sb2=statusBadge(a.status);
-                          const aIsLeave=isLeave(a.status);
                           return(
-                            <div key={a.id} style={{border:`1px solid ${aIsLeave?"#fde68a":"#e2e8f0"}`,borderRadius:10,padding:12,background:aIsLeave?"#fffbeb":"#fff",display:"flex",flexDirection:"column",gap:8}}>
+                            <div key={a.id} style={{border:"1px solid #e2e8f0",borderRadius:10,padding:12,background:"#fff",display:"flex",flexDirection:"column",gap:8}}>
                               <div style={{display:"flex",alignItems:"center",gap:8}}>
                                 <div style={{width:36,height:36,borderRadius:9,background:"linear-gradient(135deg,#3b82f6,#008A57)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:12,fontWeight:700,flexShrink:0}}>{(a.employee_name||"?").split(" ").map(n=>n[0]).join("").slice(0,2)}</div>
                                 <div style={{flex:1,minWidth:0}}>
@@ -3553,29 +2770,15 @@ function AllocationsPage(){
                                   ?<Lock size={13} strokeWidth={1.75} title="Closed" style={{opacity:0.4,color:"#64748b"}}/>
                                   :<Btn variant="ghost" size="sm" onClick={()=>openEdit(a)}><Pencil size={14} strokeWidth={1.75}/></Btn>}
                               </div>
-                              {aIsLeave?(
-                                <>
-                                  <div style={{padding:"6px 10px",background:"#fef9c3",borderRadius:7,border:"1px solid #fde68a"}}>
-                                    <p style={{margin:"0 0 2px",fontSize:11,fontWeight:700,color:"#d97706"}}>{a.status}</p>
-                                    {a.leave_from&&a.leave_to&&(
-                                      <p style={{margin:0,fontSize:10,color:"#92400e"}}>{new Date(a.leave_from+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})} → {new Date(a.leave_to+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})} · {a.leave_days||0} days</p>
-                                    )}
-                                  </div>
-                                  <span style={{fontSize:12,fontWeight:700,color:"#92400e"}}>{a.capacity_deduction||0}h capacity deducted</span>
-                                </>
-                              ):(
-                                <>
-                                  <p style={{margin:0,fontSize:12,color:"#475569",lineHeight:1.5,fontWeight:500}}>{a.client_name||"—"}</p>
-                                  <div style={{background:"#e2e8f0",borderRadius:99,height:6,overflow:"hidden"}}>
-                                    <div style={{width:`${pct}%`,height:"100%",background:clr,borderRadius:99,transition:"width .3s"}}/>
-                                  </div>
-                                  <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#64748b",lineHeight:1.5}}>
-                                    <span>{fmtH(a.allocated_hours)}h allocated</span>
-                                    <span>{fmtH(util.availableHours)}h free</span>
-                                  </div>
-                                  <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:600,background:sb2.bg,color:sb2.color,alignSelf:"flex-start"}}>{a.status}</span>
-                                </>
-                              )}
+                              <p style={{margin:0,fontSize:12,color:"#475569",lineHeight:1.5,fontWeight:500}}>{a.client_name||"—"}</p>
+                              <div style={{background:"#e2e8f0",borderRadius:99,height:6,overflow:"hidden"}}>
+                                <div style={{width:`${pct}%`,height:"100%",background:clr,borderRadius:99,transition:"width .3s"}}/>
+                              </div>
+                              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#64748b",lineHeight:1.5}}>
+                                <span>{fmtH(a.allocated_hours)}h allocated</span>
+                                <span>{fmtH(util.availableHours)}h free</span>
+                              </div>
+                              <span style={{padding:"2px 8px",borderRadius:999,fontSize:11,fontWeight:600,background:sb2.bg,color:sb2.color,alignSelf:"flex-start"}}>{a.status}</span>
                             </div>
                           );
                         })}
@@ -3599,41 +2802,25 @@ function AllocationsPage(){
             <div style={{display:"flex",flexDirection:"column",gap:13}}>
               <div style={{padding:"8px 12px",background:"#f8fafc",borderRadius:8,border:"1px solid #e2e8f0"}}>
                 <p style={{margin:0,fontSize:12,color:"#475569",lineHeight:1.5}}>Employee: <strong style={{color:"#0f172a"}}>{editing.employee_name}</strong></p>
-                <p style={{margin:"2px 0 0",fontSize:12,color:"#475569",lineHeight:1.5}}>{isLeave(editing.status)?<span style={{color:"#d97706",fontWeight:600}}>{editing.status}</span>:<>Client: <strong style={{color:"#0f172a"}}>{editing.client_name}</strong></>}</p>
+                <p style={{margin:"2px 0 0",fontSize:12,color:"#475569",lineHeight:1.5}}>Client: <strong style={{color:"#0f172a"}}>{editing.client_name}</strong></p>
               </div>
-              {isLeave(editing.status)?(
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                  <div>
-                    <Lbl>From Date *</Lbl>
-                    <Inp type="date" value={editForm.leave_from} onChange={e=>setEditForm(p=>({...p,leave_from:e.target.value}))} required/>
-                  </div>
-                  <div>
-                    <Lbl>To Date *</Lbl>
-                    <Inp type="date" value={editForm.leave_to} onChange={e=>setEditForm(p=>({...p,leave_to:e.target.value}))} required/>
-                  </div>
-                  {editForm.leave_from&&editForm.leave_to&&(()=>{
-                    const days=countWorkingDays(editForm.leave_from,editForm.leave_to);
-                    const hrs=Math.round(days*(176/22));
-                    return <p style={{margin:0,fontSize:11,color:"#d97706",gridColumn:"1/-1",lineHeight:1.5,fontWeight:600}}>{days} working day(s) — {hrs}h capacity deducted</p>;
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div>
+                  <Lbl>Hours/Month *</Lbl>
+                  <Inp type="number" min="0" value={editForm.allocated_hours} onChange={e=>setEditForm(p=>({...p,allocated_hours:e.target.value}))} required/>
+                  {(()=>{
+                    // Total remaining if we remove this allocation (to know how much space there is)
+                    const remWithout=getRemainingHours(editing.employee_id,editForm.month,editing.id);
+                    // Remaining after keeping current allocation
+                    const remWith=remWithout-parseFloat(editing.allocated_hours||0);
+                    const overAlloc=remWith<0;
+                    return <p style={{margin:"3px 0 0",fontSize:10,color:overAlloc?"#ef4444":"#64748b",lineHeight:1.5,fontWeight:overAlloc?700:400}}>
+                      {overAlloc?"⚠ Over-allocated by "+fmtH(Math.abs(remWith))+"h":fmtH(remWith)+"h available"}
+                    </p>;
                   })()}
                 </div>
-              ):(
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                  <div>
-                    <Lbl>Hours/Month *</Lbl>
-                    <Inp type="number" min="0" value={editForm.allocated_hours} onChange={e=>setEditForm(p=>({...p,allocated_hours:e.target.value}))} required/>
-                    {(()=>{
-                      const remWithout=getRemainingHours(editing.employee_id,editForm.month,editing.id);
-                      const remWith=remWithout-parseFloat(editing.allocated_hours||0);
-                      const overAlloc=remWith<0;
-                      return <p style={{margin:"3px 0 0",fontSize:10,color:overAlloc?"#ef4444":"#64748b",lineHeight:1.5,fontWeight:overAlloc?700:400}}>
-                        {overAlloc?"⚠ Over-allocated by "+fmtH(Math.abs(remWith))+"h":fmtH(remWith)+"h available"}
-                      </p>;
-                    })()}
-                  </div>
-                  <div><Lbl>Month *</Lbl><Sel value={editForm.month} onChange={v=>setEditForm(p=>({...p,month:v}))} options={ALLOC_MONTHS}/></div>
-                </div>
-              )}
+                <div><Lbl>Month *</Lbl><Sel value={editForm.month} onChange={v=>setEditForm(p=>({...p,month:v}))} options={ALLOC_MONTHS}/></div>
+              </div>
               <div><Lbl>Notes</Lbl><Inp value={editForm.notes} onChange={e=>setEditForm(p=>({...p,notes:e.target.value}))} placeholder="Allocation notes..."/></div>
               <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:4}}><Btn variant="outline" onClick={closeModal}>Cancel</Btn><Btn variant="primary" type="submit">Update</Btn></div>
             </div>
@@ -3729,12 +2916,12 @@ const exportMonthlyUtilization = (employees, allocs, month, dept, HPM, rangeMont
         if(!isRange){
           const empAllocs = allocs.filter(a=>a.employee_id===e.id&&a.month===month);
           const allocated = empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
-          const leaveDeduction = empAllocs.filter(a=>isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
+          const leaveDeduction = empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
           const effectiveHPM = Math.max(0,HPM-leaveDeduction);
           const free = Math.max(0,effectiveHPM-allocated);
           const pct = effectiveHPM>0?Math.round((allocated/effectiveHPM)*100):0;
-          const onLeave = empAllocs.some(a=>isLeave(a.status));
-          const leavedays = empAllocs.filter(a=>isLeave(a.status)).reduce((s,a)=>s+(a.leave_days||0),0);
+          const onLeave = empAllocs.some(a=>a.status==='On Leave');
+          const leavedays = empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(a.leave_days||0),0);
           const status = getUtilStatus(allocated,effectiveHPM,onLeave);
           return {e,allocated,effectiveHPM,free,pct,onLeave,leavedays,leaveDeduction,status};
         } else {
@@ -3742,7 +2929,7 @@ const exportMonthlyUtilization = (employees, allocs, month, dept, HPM, rangeMont
           rangeMonthsArg.forEach(m=>{
             const ea=allocs.filter(a=>a.employee_id===e.id&&a.month===m);
             totalAlloc+=ea.reduce((s,a)=>s+(a.allocated_hours||0),0);
-            const ld=ea.filter(a=>isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
+            const ld=ea.filter(a=>a.status==="On Leave").reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
             totalCap+=Math.max(0,HPM-ld); totalLeave+=ld;
           });
           const n=rangeMonthsArg.length||1;
@@ -3754,7 +2941,7 @@ const exportMonthlyUtilization = (employees, allocs, month, dept, HPM, rangeMont
       })
       .sort((a,b)=>(STATUS_ORDER_MAP[a.status.label]??5)-(STATUS_ORDER_MAP[b.status.label]??5));
 
-    const totalAlloc = Math.round(rows.reduce((s,r)=>s+r.allocated,0)*100)/100;
+    const totalAlloc = rows.reduce((s,r)=>s+r.allocated,0);
     const onLeaveCount = rows.filter(r=>r.onLeave).length;
     const nonLeave = rows.filter(r=>!r.onLeave&&r.effectiveHPM>0);
     const avgUtil = Math.round(nonLeave.reduce((s,r)=>s+r.pct,0)/Math.max(1,nonLeave.length));
@@ -3905,9 +3092,9 @@ const exportTeamCapacity = (employees, allocs, month, dept, HPM, allowedDepts) =
     const depts=["Creative Department","Client Servicing Department","Production Department","Planning Department"].filter(d=>!allowedDepts||allowedDepts.includes(d));
     const rows=depts.map(d=>{
       const emps=employees.filter(e=>(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=month))&&e.department===d);
-      const totalCap=emps.reduce((s,e)=>{const ld=allocs.filter(a=>a.employee_id===e.id&&a.month===month&&isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);return s+Math.max(0,HPM-ld);},0);
+      const totalCap=emps.reduce((s,e)=>{const ld=allocs.filter(a=>a.employee_id===e.id&&a.month===month&&a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);return s+Math.max(0,HPM-ld);},0);
       const totalAlloc=allocs.filter(a=>emps.some(e=>e.id===a.employee_id)&&a.month===month).reduce((s,a)=>s+(a.allocated_hours||0),0);
-      const onLeave=emps.filter(e=>allocs.some(a=>a.employee_id===e.id&&a.month===month&&isLeave(a.status))).length;
+      const onLeave=emps.filter(e=>allocs.some(a=>a.employee_id===e.id&&a.month===month&&a.status==='On Leave')).length;
       const pct=totalCap>0?Math.round((totalAlloc/totalCap)*100):0;
       const st=getUtilStatus(totalAlloc,totalCap,false);
       return{dept:d.replace(" Department",""),headcount:emps.length,onLeave,totalCap,totalAlloc,free:Math.max(0,totalCap-totalAlloc),pct,st};
@@ -3955,7 +3142,7 @@ const exportClientAllocation = (employees, allocs, month, dept, allowedDepts, se
   loadXlsxStyle(()=>{
     const XS = window.XLSX;
     const allowedEmps=employees.filter(e=>!allowedDepts||allowedDepts.includes(e.department));
-    const monthAllocs=allocs.filter(a=>a.month===month&&allowedEmps.some(e=>e.id===a.employee_id)&&(selDept==="all"||employees.find(e=>e.id===a.employee_id)?.department===selDept)&&!isLeave(a.status));
+    const monthAllocs=allocs.filter(a=>a.month===month&&allowedEmps.some(e=>e.id===a.employee_id)&&(selDept==="all"||employees.find(e=>e.id===a.employee_id)?.department===selDept)&&a.status!=="On Leave");
     const clientMap={};
     monthAllocs.forEach(a=>{if(!clientMap[a.client_name])clientMap[a.client_name]={name:a.client_name,hours:0,employees:new Set()};clientMap[a.client_name].hours+=a.allocated_hours||0;clientMap[a.client_name].employees.add(a.employee_id);});
     const rows=Object.values(clientMap).map(c=>({...c,hours:Math.round(c.hours*10)/10,employees:c.employees.size})).sort((a,b)=>b.hours-a.hours);
@@ -4004,7 +3191,7 @@ ${month}`,{bold:true,sz:11,bg:"F8FAFC",align:"center",wrap:true});
 const exportOnLeaveReport = (employees, allocs, month, dept, HPM, allowedDepts, selDept) => {
   loadXlsxStyle(()=>{
     const XS = window.XLSX;
-    const leaveAllocs=allocs.filter(a=>isLeave(a.status)&&a.month===month&&(!allowedDepts||allowedDepts.includes(employees.find(e=>e.id===a.employee_id)?.department))&&(selDept==="all"||employees.find(e=>e.id===a.employee_id)?.department===selDept));
+    const leaveAllocs=allocs.filter(a=>a.status==="On Leave"&&a.month===month&&(!allowedDepts||allowedDepts.includes(employees.find(e=>e.id===a.employee_id)?.department))&&(selDept==="all"||employees.find(e=>e.id===a.employee_id)?.department===selDept));
     const rows=leaveAllocs.map(a=>{const emp=employees.find(e=>e.id===a.employee_id);return{name:emp?.name||a.employee_name,dept:emp?.department?.replace(" Department","")||"",designation:emp?.designation||"",from:a.leave_from||"—",to:a.leave_to||"—",days:a.leave_days||0,deduction:a.capacity_deduction||0,adjusted:Math.max(0,HPM-(a.capacity_deduction||0))};}).sort((a,b)=>a.name.localeCompare(b.name));
     const totalDays=rows.reduce((s,r)=>s+r.days,0);const totalDed=rows.reduce((s,r)=>s+r.deduction,0);
     const ws={};const cols=8;let rowNum=0;
@@ -4099,7 +3286,7 @@ const exportCostAllocation = (employees, allocs, month, dept, HPM) => {
     const rows=employees.map(e=>{
       const empAllocs=allocs.filter(a=>a.employee_id===e.id&&a.month===month);
       const allocated=empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
-      const ld=empAllocs.filter(a=>isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
+      const ld=empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
       const effHPM=Math.max(0,HPM-ld);
       const pct=effHPM>0?Math.round((allocated/effHPM)*100):0;
       const mc=e.mc||0;const billed=Math.round(allocated*(mc>0?mc/30/8:0)*1.267);
@@ -4309,12 +3496,12 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
       return emps.map(e=>{
         const empAllocs = allocs.filter(a=>a.employee_id===e.id&&a.month===selMonth);
         const allocated = empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
-        const leaveDeduction = empAllocs.filter(a=>isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
+        const leaveDeduction = empAllocs.filter(a=>a.status==="On Leave").reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
         const effectiveHPM = Math.max(0,HPM-leaveDeduction);
         const free = Math.max(0,effectiveHPM-allocated);
         const pct = effectiveHPM>0?Math.round((allocated/effectiveHPM)*100):0;
-        const onLeave = empAllocs.some(a=>isLeave(a.status));
-        const leavedays = empAllocs.filter(a=>isLeave(a.status)).reduce((s,a)=>s+(a.leave_days||0),0);
+        const onLeave = empAllocs.some(a=>a.status==="On Leave");
+        const leavedays = empAllocs.filter(a=>a.status==="On Leave").reduce((s,a)=>s+(a.leave_days||0),0);
         const status = getUtilStatus(allocated,effectiveHPM,onLeave);
         return {e,allocated,effectiveHPM,free,pct,onLeave,leavedays,leaveDeduction,status};
       }).sort((a,b)=>(UTIL_STATUS_ORDER[a.status.label]??5)-(UTIL_STATUS_ORDER[b.status.label]??5));
@@ -4324,7 +3511,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
         rangeMonths.forEach(m=>{
           const ea=allocs.filter(a=>a.employee_id===e.id&&a.month===m);
           totalAlloc+=ea.reduce((s,a)=>s+(a.allocated_hours||0),0);
-          const ld=ea.filter(a=>isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
+          const ld=ea.filter(a=>a.status==="On Leave").reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
           totalCap+=Math.max(0,HPM-ld); totalLeave+=ld;
         });
         const n=rangeMonths.length||1;
@@ -4377,13 +3564,13 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
       title=`Team Capacity Summary — ${fmtLong(selMonth)} — ${deptLabel}`;
       headers=["Department","Headcount","On Leave","Total Capacity","Allocated","Free","Util %","Status"];
       const depts=["Creative Department","Client Servicing Department","Production Department","Planning Department"].filter(d=>!allowedDepts||allowedDepts.includes(d));
-      rows=depts.map(dept=>{const emps=employees.filter(e=>(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=selMonth))&&e.department===dept);const totalCap=emps.reduce((s,e)=>{const ld=allocs.filter(a=>a.employee_id===e.id&&a.month===selMonth&&isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);return s+Math.max(0,HPM-ld);},0);const totalAlloc=allocs.filter(a=>emps.some(e=>e.id===a.employee_id)&&a.month===selMonth).reduce((s,a)=>s+(a.allocated_hours||0),0);const onLeave=emps.filter(e=>allocs.some(a=>a.employee_id===e.id&&a.month===selMonth&&isLeave(a.status))).length;const pct=totalCap>0?Math.round((totalAlloc/totalCap)*100):0;return[dept.replace(" Department",""),emps.length,onLeave,totalCap+"h",totalAlloc+"h",Math.max(0,totalCap-totalAlloc)+"h",pct+"%",getUtilStatus(totalAlloc,totalCap,false).label];});
+      rows=depts.map(dept=>{const emps=employees.filter(e=>(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=selMonth))&&e.department===dept);const totalCap=emps.reduce((s,e)=>{const ld=allocs.filter(a=>a.employee_id===e.id&&a.month===selMonth&&a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);return s+Math.max(0,HPM-ld);},0);const totalAlloc=allocs.filter(a=>emps.some(e=>e.id===a.employee_id)&&a.month===selMonth).reduce((s,a)=>s+(a.allocated_hours||0),0);const onLeave=emps.filter(e=>allocs.some(a=>a.employee_id===e.id&&a.month===selMonth&&a.status==='On Leave')).length;const pct=totalCap>0?Math.round((totalAlloc/totalCap)*100):0;return[dept.replace(" Department",""),emps.length,onLeave,totalCap+"h",totalAlloc+"h",Math.max(0,totalCap-totalAlloc)+"h",pct+"%",getUtilStatus(totalAlloc,totalCap,false).label];});
       filename=`Team_Capacity_${selMonth}.pdf`;
     } else if(selReport==="client"){
       title=`Client Allocation Report — ${fmtLong(selMonth)} — ${deptLabel}`;
       headers=["#","Client","Hours Allocated","% of Total","Employees"];
       const allowedEmps=employees.filter(e=>!allowedDepts||allowedDepts.includes(e.department));
-      const monthAllocs=allocs.filter(a=>a.month===selMonth&&allowedEmps.some(e=>e.id===a.employee_id)&&(selDept==="all"||employees.find(e=>e.id===a.employee_id)?.department===selDept)&&!isLeave(a.status));
+      const monthAllocs=allocs.filter(a=>a.month===selMonth&&allowedEmps.some(e=>e.id===a.employee_id)&&(selDept==="all"||employees.find(e=>e.id===a.employee_id)?.department===selDept)&&a.status!=="On Leave");
       const clientMap={};monthAllocs.forEach(a=>{if(!clientMap[a.client_name])clientMap[a.client_name]={name:a.client_name,hours:0,emps:new Set()};clientMap[a.client_name].hours+=a.allocated_hours||0;clientMap[a.client_name].emps.add(a.employee_id);});
       const cr=Object.values(clientMap).sort((a,b)=>b.hours-a.hours);const totalH=cr.reduce((s,r)=>s+r.hours,0);
       rows=cr.map((r,i)=>[i+1,r.name||"—",r.hours+"h",totalH>0?Math.round((r.hours/totalH)*100)+"%":"0%",r.emps.size]);
@@ -4391,7 +3578,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
     } else if(selReport==="leave"){
       title=`On Leave Report — ${fmtLong(selMonth)} — ${deptLabel}`;
       headers=["Employee","Department","Designation","Leave From","Leave To","Days","Hrs Deducted","Adj. Capacity"];
-      const leaveAllocs=allocs.filter(a=>isLeave(a.status)&&a.month===selMonth&&(!allowedDepts||allowedDepts.includes(employees.find(e=>e.id===a.employee_id)?.department))&&(selDept==="all"||employees.find(e=>e.id===a.employee_id)?.department===selDept));
+      const leaveAllocs=allocs.filter(a=>a.status==="On Leave"&&a.month===selMonth&&(!allowedDepts||allowedDepts.includes(employees.find(e=>e.id===a.employee_id)?.department))&&(selDept==="all"||employees.find(e=>e.id===a.employee_id)?.department===selDept));
       rows=leaveAllocs.map(a=>{const emp=employees.find(e=>e.id===a.employee_id);return[emp?.name||a.employee_name,emp?.department?.replace(" Department","")||"",emp?.designation||"",a.leave_from||"—",a.leave_to||"—",a.leave_days||0,a.capacity_deduction||0,Math.max(0,HPM-(a.capacity_deduction||0))+"h"];});
       filename=`On_Leave_${selMonth}.pdf`;
     } else if(selReport==="renewals"){
@@ -4404,7 +3591,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
     } else if(selReport==="cost"){
       title=`Employee Cost vs Allocation — ${fmtLong(selMonth)} — ${deptLabel}`;
       headers=["Employee","Department","Designation","Monthly Cost","Allocated","Util %","Billed Value","Recovery"];
-      rows=filteredEmps.map(e=>{const empAllocs=allocs.filter(a=>a.employee_id===e.id&&a.month===selMonth);const allocated=empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);const ld=empAllocs.filter(a=>isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);const effHPM=Math.max(0,HPM-ld);const pct=effHPM>0?Math.round((allocated/effHPM)*100):0;const mc=e.mc||0;const billed=Math.round(allocated*(mc>0?mc/30/8:0)*1.267);return[e.name,e.department?.replace(" Department","")||"",e.designation||"","SAR "+mc.toLocaleString(),allocated+"h",pct+"%","SAR "+billed.toLocaleString(),mc>0?Math.round((billed/mc)*100)+"%":"—"];});
+      rows=filteredEmps.map(e=>{const empAllocs=allocs.filter(a=>a.employee_id===e.id&&a.month===selMonth);const allocated=empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);const ld=empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);const effHPM=Math.max(0,HPM-ld);const pct=effHPM>0?Math.round((allocated/effHPM)*100):0;const mc=e.mc||0;const billed=Math.round(allocated*(mc>0?mc/30/8:0)*1.267);return[e.name,e.department?.replace(" Department","")||"",e.designation||"","SAR "+mc.toLocaleString(),allocated+"h",pct+"%","SAR "+billed.toLocaleString(),mc>0?Math.round((billed/mc)*100)+"%":"—"];});
       filename=`Cost_vs_Allocation_${selMonth}.pdf`;
     }
     exportPDFTable(title, headers, rows, filename);
@@ -4464,11 +3651,11 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
             const emps=employees.filter(e=>(e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=selMonth))&&e.department===dept);
             const totalCap=emps.reduce((s,e)=>{
               const empAllocs=allocs.filter(a=>a.employee_id===e.id&&a.month===selMonth);
-              const ld=empAllocs.filter(a=>isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
+              const ld=empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
               return s+Math.max(0,HPM-ld);
             },0);
             const totalAlloc=allocs.filter(a=>emps.some(e=>e.id===a.employee_id)&&a.month===selMonth).reduce((s,a)=>s+(a.allocated_hours||0),0);
-            const onLeave=emps.filter(e=>allocs.some(a=>a.employee_id===e.id&&a.month===selMonth&&isLeave(a.status))).length;
+            const onLeave=emps.filter(e=>allocs.some(a=>a.employee_id===e.id&&a.month===selMonth&&a.status==='On Leave')).length;
             const pct=totalCap>0?Math.round((totalAlloc/totalCap)*100):0;
             const st=getUtilStatus(totalAlloc,totalCap,false);
             return{dept:dept.replace(" Department",""),headcount:emps.length,totalCap,totalAlloc,free:Math.max(0,totalCap-totalAlloc),pct,onLeave,st};
@@ -4521,7 +3708,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
         {/* ── Client Allocation Report ── */}
         {selReport==="client"&&(()=>{
           const allowedEmps=employees.filter(e=>!allowedDepts||allowedDepts.includes(e.department));
-          const monthAllocs=allocs.filter(a=>a.month===selMonth&&(selDept==="all"||employees.find(e=>e.id===a.employee_id)?.department===selDept)&&allowedEmps.some(e=>e.id===a.employee_id)&&!isLeave(a.status));
+          const monthAllocs=allocs.filter(a=>a.month===selMonth&&(selDept==="all"||employees.find(e=>e.id===a.employee_id)?.department===selDept)&&allowedEmps.some(e=>e.id===a.employee_id)&&a.status!=="On Leave");
           const clientMap={};
           monthAllocs.forEach(a=>{
             if(!clientMap[a.client_name]) clientMap[a.client_name]={name:a.client_name,hours:0,employees:new Set()};
@@ -4571,7 +3758,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
 
         {/* ── On Leave Report ── */}
         {selReport==="leave"&&(()=>{
-          const leaveAllocs=allocs.filter(a=>isLeave(a.status)&&a.month===selMonth&&(!allowedDepts||allowedDepts.includes(employees.find(e=>e.id===a.employee_id)?.department))&&(selDept==="all"||employees.find(e=>e.id===a.employee_id)?.department===selDept));
+          const leaveAllocs=allocs.filter(a=>a.status==="On Leave"&&a.month===selMonth&&(!allowedDepts||allowedDepts.includes(employees.find(e=>e.id===a.employee_id)?.department))&&(selDept==="all"||employees.find(e=>e.id===a.employee_id)?.department===selDept));
           const rows=leaveAllocs.map(a=>{
             const emp=employees.find(e=>e.id===a.employee_id);
             return{name:emp?.name||a.employee_name,dept:emp?.department?.replace(" Department","")||"",designation:emp?.designation||"",from:a.leave_from,to:a.leave_to,days:a.leave_days||0,deduction:a.capacity_deduction||0,adjusted:Math.max(0,HPM-(a.capacity_deduction||0))};
@@ -4674,7 +3861,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
           const rows=emps.map(e=>{
             const empAllocs=allocs.filter(a=>a.employee_id===e.id&&a.month===selMonth);
             const allocated=empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
-            const leaveDeduction=empAllocs.filter(a=>isLeave(a.status)).reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
+            const leaveDeduction=empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
             const effectiveHPM=Math.max(0,HPM-leaveDeduction);
             const pct=effectiveHPM>0?Math.round((allocated/effectiveHPM)*100):0;
             const mc=e.mc||e.monthly_cost||0;
@@ -4782,7 +3969,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
                       )}
                     </td>
                     <td style={{padding:"10px 13px",textAlign:"center"}}>
-                      <span style={{padding:"2px 9px",borderRadius:999,fontSize:11,fontWeight:700,color:"#"+r.status.fgRGB,background:"#"+r.status.bgRGB,whiteSpace:"nowrap"}}>{r.status.label}</span>
+                      <span style={{padding:"2px 9px",borderRadius:999,fontSize:11,fontWeight:700,color:"#"+r.status.fgRGB,background:"#"+r.status.bgRGB}}>{r.status.label}</span>
                     </td>
                     <td style={{padding:"10px 13px",textAlign:"center",fontSize:12,fontWeight:700,color:r.isRange?"#008A57":r.onLeave?"#d97706":"#64748b"}}>{r.isRange?r.n+"mo":r.leavedays||"—"}</td>
                     <td style={{padding:"10px 13px",textAlign:"center",fontSize:12,fontWeight:700,color:r.isRange?"#008A57":r.onLeave?"#d97706":"#64748b"}}>{r.isRange?r.totalAlloc+"h":r.leaveDeduction||"—"}</td>
@@ -4846,25 +4033,20 @@ function ReportsPage(){
   const [dataLoaded,setDataLoaded]       = useState(false);
 
   useEffect(()=>{
-    const fetchData=async()=>{
-      const [e,ct,cl,sn]=await Promise.all([
-        sb.from('employees').select('*'),
-        sb.from('contracts').select('*'),
-        sb.from('clients').select('*'),
-        sb.from('monthly_snapshots').select('*'),
-      ]);
-      const b1=await sb.from('allocations').select('*').range(0,999);
-      const b2=await sb.from('allocations').select('*').range(1000,1999);
-      const b3=await sb.from('allocations').select('*').range(2000,2999);
-      const al=[...(b1.data||[]),...(b2.data||[]),...(b3.data||[])];
-      if(e.data)  setRealEmployees(e.data.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0,id:x.id})));
-      if(ct.data) setRealContracts(ct.data.map(x=>({...x,cn:x.client_name,cid:x.client_id,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status,bcs:parseFloat(x.budget_client_servicing)||0,bp:parseFloat(x.budget_production)||0,bc:parseFloat(x.budget_creative)||0,bpl:parseFloat(x.budget_planning)||0})));
-      if(cl.data) setRealClients(cl.data);
-      if(al.length) setRealAllocs(al.map(x=>({...x,eid:x.employee_id,cid:x.client_id,h:parseFloat(x.allocated_hours)||0})));
-      if(sn.data) setRealSnapshots(sn.data);
+    Promise.all([
+      sb.from('employees').select('*'),
+      sb.from('contracts').select('*'),
+      sb.from('clients').select('*'),
+      sb.from('allocations').select('*'),
+      sb.from('monthly_snapshots').select('*'),
+    ]).then(([{data:e},{data:ct},{data:cl},{data:al},{data:sn}])=>{
+      if(e)  setRealEmployees(e.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0,id:x.id})));
+      if(ct) setRealContracts(ct.map(x=>({...x,cn:x.client_name,cid:x.client_id,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status,bcs:parseFloat(x.budget_client_servicing)||0,bp:parseFloat(x.budget_production)||0,bc:parseFloat(x.budget_creative)||0,bpl:parseFloat(x.budget_planning)||0})));
+      if(cl) setRealClients(cl);
+      if(al) setRealAllocs(al.map(x=>({...x,eid:x.employee_id,cid:x.client_id,h:parseFloat(x.allocated_hours)||0})));
+      if(sn) setRealSnapshots(sn);
       setDataLoaded(true);
-    };
-    fetchData();
+    });
   },[sb]);
 
   // Build allocsByMonth-style lookup from real allocations
@@ -5820,23 +5002,18 @@ function MonthlyClosePage(){
   const [realAllocs,setRealAllocs]=useState([]);
 
   useEffect(()=>{
-    const fetchData=async()=>{
-      const [sn,ct,em]=await Promise.all([
-        sb.from('monthly_snapshots').select('*').order('month',{ascending:false}),
-        sb.from('contracts').select('*'),
-        sb.from('employees').select('*'),
-      ]);
-      const b1=await sb.from('allocations').select('*').range(0,999);
-      const b2=await sb.from('allocations').select('*').range(1000,1999);
-      const b3=await sb.from('allocations').select('*').range(2000,2999);
-      const al=[...(b1.data||[]),...(b2.data||[]),...(b3.data||[])];
-      if(sn.data) setSnapshots(sn.data);
-      if(ct.data) setRealContracts(ct.data.map(x=>({...x,cid:x.client_id,cn:x.client_name,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status})));
-      if(em.data) setRealEmployees(em.data.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0})));
-      if(al.length) setRealAllocs(al.map(x=>({...x,eid:x.employee_id,cid:x.client_id,h:parseFloat(x.allocated_hours)||0})));
+    Promise.all([
+      sb.from('monthly_snapshots').select('*').order('month',{ascending:false}),
+      sb.from('contracts').select('*'),
+      sb.from('employees').select('*'),
+      sb.from('allocations').select('*'),
+    ]).then(([{data:sn},{data:ct},{data:em},{data:al}])=>{
+      if(sn) setSnapshots(sn);
+      if(ct) setRealContracts(ct.map(x=>({...x,cid:x.client_id,cn:x.client_name,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status})));
+      if(em) setRealEmployees(em.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0})));
+      if(al) setRealAllocs(al.map(x=>({...x,eid:x.employee_id,cid:x.client_id,h:parseFloat(x.allocated_hours)||0})));
       setLoading(false);
-    };
-    fetchData();
+    });
   },[sb]);
   const dbBulkAdd=async items=>{const{data}=await sb.from('monthly_snapshots').insert(items.map(s=>({month:s.month,contract_id:s.contract_id,contract_number:s.contract_number,client_name:s.client_name,monthly_retainer:s.monthly_retainer,resource_cost:s.resource_cost,profit:s.profit,allocated_hours:s.allocated_hours,is_closed:true}))).select();if(data)setSnapshots(p=>[...p,...data]);};
   const dbDelete=async month=>{await sb.from('monthly_snapshots').delete().eq('month',month);setSnapshots(p=>p.filter(s=>s.month!==month));};
@@ -6814,366 +5991,6 @@ function ContractExpensesPage(){
 
 
 
-function PublicHolidaysTab({sb}){
-  const toast=useToast();
-  const confirm=useConfirm();
-  const [holidays,setHolidays]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [modalOpen,setModalOpen]=useState(false);
-  const [editing,setEditing]=useState(null);
-  const EMPTY={name:"",from_date:"",to_date:"",country:"Both"};
-  const [form,setForm]=useState(EMPTY);
-  const [saving,setSaving]=useState(false);
-  const [logs,setLogs]=useState([]);
-  const [logsLoading,setLogsLoading]=useState(true);
-  const [snapshots,setSnapshots]=useState([]);
-  const [applyHoliday,setApplyHoliday]=useState(null);
-  const [applyStep,setApplyStep]=useState(1);
-  const [applyMonth,setApplyMonth]=useState("");
-  const [applyEmployees,setApplyEmployees]=useState([]);
-  const [applySnapshots,setApplySnapshots]=useState([]);
-  const [applyAllocs,setApplyAllocs]=useState([]);
-  const [applyLoading,setApplyLoading]=useState(false);
-  const [applyModal,setApplyModal]=useState(false);
-  const [applying,setApplying]=useState(false);
-
-  useEffect(()=>{
-    Promise.all([
-      sb.from('public_holidays').select('*').order('from_date'),
-      sb.from('holiday_applications').select('*').order('created_at',{ascending:false}),
-      sb.from('monthly_snapshots').select('*'),
-    ]).then(([{data:h},{data:l},{data:s}])=>{
-      if(h) setHolidays(h);
-      if(l) setLogs(l);
-      if(s) setSnapshots(s);
-      setLoading(false);
-      setLogsLoading(false);
-    });
-  },[sb]);
-
-  const workingDays=(from,to)=>{
-    if(!from||!to) return 0;
-    let count=0,cur=new Date(from);
-    const end=new Date(to);
-    while(cur<=end){const d=cur.getDay();if(d!==5&&d!==6)count++;cur.setDate(cur.getDate()+1);}
-    return count;
-  };
-
-  const isClosed=m=>snapshots.some(s=>s.month===m&&s.is_closed);
-  const openAdd=()=>{setEditing(null);setForm(EMPTY);setModalOpen(true);};
-  const openEdit=h=>{setEditing(h);setForm({name:h.name,from_date:h.from_date,to_date:h.to_date,country:h.country});setModalOpen(true);};
-
-  const handleSave=async()=>{
-    if(!form.name||!form.from_date||!form.to_date){toast("Please fill all fields","warning");return;}
-    setSaving(true);
-    try{
-      const days=workingDays(form.from_date,form.to_date);
-      const payload={name:form.name,from_date:form.from_date,to_date:form.to_date,country:form.country,working_days:days};
-      if(editing){
-        const{data,error}=await sb.from('public_holidays').update(payload).eq('id',editing.id).select().single();
-        if(error)throw new Error(error.message);
-        if(data)setHolidays(p=>p.map(h=>h.id===editing.id?data:h));
-        toast("Holiday updated","success");
-      } else {
-        const{data,error}=await sb.from('public_holidays').insert([payload]).select().single();
-        if(error)throw new Error(error.message);
-        if(data)setHolidays(p=>[...p,data].sort((a,b)=>a.from_date.localeCompare(b.from_date)));
-        toast("Holiday added","success");
-      }
-      setModalOpen(false);
-    }catch(err){toast(err.message||"Failed to save","error");}
-    finally{setSaving(false);}
-  };
-
-  const handleDelete=async h=>{
-    const ok=await confirm({title:"Delete holiday?",message:`"${h.name}" will be permanently removed.`,danger:true,confirmLabel:"Delete"});
-    if(!ok) return;
-    await sb.from('public_holidays').delete().eq('id',h.id);
-    setHolidays(p=>p.filter(x=>x.id!==h.id));
-    toast("Holiday deleted","success");
-  };
-
-  const openApply=async(h)=>{
-    setApplyHoliday(h);
-    setApplyStep(1);
-    const m=h.from_date.slice(0,7);
-    setApplyMonth(m);
-    setApplyLoading(true);
-    setApplyModal(true);
-    const[{data:emps},{data:snaps},{data:allocs}]=await Promise.all([
-      sb.from('employees').select('*').eq('status','Active'),
-      sb.from('monthly_snapshots').select('*'),
-      sb.from('allocations').select('*').eq('month',m)
-    ]);
-    setApplyEmployees(emps||[]);
-    setApplySnapshots(snaps||[]);
-    setApplyAllocs(allocs||[]);
-    setApplyLoading(false);
-  };
-
-  const changeApplyMonth=async(m)=>{
-    setApplyMonth(m);
-    setApplyLoading(true);
-    const{data:allocs}=await sb.from('allocations').select('*').eq('month',m);
-    setApplyAllocs(allocs||[]);
-    setApplyLoading(false);
-  };
-
-  const getPreview=()=>{
-    if(!applyHoliday||!applyMonth) return{affected:[],skipped:[]};
-    const isMonthClosed=m=>applySnapshots.some(s=>s.month===m&&s.is_closed);
-    const locationMatch=emp=>{
-      const c=applyHoliday.country;
-      if(c==="Both") return ["Jeddah","Riyadh","Cairo"].includes(emp.location);
-      if(c==="KSA")  return ["Jeddah","Riyadh"].includes(emp.location);
-      if(c==="EGY")  return emp.location==="Cairo";
-      return false;
-    };
-    const days=workingDays(applyHoliday.from_date,applyHoliday.to_date);
-    const capDed=Math.round(days*(176/22));
-    const closed=isMonthClosed(applyMonth);
-    const affected=[],skipped=[];
-    applyEmployees.filter(locationMatch).forEach(emp=>{
-      if(closed){skipped.push({...emp,reason:"Closed month"});return;}
-      affected.push({...emp,days,capDed});
-    });
-    return{affected,skipped};
-  };
-
-  const handleApply=async()=>{
-    const{affected}=getPreview();
-    if(affected.length===0){toast("No employees to apply to","warning");return;}
-    setApplying(true);
-    try{
-      const days=workingDays(applyHoliday.from_date,applyHoliday.to_date);
-      const capDed=Math.round(days*(176/22));
-      const batchId=crypto.randomUUID();
-      const records=affected.map(emp=>({
-        employee_id:emp.id,
-        employee_name:emp.name,
-        month:applyMonth,
-        status:"On Leave (Public H.)",
-        allocated_hours:0,
-        leave_from:applyHoliday.from_date,
-        leave_to:applyHoliday.to_date,
-        leave_days:days,
-        capacity_deduction:capDed,
-        notes:`Public Holiday: ${applyHoliday.name}`,
-        batch_id:batchId,
-        client_id:null,
-        client_name:null,
-      }));
-      const{error}=await sb.from('allocations').insert(records);
-      if(error) throw new Error(error.message);
-      const logPayload={holiday_id:applyHoliday.id,holiday_name:applyHoliday.name,month:applyMonth,country:applyHoliday.country,records_count:records.length,batch_id:batchId};
-      const{data:logData}=await sb.from('holiday_applications').insert([logPayload]).select().single();
-      if(logData) setLogs(p=>[logData,...p]);
-      toast(`✓ ${records.length} On Leave (Public H.) records created`,"success");
-      setApplyModal(false);
-    }catch(err){toast(err.message||"Failed to apply","error");}
-    finally{setApplying(false);}
-  };
-
-  const handleUndo=async(log)=>{
-    if(isClosed(log.month)){toast("Cannot undo — month is closed","warning");return;}
-    const ok=await confirm({title:"Undo holiday application?",message:`This will delete all ${log.records_count} On Leave (Public H.) records for "${log.holiday_name}" in ${fmtLong(log.month)}.`,danger:true,confirmLabel:"Undo"});
-    if(!ok) return;
-    const{error}=await sb.from('allocations').delete().eq('batch_id',log.batch_id);
-    if(error){toast(error.message||"Failed to undo","error");return;}
-    await sb.from('holiday_applications').delete().eq('id',log.id);
-    setLogs(p=>p.filter(l=>l.id!==log.id));
-    toast(`✓ ${log.records_count} records removed`,"success");
-  };
-
-  const fmtD=d=>d?new Date(d+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"—";
-  const fmtDT=d=>d?new Date(d).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}):"—";
-  const cBadge=c=>c==="KSA"?{bg:"#dbeafe",color:"#1d4ed8"}:c==="EGY"?{bg:"#fef9c3",color:"#d97706"}:{bg:"#f1f5f9",color:"#475569"};
-  const formDays=workingDays(form.from_date,form.to_date);
-  const{affected,skipped}=applyModal?getPreview():{affected:[],skipped:[]};
-  const ksaEmps=affected.filter(e=>["Jeddah","Riyadh"].includes(e.location));
-  const egyEmps=affected.filter(e=>e.location==="Cairo");
-
-  return(
-    <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      {/* Holiday Library */}
-      <Card style={{overflow:"hidden",padding:0}}>
-        <div style={{padding:"14px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <Calendar size={15} strokeWidth={1.75} color="#008A57"/>
-            <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>Public Holiday Library</p>
-          </div>
-          <Btn variant="primary" size="sm" onClick={openAdd}><Plus size={13} strokeWidth={2}/>Add Holiday</Btn>
-        </div>
-        {loading?(<div style={{padding:24}}><Skeleton h={14} mb={10}/><Skeleton h={14} mb={10}/><Skeleton h={14}/></div>)
-        :holidays.length===0?(<div style={{padding:40,textAlign:"center"}}><Calendar size={32} color="#cbd5e1" style={{marginBottom:12}}/><p style={{margin:0,fontSize:14,color:"#94a3b8",fontWeight:600}}>No holidays defined yet</p><p style={{margin:"4px 0 0",fontSize:12,color:"#cbd5e1"}}>Add public holidays to use them in mass allocation</p></div>)
-        :(
-          <table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead><tr style={{background:"#f8fafc"}}>{["Holiday Name","From","To","Working Days","Country","Actions"].map((h,i)=>(<th key={h} style={{padding:"9px 14px",textAlign:i>=3?"center":"left",fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".04em",borderBottom:"1px solid #e2e8f0",whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
-            <tbody>
-              {holidays.map((h,i)=>{
-                const cb=cBadge(h.country);
-                return(
-                  <tr key={h.id} style={{borderBottom:"1px solid #f1f5f9",background:i%2===0?"#fff":"#fafafa"}}>
-                    <td style={{padding:"10px 14px",fontWeight:600,fontSize:13,color:"#0f172a"}}>{h.name}</td>
-                    <td style={{padding:"10px 14px",fontSize:13,color:"#475569"}}>{fmtD(h.from_date)}</td>
-                    <td style={{padding:"10px 14px",fontSize:13,color:"#475569"}}>{fmtD(h.to_date)}</td>
-                    <td style={{padding:"10px 14px",textAlign:"center"}}><span style={{padding:"2px 10px",borderRadius:999,background:"#f0fdf4",color:"#059669",fontSize:12,fontWeight:700}}>{h.working_days||workingDays(h.from_date,h.to_date)} days</span></td>
-                    <td style={{padding:"10px 14px",textAlign:"center"}}><span style={{padding:"2px 10px",borderRadius:999,background:cb.bg,color:cb.color,fontSize:11,fontWeight:700}}>{h.country}</span></td>
-                    <td style={{padding:"10px 14px",textAlign:"right"}}>
-                      <div style={{display:"flex",justifyContent:"flex-end",gap:4}}>
-                        <Btn variant="outline" size="sm" onClick={()=>openApply(h)}><Zap size={13} strokeWidth={1.75}/>Apply to Team</Btn>
-                        <Btn variant="ghost" size="sm" onClick={()=>openEdit(h)}><Pencil size={14} strokeWidth={1.75}/></Btn>
-                        <Btn variant="danger" size="sm" onClick={()=>handleDelete(h)}><Trash2 size={14} strokeWidth={1.75}/></Btn>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </Card>
-
-      {/* Application History */}
-      <Card style={{overflow:"hidden",padding:0}}>
-        <div style={{padding:"14px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:8}}>
-          <History size={15} strokeWidth={1.75} color="#64748b"/>
-          <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>Application History</p>
-        </div>
-        {logsLoading?(<div style={{padding:24}}><Skeleton h={14} mb={10}/><Skeleton h={14}/></div>)
-        :logs.length===0?(<div style={{padding:32,textAlign:"center"}}><p style={{margin:0,fontSize:13,color:"#94a3b8"}}>No applications yet — apply a holiday to see the log here.</p></div>)
-        :(
-          <table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead><tr style={{background:"#f8fafc"}}>{["Holiday","Month","Country","Records","Applied At","Actions"].map((h,i)=>(<th key={h} style={{padding:"9px 14px",textAlign:i>=2?"center":"left",fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".04em",borderBottom:"1px solid #e2e8f0",whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
-            <tbody>
-              {logs.map((log,i)=>{
-                const closed=isClosed(log.month);
-                const cb=cBadge(log.country);
-                return(
-                  <tr key={log.id} style={{borderBottom:"1px solid #f1f5f9",background:i%2===0?"#fff":"#fafafa"}}>
-                    <td style={{padding:"10px 14px",fontWeight:600,fontSize:13,color:"#0f172a"}}>{log.holiday_name}</td>
-                    <td style={{padding:"10px 14px",fontSize:13,color:"#475569"}}>{fmtLong(log.month)}</td>
-                    <td style={{padding:"10px 14px",textAlign:"center"}}><span style={{padding:"2px 8px",borderRadius:999,background:cb.bg,color:cb.color,fontSize:11,fontWeight:700}}>{log.country}</span></td>
-                    <td style={{padding:"10px 14px",textAlign:"center"}}><span style={{padding:"2px 10px",borderRadius:999,background:"#f0fdf4",color:"#059669",fontSize:12,fontWeight:700}}>{log.records_count} employees</span></td>
-                    <td style={{padding:"10px 14px",textAlign:"center",fontSize:12,color:"#64748b"}}>{fmtDT(log.created_at)}</td>
-                    <td style={{padding:"10px 14px",textAlign:"right"}}>
-                      {closed?(<span style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>🔒 Month closed</span>)
-                      :(<Btn variant="danger" size="sm" onClick={()=>handleUndo(log)}><RotateCcw size={13} strokeWidth={1.75}/>Undo</Btn>)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </Card>
-
-      {/* Add/Edit Modal */}
-      <Modal open={modalOpen} onClose={()=>setModalOpen(false)} title={editing?"Edit Holiday":"Add Public Holiday"}>
-        <div style={{display:"flex",flexDirection:"column",gap:13}}>
-          <div><Lbl>Holiday Name *</Lbl><Inp value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} placeholder="e.g. Eid Al-Fitr"/></div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <div><Lbl>From Date *</Lbl><Inp type="date" value={form.from_date} onChange={e=>setForm(p=>({...p,from_date:e.target.value}))}/></div>
-            <div><Lbl>To Date *</Lbl><Inp type="date" value={form.to_date} onChange={e=>setForm(p=>({...p,to_date:e.target.value}))}/></div>
-          </div>
-          {form.from_date&&form.to_date&&(<div style={{padding:"8px 12px",background:"#f0fdf4",borderRadius:8,border:"1px solid #a7f3d0"}}><p style={{margin:0,fontSize:12,color:"#059669",fontWeight:600}}>{formDays} working day{formDays!==1?"s":""} · {formDays*8}h capacity deduction per employee</p></div>)}
-          <div>
-            <Lbl>Applies To *</Lbl>
-            <div style={{display:"flex",gap:8}}>
-              {["KSA","EGY","Both"].map(c=>{const cb=cBadge(c);const sel=form.country===c;return(<button key={c} onClick={()=>setForm(p=>({...p,country:c}))} style={{flex:1,padding:"8px 12px",borderRadius:8,border:`1.5px solid ${sel?cb.color:"#e2e8f0"}`,background:sel?cb.bg:"#fff",color:sel?cb.color:"#64748b",fontSize:12,fontWeight:sel?700:500,cursor:"pointer",transition:"all .15s"}}>{c==="KSA"?"🇸🇦 KSA":c==="EGY"?"🇪🇬 Egypt":"🌍 Both"}</button>);})}
-            </div>
-          </div>
-          <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:4}}>
-            <Btn variant="outline" onClick={()=>setModalOpen(false)}>Cancel</Btn>
-            <Btn variant="primary" onClick={handleSave} disabled={saving}>{saving?"Saving...":"Save Holiday"}</Btn>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Apply to Team Modal */}
-      <Modal open={applyModal} onClose={()=>!applying&&setApplyModal(false)} title={`Apply: ${applyHoliday?.name||""}`}>
-        <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:20}}>
-          {[1,2,3].map((s,i)=>(
-            <React.Fragment key={s}>
-              <div style={{display:"flex",alignItems:"center",gap:6}}>
-                <div style={{width:24,height:24,borderRadius:999,background:applyStep>=s?"#008A57":"#e2e8f0",color:applyStep>=s?"#fff":"#94a3b8",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700}}>{s}</div>
-                <span style={{fontSize:11,fontWeight:600,color:applyStep>=s?"#008A57":"#94a3b8",whiteSpace:"nowrap"}}>{["Review & Month","Preview","Confirm"][i]}</span>
-              </div>
-              {i<2&&<div style={{flex:1,height:1,background:"#e2e8f0",margin:"0 8px"}}/>}
-            </React.Fragment>
-          ))}
-        </div>
-
-        {applyStep===1&&applyHoliday&&(
-          <div style={{display:"flex",flexDirection:"column",gap:14}}>
-            <div style={{padding:"12px 14px",background:"#f8fafc",borderRadius:10,border:"1px solid #e2e8f0"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-                <p style={{margin:0,fontWeight:700,fontSize:14,color:"#0f172a"}}>{applyHoliday.name}</p>
-                <span style={{padding:"2px 8px",borderRadius:999,background:cBadge(applyHoliday.country).bg,color:cBadge(applyHoliday.country).color,fontSize:11,fontWeight:700}}>{applyHoliday.country}</span>
-              </div>
-              <div style={{display:"flex",gap:16,fontSize:12,color:"#64748b",flexWrap:"wrap"}}>
-                <span>📅 {fmtD(applyHoliday.from_date)} → {fmtD(applyHoliday.to_date)}</span>
-                <span>🗓 {applyHoliday.working_days} working days</span>
-                <span>⏱ {Math.round(applyHoliday.working_days*(176/22))}h deducted</span>
-              </div>
-            </div>
-            <div>
-              <Lbl>Apply to Month *</Lbl>
-              <Sel value={applyMonth} onChange={changeApplyMonth} options={ALLOC_MONTHS}/>
-              <p style={{margin:"5px 0 0",fontSize:11,color:"#64748b"}}>Month is auto-detected from the holiday dates but can be changed.</p>
-            </div>
-            <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:4}}>
-              <Btn variant="outline" onClick={()=>setApplyModal(false)}>Cancel</Btn>
-              <Btn variant="primary" onClick={()=>setApplyStep(2)} disabled={applyLoading||!applyMonth}>{applyLoading?"Loading...":"Preview →"}</Btn>
-            </div>
-          </div>
-        )}
-
-        {applyStep===2&&(
-          <div style={{display:"flex",flexDirection:"column",gap:14}}>
-            {applyLoading?(<div style={{padding:24}}><Skeleton h={14} mb={10}/><Skeleton h={14} mb={10}/><Skeleton h={14}/></div>):(
-              <>
-                <div style={{display:"flex",gap:8}}>
-                  <div style={{flex:1,padding:"10px 14px",background:"#f0fdf4",borderRadius:10,border:"1px solid #a7f3d0",textAlign:"center"}}>
-                    <p style={{margin:0,fontSize:20,fontWeight:800,color:"#059669"}}>{affected.length}</p>
-                    <p style={{margin:0,fontSize:11,color:"#059669",fontWeight:600}}>Will be applied</p>
-                  </div>
-                  {skipped.length>0&&(<div style={{flex:1,padding:"10px 14px",background:"#f8fafc",borderRadius:10,border:"1px solid #e2e8f0",textAlign:"center"}}><p style={{margin:0,fontSize:20,fontWeight:800,color:"#94a3b8"}}>{skipped.length}</p><p style={{margin:0,fontSize:11,color:"#94a3b8",fontWeight:600}}>Skipped (closed month)</p></div>)}
-                </div>
-                {ksaEmps.length>0&&(<div><p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#1d4ed8",textTransform:"uppercase",letterSpacing:".05em"}}>🇸🇦 KSA — {ksaEmps.length} employees</p><div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:160,overflowY:"auto"}}>{ksaEmps.map(e=>(<div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",background:"#eff6ff",borderRadius:7,border:"1px solid #bfdbfe"}}><span style={{fontSize:12,fontWeight:600,color:"#0f172a"}}>{e.name}</span><div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{fontSize:11,color:"#64748b"}}>{e.location}</span><span style={{fontSize:11,fontWeight:700,color:"#1d4ed8"}}>{e.capDed}h deducted</span></div></div>))}</div></div>)}
-                {egyEmps.length>0&&(<div><p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:"#d97706",textTransform:"uppercase",letterSpacing:".05em"}}>🇪🇬 Egypt — {egyEmps.length} employees</p><div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:160,overflowY:"auto"}}>{egyEmps.map(e=>(<div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",background:"#fefce8",borderRadius:7,border:"1px solid #fde68a"}}><span style={{fontSize:12,fontWeight:600,color:"#0f172a"}}>{e.name}</span><div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{fontSize:11,color:"#64748b"}}>{e.location}</span><span style={{fontSize:11,fontWeight:700,color:"#d97706"}}>{e.capDed}h deducted</span></div></div>))}</div></div>)}
-                {skipped.length>0&&(<div style={{padding:"8px 12px",background:"#f8fafc",borderRadius:8,border:"1px solid #e2e8f0"}}><p style={{margin:"0 0 4px",fontSize:11,fontWeight:700,color:"#94a3b8"}}>⚠ {skipped.length} skipped — closed month</p><p style={{margin:0,fontSize:11,color:"#94a3b8"}}>{skipped.map(e=>e.name).join(", ")}</p></div>)}
-                {affected.length===0&&(<div style={{padding:"20px",textAlign:"center",color:"#94a3b8",fontSize:13}}>No eligible employees found.</div>)}
-              </>
-            )}
-            <div style={{display:"flex",justifyContent:"space-between",gap:8,marginTop:4}}>
-              <Btn variant="outline" onClick={()=>setApplyStep(1)}>← Back</Btn>
-              <Btn variant="primary" onClick={()=>setApplyStep(3)} disabled={affected.length===0}>Confirm →</Btn>
-            </div>
-          </div>
-        )}
-
-        {applyStep===3&&(
-          <div style={{display:"flex",flexDirection:"column",gap:16}}>
-            <div style={{padding:"16px",background:"#f0fdf4",borderRadius:12,border:"1px solid #a7f3d0",textAlign:"center"}}>
-              <p style={{margin:"0 0 4px",fontSize:28,fontWeight:800,color:"#059669"}}>{affected.length}</p>
-              <p style={{margin:"0 0 8px",fontSize:13,fontWeight:700,color:"#059669"}}>employees will receive</p>
-              <span style={{padding:"4px 14px",borderRadius:999,background:"#fef9c3",color:"#d97706",fontSize:13,fontWeight:700,border:"1px solid #fde68a"}}>On Leave (Public H.)</span>
-              <p style={{margin:"10px 0 0",fontSize:12,color:"#059669"}}>{applyHoliday?.name} · {fmtD(applyHoliday?.from_date)} → {fmtD(applyHoliday?.to_date)}</p>
-              <p style={{margin:"2px 0 0",fontSize:12,color:"#059669"}}>Month: <strong>{fmtLong(applyMonth)}</strong> · {applyHoliday?.working_days} days · {Math.round((applyHoliday?.working_days||0)*(176/22))}h per person</p>
-            </div>
-            {skipped.length>0&&(<div style={{padding:"8px 12px",background:"#f8fafc",borderRadius:8,border:"1px solid #e2e8f0",fontSize:11,color:"#94a3b8"}}>⚠ {skipped.length} employee{skipped.length!==1?"s":""} will be skipped (closed month)</div>)}
-            <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
-              <Btn variant="outline" onClick={()=>setApplyStep(2)} disabled={applying}>← Back</Btn>
-              <Btn variant="primary" onClick={handleApply} disabled={applying}>{applying?"Applying...":"✓ Apply to Team"}</Btn>
-            </div>
-          </div>
-        )}
-      </Modal>
-    </div>
-  );
-}
-
 function SystemUsersPage(){
   const {sb,profile:currentProfile,startImpersonate}=useAuth();
   const toast=useToast();
@@ -7466,30 +6283,20 @@ function SystemUsersPage(){
     <div style={{display:"flex",flexDirection:"column",gap:18}}>
       {/* Header */}
       <div>
-        <h1 style={{fontSize:26,fontWeight:800,color:"#0f172a",margin:0}}>System Settings</h1>
-        <p style={{fontSize:13,color:"#64748b",lineHeight:1.5,marginTop:3}}>Manage users, roles, and system configuration</p>
+        <h1 style={{fontSize:26,fontWeight:800,color:"#0f172a",margin:0}}>System Users</h1>
+        <p style={{fontSize:13,color:"#64748b",lineHeight:1.5,marginTop:3}}>Manage users and role permissions</p>
       </div>
 
-      {/* Top-level sub-tabs */}
-      <div style={{display:"flex",gap:4,background:"#f1f5f9",borderRadius:10,padding:4,maxWidth:400}}>
-        {[["system_users",UserCog,"System Users"],["public_holidays",Calendar,"Public Holidays"]].map(([v,Ic,l])=>(
+      {/* Tab bar */}
+      <div style={{display:"flex",gap:4,background:"#f1f5f9",borderRadius:10,padding:4,maxWidth:340}}>
+        {[["users",Users,"Users"],["roles",ShieldCheck,"Role Permissions"]].map(([v,Ic,l])=>(
           <button key={v} onClick={()=>setTab(v)} style={{flex:1,padding:"8px 12px",borderRadius:8,border:"none",background:tab===v?"#fff":"transparent",fontWeight:tab===v?700:500,fontSize:13,color:tab===v?"#0f172a":"#64748b",cursor:"pointer",boxShadow:tab===v?"0 1px 3px rgba(0,0,0,.1)":"none",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}><Ic size={14} strokeWidth={1.75}/>{l}</button>
         ))}
       </div>
 
-      {/* ── PUBLIC HOLIDAYS TAB ── */}
-      {tab==="public_holidays"&&<PublicHolidaysTab sb={sb}/>}
-
-      {/* ── SYSTEM USERS TAB ── */}
-      {(tab==="users"||tab==="system_users")&&(
+      {/* ── USERS TAB ── */}
+      {tab==="users"&&(
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
-
-          {/* Inner sub-tabs: Users / Role Permissions */}
-          <div style={{display:"flex",gap:4,background:"#f1f5f9",borderRadius:10,padding:4,maxWidth:340}}>
-            {[["users",Users,"Users"],["roles",ShieldCheck,"Role Permissions"]].map(([v,Ic,l])=>(
-              <button key={v} onClick={()=>setTab(v)} style={{flex:1,padding:"8px 12px",borderRadius:8,border:"none",background:tab===v?"#fff":"transparent",fontWeight:tab===v?700:500,fontSize:13,color:tab===v?"#0f172a":"#64748b",cursor:"pointer",boxShadow:tab===v?"0 1px 3px rgba(0,0,0,.1)":"none",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}><Ic size={14} strokeWidth={1.75}/>{l}</button>
-            ))}
-          </div>
 
           {/* ── Add New User card — tabbed ─────────────────────── */}
           <Card style={{overflow:"hidden",padding:0}}>
@@ -7693,7 +6500,7 @@ function SystemUsersPage(){
       )}
 
       {/* ── ROLES TAB ── */}
-      {(tab==="roles")&&(
+      {tab==="roles"&&(
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div><p style={{margin:0,fontWeight:700,fontSize:15,color:"#0f172a",lineHeight:1.5}}>Role Permissions</p><p style={{margin:"2px 0 0",fontSize:12,color:"#64748b",lineHeight:1.5}}>Define what each role can access</p></div>
@@ -7905,16 +6712,13 @@ function PlatformApp(){
     if(activePage==="Employees")         return <EmployeesPage/>;
     if(activePage==="Clients")           return <ClientsPage/>;
     if(activePage==="Contracts")         return <ContractsPage/>;
+    if(activePage==="Allocations")       return <AllocationsPage/>;
     if(activePage==="Reports")           return <ReportsPage/>;
     if(activePage==="MonthlyClose")      return <MonthlyClosePage/>;
     if(activePage==="ContractExpenses")  return <ContractExpensesPage/>;
     if(activePage==="Settings")          return <SystemUsersPage/>;
     return <ComingSoon page={NAV.find(n=>n.id===activePage)?.label||activePage}/>;
   };
-
-  // AllocationsPage is always mounted to preserve modal state across tab switches
-  const allocPerms=PAGE_PERM_KEY["Allocations"];
-  const canViewAlloc=!allocPerms||can(allocPerms,"view");
 
   return(
     <div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"'Inter',system-ui,sans-serif",background:"#f8fafc",overflow:"hidden"}}>
@@ -7993,13 +6797,7 @@ function PlatformApp(){
 
       {/* Main content */}
       <main style={{flex:1,overflowY:"auto",padding:24}}>
-        {/* AllocationsPage always mounted to preserve modal state */}
-        {canViewAlloc&&(
-          <div style={{display:activePage==="Allocations"?"block":"none"}}>
-            <AllocationsPage/>
-          </div>
-        )}
-        {activePage!=="Allocations"&&renderPage()}
+        {renderPage()}
       </main>
       </div>
     </div>
