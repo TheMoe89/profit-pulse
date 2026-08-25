@@ -2353,6 +2353,9 @@ function AllocationsPage(){
   const [toMonth,setToMonth]      = useState("");
   const [showDuration,setShowDuration]=useState(false);
   const [chartMonth,setChartMonth]=usePersistState("pp_alloc_month","2026-04");
+  const [filterEmpId,setFilterEmpId]=useState("all");
+  const [filterDeptOv,setFilterDeptOv]=useState("all");
+  const [filterClientOv,setFilterClientOv]=useState("all");
   const [modalOpen,setModalOpen] = useState(false);
   const [editing,setEditing]     = useState(null);
   const [formStep,setFormStep]   = useState(1);
@@ -2445,11 +2448,11 @@ function AllocationsPage(){
   // Mirror Base44: inactive employees whose inactive_effective_month >= chartMonth still count
   const isEmpActiveForMonth=(e,month)=>e.status==="Active"||(e.status==="Inactive"&&e.inactive_effective_month&&e.inactive_effective_month>=month);
   // Filter active employees by allowed departments
-  const activeEmps=(realEmps).filter(e=>isEmpActiveForMonth(e,chartMonth)&&(!allowedDepts||allowedDepts.includes(e.department)));
+  const activeEmps=(realEmps).filter(e=>isEmpActiveForMonth(e,chartMonth)&&(!allowedDepts||allowedDepts.includes(e.department))&&(filterDeptOv==="all"||e.department===filterDeptOv)&&(filterEmpId==="all"||e.id===filterEmpId));
   // Filter chart allocs to only allowed dept employees
   const allowedEmpIds=new Set(activeEmps.map(e=>e.id));
-  const filteredChartAllocs=chartAllocs.filter(a=>allowedEmpIds.has(a.employee_id));
-  const totalCap=activeEmps.length*HPM;
+  const filteredChartAllocs=chartAllocs.filter(a=>allowedEmpIds.has(a.employee_id)&&(filterClientOv==="all"||a.client_name===filterClientOv));
+  const totalCap=activeEmps.reduce((s,e)=>{const ld=chartAllocs.filter(a=>a.employee_id===e.id&&a.status==="On Leave").reduce((ss,a)=>ss+(parseFloat(a.capacity_deduction)||0),0);return s+Math.max(0,HPM-ld);},0);
   const utilizedHours=filteredChartAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);
   const availHours=Math.max(0,totalCap-utilizedHours);
   const pieData=[{name:"Utilized",hours:utilizedHours},{name:"Available",hours:availHours}];
@@ -2548,12 +2551,26 @@ function AllocationsPage(){
         <Btn variant="primary" onClick={openAdd} style={{gap:6}}><Plus size={14} strokeWidth={2}/>Add Allocation</Btn>
       </div>
 
-      {/* Chart month selector */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      {/* Chart month selector + filters */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
         <p style={{margin:0,fontSize:13,fontWeight:600,color:"#64748b"}}>Allocation Overview</p>
-        <Sel value={chartMonth} onChange={setChartMonth}
-          options={availMonths.length>0?availMonths.map(m=>({v:m,l:fmtLong(m)})):[{v:"2026-04",l:"April 2026"}]}
-          style={{width:165}}/>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          <Sel value={chartMonth} onChange={v=>{setChartMonth(v);setFilterEmpId("all");setFilterDeptOv("all");setFilterClientOv("all");}}
+            options={availMonths.length>0?availMonths.map(m=>({v:m,l:fmtLong(m)})):[{v:"2026-04",l:"April 2026"}]}
+            style={{width:155}}/>
+          <Sel value={filterEmpId} onChange={setFilterEmpId}
+            options={[{v:"all",l:"All Employees"},...(realEmps).filter(e=>isEmpActiveForMonth(e,chartMonth)&&(!allowedDepts||allowedDepts.includes(e.department))).sort((a,b)=>a.name.localeCompare(b.name)).map(e=>({v:e.id,l:e.name}))]}
+            style={{width:175}}/>
+          <Sel value={filterDeptOv} onChange={setFilterDeptOv}
+            options={[{v:"all",l:"All Departments"},...(allowedDepts||["Creative Department","Client Servicing Department","Production Department","Planning Department"]).map(d=>({v:d,l:d.replace(" Department","")}))]  }
+            style={{width:165}}/>
+          <Sel value={filterClientOv} onChange={setFilterClientOv}
+            options={[{v:"all",l:"All Clients"},...[...new Set(chartAllocs.map(a=>a.client_name).filter(Boolean))].sort().map(c=>({v:c,l:c}))]}
+            style={{width:165}}/>
+          {(filterEmpId!=="all"||filterDeptOv!=="all"||filterClientOv!=="all")&&(
+            <button onClick={()=>{setFilterEmpId("all");setFilterDeptOv("all");setFilterClientOv("all");}} style={{padding:"6px 10px",borderRadius:7,border:"1px solid #e2e8f0",background:"#f8fafc",cursor:"pointer",fontSize:11,color:"#64748b",display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}><X size={11} strokeWidth={2}/>Clear</button>
+          )}
+        </div>
       </div>
 
       {/* Charts row */}
@@ -2599,7 +2616,7 @@ function AllocationsPage(){
 
       {/* Capacity cards — all active employees for chartMonth (mirrors Base44) */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
-        {(realEmps).filter(e=>isEmpActiveForMonth(e,chartMonth)).map(emp=>{
+        {(realEmps).filter(e=>isEmpActiveForMonth(e,chartMonth)&&(!allowedDepts||allowedDepts.includes(e.department))&&(filterEmpId==="all"||e.id===filterEmpId)&&(filterDeptOv==="all"||e.department===filterDeptOv)).map(emp=>{
           const u=utilMap[emp.id]||{totalHours:0,availableHours:HPM,percentage:0};
           const ov=u.percentage>100,ok=u.percentage>=70&&u.percentage<=100;
           const border=ov?"#fecaca":ok?"#a7f3d0":"#fde68a";
