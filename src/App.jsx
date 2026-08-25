@@ -4064,15 +4064,20 @@ function ReportsPage(){
   const USE_EMPLOYEES = realEmployees;
   const USE_CONTRACTS = realContracts;
   const USE_CLIENTS   = realClients;
-  const USE_SNAPSHOTS = realSnapshots.map(s=>({
-    month:s.month, client_name:s.client_name, contract_number:s.contract_number,
-    contract_value:parseFloat(s.monthly_retainer)*12,
-    monthly_retainer:parseFloat(s.monthly_retainer)||0,
-    allocated_hours:parseFloat(s.allocated_hours)||0,
-    resource_cost:parseFloat(s.resource_cost)||0,
-    profit:parseFloat(s.profit)||0,
-    status:"Active", contract_category:"Retainer"
-  }));
+  const USE_SNAPSHOTS = realSnapshots.map(s=>{
+    // Look up contract_category from real contracts
+    const matchedContract = realContracts.find(c=>c.contract_number===s.contract_number||(c.client_name||c.cn)===s.client_name);
+    return {
+      month:s.month, client_name:s.client_name, contract_number:s.contract_number,
+      contract_value:parseFloat(s.monthly_retainer)*12,
+      monthly_retainer:parseFloat(s.monthly_retainer)||0,
+      allocated_hours:parseFloat(s.allocated_hours)||0,
+      resource_cost:parseFloat(s.resource_cost)||0,
+      profit:parseFloat(s.profit)||0,
+      status:"Active",
+      contract_category:matchedContract?.contract_category||matchedContract?.cc||"Retainer"
+    };
+  });
 
   // ── Calculations ────────────────────────────────────────────────────────────
   const R = useMemo(()=>{
