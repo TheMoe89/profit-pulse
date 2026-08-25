@@ -4075,7 +4075,9 @@ function ReportsPage(){
       resource_cost:parseFloat(s.resource_cost)||0,
       profit:parseFloat(s.profit)||0,
       status:"Active",
-      contract_category:matchedContract?.contract_category||matchedContract?.cc||"Retainer"
+      contract_category:matchedContract?.contract_category||matchedContract?.cc||"Retainer",
+      start_date:matchedContract?.start_date||matchedContract?.sd||"—",
+      end_date:matchedContract?.end_date||matchedContract?.ed||"—",
     };
   });
 
