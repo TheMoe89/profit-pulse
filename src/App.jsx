@@ -1095,12 +1095,23 @@ function DashboardPage(){
   const [dbSnapshots,setDbSnapshots]=useState([]);
 
   useEffect(()=>{
+    const fetchAllAllocs = async () => {
+      let all=[]; let from=0; const size=1000;
+      while(true){
+        const {data,error}=await sb.from('allocations').select('*').range(from,from+size-1);
+        if(error||!data||data.length===0) break;
+        all=[...all,...data];
+        if(data.length<size) break;
+        from+=size;
+      }
+      return all;
+    };
     Promise.all([
       sb.from('employees').select('*'),
       sb.from('contracts').select('*'),
-      sb.from('allocations').select('*'),
+      fetchAllAllocs(),
       sb.from('monthly_snapshots').select('*'),
-    ]).then(([{data:e},{data:ct},{data:al},{data:sn}])=>{
+    ]).then(([{data:e},{data:ct},al,{data:sn}])=>{
       if(e)  setDbEmployees(e.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0,id:x.id,name:x.name,designation:x.designation,department:x.department,status:x.status})));
       if(ct) setDbContracts(ct.map(x=>({...x,cn:x.client_name,cid:x.client_id,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status,bcs:parseFloat(x.budget_client_servicing)||0,bp:parseFloat(x.budget_production)||0,bc:parseFloat(x.budget_creative)||0,bpl:parseFloat(x.budget_planning)||0})));
       if(al) setDbAllocs(al.map(x=>({...x,eid:x.employee_id,cid:x.client_id,h:parseFloat(x.allocated_hours)||0})));
@@ -2318,7 +2329,17 @@ function AllocationsPage(){
   const [loading,setLoading]=useState(true);
   const mapA=a=>({...a,eid:a.employee_id,cid:a.client_id,h:a.allocated_hours});
   useEffect(()=>{
-    sb.from('allocations').select('*').order('month',{ascending:false}).then(({data})=>{if(data)setAllocs(data.map(mapA));setLoading(false);});
+    (async()=>{
+      let all=[]; let from=0; const size=1000;
+      while(true){
+        const {data,error}=await sb.from('allocations').select('*').order('month',{ascending:false}).range(from,from+size-1);
+        if(error||!data||data.length===0) break;
+        all=[...all,...data];
+        if(data.length<size) break;
+        from+=size;
+      }
+      setAllocs(all.map(mapA)); setLoading(false);
+    })();
   },[sb]);
   const dbBulkAdd=async items=>{const rows=items.map(a=>({employee_id:a.employee_id,employee_name:a.employee_name,employee_monthly_cost:a.employee_monthly_cost||0,client_id:a.client_id||null,client_name:a.client_name||'',contract_id:a.contract_id||null,allocated_hours:a.allocated_hours||0,month:a.month,status:a.status||'Assigned',notes:a.notes||'',leave_from:a.leave_from||null,leave_to:a.leave_to||null,leave_days:a.leave_days||0,capacity_deduction:a.capacity_deduction||0}));const{data,error}=await sb.from('allocations').insert(rows).select();if(error)throw new Error(error.message);if(data)setAllocs(p=>[...p,...data.map(mapA)]);};
   const dbUpdate=async(id,p)=>{const{data}=await sb.from('allocations').update({allocated_hours:p.allocated_hours,month:p.month,notes:p.notes}).eq('id',id).select().single();if(data)setAllocs(x=>x.map(a=>a.id===id?mapA(data):a));};
@@ -4033,13 +4054,24 @@ function ReportsPage(){
   const [dataLoaded,setDataLoaded]       = useState(false);
 
   useEffect(()=>{
+    const fetchAllAllocs = async () => {
+      let all=[]; let from=0; const size=1000;
+      while(true){
+        const {data,error}=await sb.from('allocations').select('*').range(from,from+size-1);
+        if(error||!data||data.length===0) break;
+        all=[...all,...data];
+        if(data.length<size) break;
+        from+=size;
+      }
+      return all;
+    };
     Promise.all([
       sb.from('employees').select('*'),
       sb.from('contracts').select('*'),
       sb.from('clients').select('*'),
-      sb.from('allocations').select('*'),
+      fetchAllAllocs(),
       sb.from('monthly_snapshots').select('*'),
-    ]).then(([{data:e},{data:ct},{data:cl},{data:al},{data:sn}])=>{
+    ]).then(([{data:e},{data:ct},{data:cl},al,{data:sn}])=>{
       if(e)  setRealEmployees(e.map(x=>({...x,mc:parseFloat(x.monthly_cost)||0,id:x.id})));
       if(ct) setRealContracts(ct.map(x=>({...x,cn:x.client_name,cid:x.client_id,cv:parseFloat(x.contract_value)||0,tm:parseFloat(x.tenure_months)||1,sd:x.start_date,ed:x.end_date,st:x.status,bcs:parseFloat(x.budget_client_servicing)||0,bp:parseFloat(x.budget_production)||0,bc:parseFloat(x.budget_creative)||0,bpl:parseFloat(x.budget_planning)||0})));
       if(cl) setRealClients(cl);
