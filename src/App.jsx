@@ -187,13 +187,15 @@ function AuthProvider({children}){
       else setPermsLoaded(true); // no session = show login immediately
     });
     const {data:{subscription}} = sb.auth.onAuthStateChange((event,session)=>{
-      // Only act on real auth changes, not tab focus token refresh
-      if(event==="SIGNED_IN"||event==="SIGNED_OUT"||event==="USER_UPDATED"||event==="TOKEN_REFRESHED"){
-        if(event==="TOKEN_REFRESHED") return; // ignore silent token refresh
+      // Only react to real sign in/out events — ignore everything else
+      // TOKEN_REFRESHED and INITIAL_SESSION fire on tab focus and cause modal resets
+      if(event==="SIGNED_OUT"){
+        setSession(null);
+        setProfile(null); setUserPerms(null); setPermsLoaded(true);
+      } else if(event==="USER_UPDATED"){
         setSession(session);
-        if(session){ setPermsLoaded(false); loadProfile(session.user.id); }
-        else { setProfile(null); setUserPerms(null); setPermsLoaded(true); }
       }
+      // SIGNED_IN, TOKEN_REFRESHED, INITIAL_SESSION — all ignored to prevent re-renders
     });
     return ()=>subscription.unsubscribe();
   },[sb]);
