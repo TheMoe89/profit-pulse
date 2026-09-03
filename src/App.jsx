@@ -3327,7 +3327,7 @@ const exportCostAllocation = (employees, allocs, month, dept, HPM) => {
       const ld=empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);
       const effHPM=Math.max(0,HPM-ld);
       const pct=effHPM>0?Math.round((allocated/effHPM)*100):0;
-      const mc=e.mc||0;const billed=Math.round(allocated*(mc>0?mc/30/8:0)*1.267);
+      const mc=e.mc||0;const billed=Math.round(allocated*(mc>0?mc/HPM:0)*1.267);
       const rec=mc>0?Math.round((billed/mc)*100):0;
       return{e,allocated,effHPM,pct,mc,billed,rec};
     }).sort((a,b)=>b.rec-a.rec);
@@ -3629,7 +3629,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
     } else if(selReport==="cost"){
       title=`Employee Cost vs Allocation — ${fmtLong(selMonth)} — ${deptLabel}`;
       headers=["Employee","Department","Designation","Monthly Cost","Allocated","Util %","Billed Value","Recovery"];
-      rows=filteredEmps.map(e=>{const empAllocs=allocs.filter(a=>a.employee_id===e.id&&a.month===selMonth);const allocated=empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);const ld=empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);const effHPM=Math.max(0,HPM-ld);const pct=effHPM>0?Math.round((allocated/effHPM)*100):0;const mc=e.mc||0;const billed=Math.round(allocated*(mc>0?mc/30/8:0)*1.267);return[e.name,e.department?.replace(" Department","")||"",e.designation||"","SAR "+mc.toLocaleString(),allocated+"h",pct+"%","SAR "+billed.toLocaleString(),mc>0?Math.round((billed/mc)*100)+"%":"—"];});
+      rows=filteredEmps.map(e=>{const empAllocs=allocs.filter(a=>a.employee_id===e.id&&a.month===selMonth);const allocated=empAllocs.reduce((s,a)=>s+(a.allocated_hours||0),0);const ld=empAllocs.filter(a=>a.status==='On Leave').reduce((s,a)=>s+(parseFloat(a.capacity_deduction)||0),0);const effHPM=Math.max(0,HPM-ld);const pct=effHPM>0?Math.round((allocated/effHPM)*100):0;const mc=e.mc||0;const billed=Math.round(allocated*(mc>0?mc/HPM:0)*1.267);return[e.name,e.department?.replace(" Department","")||"",e.designation||"","SAR "+mc.toLocaleString(),allocated+"h",pct+"%","SAR "+billed.toLocaleString(),mc>0?Math.round((billed/mc)*100)+"%":"—"];});
       filename=`Cost_vs_Allocation_${selMonth}.pdf`;
     }
     exportPDFTable(title, headers, rows, filename);
@@ -3903,7 +3903,7 @@ function FixedReportsSection({employees,allocs,contracts,clients,HPM,fmtLong,all
             const effectiveHPM=Math.max(0,HPM-leaveDeduction);
             const pct=effectiveHPM>0?Math.round((allocated/effectiveHPM)*100):0;
             const mc=e.mc||e.monthly_cost||0;
-            const costRate=mc>0?(mc/30/8):0;
+            const costRate=mc>0?(mc/HPM):0;
             const billedValue=allocated*costRate*1.267;
             const recovery=mc>0?Math.round((billedValue/mc)*100):0;
             return{e,allocated,effectiveHPM,pct,mc,billedValue:Math.round(billedValue),recovery};
