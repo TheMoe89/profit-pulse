@@ -351,8 +351,13 @@ const currentMonth = "2026-04";
 // ─── HELPER FUNCTIONS ─────────────────────────────────────────────────────────
 const isActive=(c,month)=>{
   if(!c.sd||!c.ed) return false;
-  const m=new Date(month+"-01");
-  return new Date(c.sd)<=m && new Date(c.ed)>=m && (c.st||c.status)!=="Cancelled";
+  // Contract is active in a month if it starts before the end of that month
+  // AND ends on or after the start of that month
+  const monthStart=new Date(month+"-01");
+  const monthEnd=new Date(monthStart.getFullYear(),monthStart.getMonth()+1,0); // last day of month
+  const contractStart=new Date(c.sd);
+  const contractEnd=new Date(c.ed);
+  return contractStart<=monthEnd && contractEnd>=monthStart && (c.st||c.status)!=="Cancelled";
 };
 const diffDays=(dateStr)=>{
   if(!dateStr) return 9999;
