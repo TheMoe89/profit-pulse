@@ -180,22 +180,33 @@ function AuthProvider({children}){
   const [allowedDepts,setAllowedDepts] = useState(null); // null = all depts
   const [permsLoaded,setPermsLoaded] = useState(false); // blocks UI until perms are ready
 
+  const currentUidRef = React.useRef(null);
   useEffect(()=>{
     sb.auth.getSession().then(({data:{session}})=>{
+      currentUidRef.current = session?.user?.id || null;
       setSession(session);
       if(session) loadProfile(session.user.id);
       else setPermsLoaded(true); // no session = show login immediately
     });
     const {data:{subscription}} = sb.auth.onAuthStateChange((event,session)=>{
-      // Only react to real sign in/out events — ignore everything else
-      // TOKEN_REFRESHED and INITIAL_SESSION fire on tab focus and cause modal resets
       if(event==="SIGNED_OUT"){
+        currentUidRef.current = null;
         setSession(null);
         setProfile(null); setUserPerms(null); setPermsLoaded(true);
+      } else if(event==="SIGNED_IN"){
+        // Real login = a different user than the one currently loaded.
+        // Same-user SIGNED_IN fires on tab focus and must be ignored (it resets open modals).
+        const uid = session?.user?.id || null;
+        if(uid && uid!==currentUidRef.current){
+          currentUidRef.current = uid;
+          setSession(session);
+          setPermsLoaded(false);
+          loadProfile(uid);
+        }
       } else if(event==="USER_UPDATED"){
         setSession(session);
       }
-      // SIGNED_IN, TOKEN_REFRESHED, INITIAL_SESSION — all ignored to prevent re-renders
+      // TOKEN_REFRESHED and INITIAL_SESSION are ignored to prevent re-renders on tab focus
     });
     return ()=>subscription.unsubscribe();
   },[sb]);
